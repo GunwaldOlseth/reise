@@ -45,3 +45,13 @@ Collections i prosjektet `homey-376215`:
 
 - `trips` — reiser
 - `trip_days` — dager knyttet til en tur via `tripId`
+
+## Cloud Run
+
+Deploy API + frontend til `homey-376215` / `europe-north1`:
+
+```bash
+bash scripts/deploy-cloud-run.sh
+```
+
+Tjenester: `reise-backend`, `reise-frontend`. Backend bruker Application Default Credentials med `FIREBASE_PROJECT_ID=homey-376215`.

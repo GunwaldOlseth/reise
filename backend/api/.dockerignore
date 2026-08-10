@@ -1,0 +1,6 @@
+*.exe
+service-account.json
+*service-account*.json
+!service-account-template.json
+.tmp
+.git
