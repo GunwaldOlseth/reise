@@ -188,6 +188,13 @@ a:hover {
 
 .trip-row,
 .day-row,
+.city-row-wrap {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.45rem;
+  align-items: stretch;
+}
+
 .city-row {
   display: grid;
   grid-template-columns: 1fr auto;
@@ -201,6 +208,24 @@ a:hover {
   padding: 0.95rem 1.05rem;
   cursor: pointer;
   transition: border-color 160ms ease, background 160ms ease, transform 160ms ease;
+}
+
+.city-row-maps {
+  display: grid;
+  place-items: center;
+  min-width: 3.4rem;
+  padding: 0.5rem;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: rgba(31, 111, 235, 0.08);
+  color: #1f6feb;
+  font-size: 0.85rem;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.city-row-maps:hover {
+  background: rgba(31, 111, 235, 0.16);
 }
 
 .trip-row:hover,
@@ -769,6 +794,71 @@ textarea {
   gap: 0.75rem;
 }
 
+.trip-map-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.55rem;
+}
+
+.trip-map-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.google-user-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  max-width: 12rem;
+}
+
+.google-user-avatar {
+  width: 1.35rem;
+  height: 1.35rem;
+  border-radius: 999px;
+  object-fit: cover;
+}
+
+.google-user-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.trip-map-legend-body {
+  min-width: 0;
+}
+
+.trip-map-gmaps-link {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #1f6feb;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.trip-map-gmaps-link:hover {
+  text-decoration: underline;
+}
+
+.trip-map-gps-btn.is-active {
+  border-color: #1f6feb;
+  color: #1f6feb;
+  background: rgba(31, 111, 235, 0.1);
+}
+
+.trip-map-gps-hint {
+  margin: 0;
+}
+
+.trip-map-frame {
+  position: relative;
+}
+
 .trip-map {
   width: 100%;
   height: min(62vh, 520px);
@@ -778,6 +868,19 @@ textarea {
   overflow: hidden;
   background: rgba(255, 255, 255, 0.5);
   z-index: 0;
+}
+
+.trip-map-user-dot {
+  display: block;
+  width: 18px;
+  height: 18px;
+  margin: 2px;
+  border-radius: 999px;
+  background: #1f6feb;
+  border: 3px solid #fff;
+  box-shadow:
+    0 0 0 2px rgba(31, 111, 235, 0.35),
+    0 1px 4px rgba(0, 0, 0, 0.25);
 }
 
 .trip-map-marker {
@@ -1426,6 +1529,101 @@ textarea {
   .via-city-edit-grid {
     grid-template-columns: 1fr;
   }
+}
+
+.leg-departures-field {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.leg-departures-field .meta {
+  font-weight: 400;
+}
+
+.leg-departures {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+  min-height: 2.35rem;
+  padding: 0.3rem 0.45rem;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fff;
+}
+
+.leg-departure-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  border: 0;
+  border-radius: 999px;
+  padding: 0.2rem 0.5rem;
+  background: rgba(15, 90, 94, 0.1);
+  color: var(--teal-deep);
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.leg-departure-chip.is-preferred {
+  background: rgba(15, 90, 94, 0.2);
+}
+
+.leg-departure-chip.is-suggested {
+  outline: 2px solid #c9a04a;
+}
+
+.leg-departure-chip:hover {
+  background: rgba(15, 90, 94, 0.18);
+}
+
+.leg-departures-input {
+  flex: 1 1 7rem;
+  min-width: 6rem;
+  border: 0 !important;
+  box-shadow: none !important;
+  padding: 0.25rem 0.2rem !important;
+  background: transparent !important;
+}
+
+.leg-departure-suggest {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.45rem 0.6rem;
+  border-radius: 10px;
+  background: rgba(201, 160, 74, 0.16);
+  color: var(--ink);
+  font-size: 0.88rem;
+}
+
+.leg-transport-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  min-width: 0;
+}
+
+.leg-departure-suggest-inline {
+  border: 0;
+  border-radius: 999px;
+  padding: 0.2rem 0.55rem;
+  background: rgba(201, 160, 74, 0.22);
+  color: #6a4e12;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.leg-departure-suggest-inline:hover {
+  background: rgba(201, 160, 74, 0.34);
 }
 
 .via-flow-leg {

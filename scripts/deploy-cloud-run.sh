@@ -24,12 +24,12 @@ BACKEND_URL="$(gcloud run services describe "$BACKEND_SERVICE" --region "$REGION
 echo "==> Backend URL: $BACKEND_URL"
 
 echo "==> Deploying frontend ($FRONTEND_SERVICE) from source..."
+echo "==> Using frontend/.env.production for API + Firebase (public) config"
 gcloud run deploy "$FRONTEND_SERVICE" \
   --source "$ROOT/frontend" \
   --region "$REGION" \
   --allow-unauthenticated \
-  --quiet \
-  --set-build-env-vars="VITE_API_URL=${BACKEND_URL}/api"
+  --quiet
 
 FRONTEND_URL="$(gcloud run services describe "$FRONTEND_SERVICE" --region "$REGION" --format='value(status.url)')"
 echo "==> Frontend URL: $FRONTEND_URL"

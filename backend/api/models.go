@@ -65,11 +65,13 @@ type RouteLeg struct {
 	ToViaPointID   string `json:"toViaPointId" firestore:"toViaPointId"`
 	Mode           string `json:"mode" firestore:"mode"` // walk | taxi | bus | tram | train | flight | other
 	Title          string `json:"title,omitempty" firestore:"title,omitempty"`
-	StartTime      string `json:"startTime,omitempty" firestore:"startTime,omitempty"`
-	EndTime        string `json:"endTime,omitempty" firestore:"endTime,omitempty"`
-	URL            string `json:"url,omitempty" firestore:"url,omitempty"`
-	Notes          string `json:"notes,omitempty" firestore:"notes,omitempty"`
-	SortOrder      int    `json:"sortOrder" firestore:"sortOrder"`
+	StartTime      string `json:"startTime,omitempty" firestore:"startTime,omitempty"` // valgt / planlagt avgang
+	EndTime        string `json:"endTime,omitempty" firestore:"endTime,omitempty"`     // valgt / planlagt ankomst
+	// Departures are optional timetable alternatives (info only — not used for sorting/route sync).
+	Departures []string `json:"departures,omitempty" firestore:"departures,omitempty"`
+	URL        string   `json:"url,omitempty" firestore:"url,omitempty"`
+	Notes      string   `json:"notes,omitempty" firestore:"notes,omitempty"`
+	SortOrder  int      `json:"sortOrder" firestore:"sortOrder"`
 }
 
 // Trip is a travel plan with a date range.

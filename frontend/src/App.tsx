@@ -24,10 +24,15 @@ import {
   dayPlaceLabel,
   ensureCruiseDays,
   ensureHotelStayDays,
+  formatDeparturesLabel,
   formatViaStopTimes,
   hotelNights,
   hotelsCheckingOutOnDay,
   hotelsStayingOnDay,
+  modeHasDepartureSchedule,
+  nextScheduledDeparture,
+  normalizeDepartures,
+  parseDepartureTimes,
   sortViaPointsByArriveTime,
   summarizeCheckoutHotels,
   summarizeDayItems,
@@ -49,8 +54,47 @@ import {
   type TripInput,
 } from './api'
 import { downloadTripIcs } from './ics'
+import { useGoogleAuth } from './googleAuth'
+import { googleMapsPlaceUrl } from './googleMaps'
 import { CitySuggestFields } from './CitySuggest'
 import { TripMap } from './TripMap'
+
+function GoogleLoginButton() {
+  const { user, ready, configured, login, logout } = useGoogleAuth()
+  if (!configured) return null
+  if (!ready) {
+    return (
+      <button type="button" className="btn btn-ghost btn-sm" disabled>
+        Google…
+      </button>
+    )
+  }
+  if (user) {
+    return (
+      <button
+        type="button"
+        className="btn btn-ghost btn-sm google-user-btn"
+        onClick={logout}
+        title={`${user.email} — klikk for å logge ut (innlogging huskes til du logger ut)`}
+      >
+        {user.picture ? (
+          <img src={user.picture} alt="" className="google-user-avatar" />
+        ) : null}
+        <span className="google-user-name">{user.name}</span>
+      </button>
+    )
+  }
+  return (
+    <button
+      type="button"
+      className="btn btn-soft btn-sm"
+      onClick={login}
+      title="Logg inn med Google — innloggingen huskes i denne nettleseren"
+    >
+      Logg inn med Google
+    </button>
+  )
+}
 
 type View =
   | { name: 'home' }
@@ -198,6 +242,106 @@ function TransportModeIcon({
   }
 }
 
+/** Local clock tick so “neste avgang”-forslag oppdateres uten refresh. */
+function useNowTick(intervalMs = 30000) {
+  const [now, setNow] = useState(() => new Date())
+  useEffect(() => {
+    const id = window.setInterval(() => setNow(new Date()), intervalMs)
+    return () => window.clearInterval(id)
+  }, [intervalMs])
+  return now
+}
+
+/**
+ * Timetable for bus/tram/train: first = preferred, rest = fallbacks.
+ * Fallbacks are suggestions only — accepting one sets planned startTime.
+ */
+function LegDeparturesField({
+  times,
+  dayDate,
+  onChange,
+  onAcceptSuggested,
+}: {
+  times: string[] | undefined
+  dayDate: string
+  onChange: (next: string[]) => void
+  onAcceptSuggested: (suggested: string) => void
+}) {
+  const [draft, setDraft] = useState('')
+  const now = useNowTick()
+  const list = normalizeDepartures(times)
+  const suggestion = nextScheduledDeparture(dayDate, list, now)
+
+  function commit(raw: string) {
+    const added = parseDepartureTimes(raw)
+    if (!added.length) return
+    onChange(normalizeDepartures([...list, ...added]))
+    setDraft('')
+  }
+
+  return (
+    <div className="full leg-departures-field">
+      <label>
+        Avganger
+        <span className="meta">
+          {' '}
+          · første er planen, resten om den går forbi
+        </span>
+        <div className="leg-departures">
+          {list.map((t, i) => (
+            <button
+              key={t}
+              type="button"
+              className={`leg-departure-chip${i === 0 ? ' is-preferred' : ''}${
+                suggestion?.suggested === t ? ' is-suggested' : ''
+              }`}
+              title={i === 0 ? 'Planlagt avgang (fjern)' : `Reserve — fjern ${t}`}
+              aria-label={
+                i === 0 ? `Fjern planlagt avgang ${t}` : `Fjern reserve ${t}`
+              }
+              onClick={() => onChange(list.filter((x) => x !== t))}
+            >
+              {i === 0 ? `${t} ★` : t}
+              <span aria-hidden="true">×</span>
+            </button>
+          ))}
+          <input
+            className="leg-departures-input"
+            value={draft}
+            placeholder="14:05 14:50 …"
+            autoComplete="off"
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ',') {
+                e.preventDefault()
+                commit(draft)
+              }
+            }}
+            onBlur={() => {
+              if (draft.trim()) commit(draft)
+            }}
+          />
+        </div>
+      </label>
+      {suggestion && (
+        <div className="leg-departure-suggest">
+          <span>
+            {suggestion.preferred} er passert — neste:{' '}
+            <strong>{suggestion.suggested}</strong>
+          </span>
+          <button
+            type="button"
+            className="btn btn-soft btn-sm"
+            onClick={() => onAcceptSuggested(suggestion.suggested)}
+          >
+            Bruk {suggestion.suggested}
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
 function TransportBadge({
   mode,
   label,
@@ -215,6 +359,47 @@ function TransportBadge({
         {detail ? ` · ${detail}` : ''}
       </span>
     </span>
+  )
+}
+
+function LegTransportSummary({
+  leg,
+  dayDate,
+  onAcceptSuggested,
+}: {
+  leg: RouteLeg
+  dayDate: string
+  onAcceptSuggested?: (suggested: string) => void
+}) {
+  const now = useNowTick()
+  const schedule = modeHasDepartureSchedule(leg.mode)
+  const suggestion =
+    schedule && onAcceptSuggested
+      ? nextScheduledDeparture(dayDate, leg.departures, now)
+      : null
+  const reserves = normalizeDepartures(leg.departures).slice(1)
+  const detail = [
+    leg.title?.trim(),
+    [leg.startTime, leg.endTime].filter(Boolean).join('–'),
+    reserves.length ? `reserve ${reserves.join(' · ')}` : '',
+  ]
+    .filter(Boolean)
+    .join(' · ')
+
+  return (
+    <div className="leg-transport-summary">
+      <TransportBadge mode={leg.mode} detail={detail || undefined} />
+      {suggestion && onAcceptSuggested && (
+        <button
+          type="button"
+          className="leg-departure-suggest-inline"
+          onClick={() => onAcceptSuggested(suggestion.suggested)}
+          title={`Bruk neste avgang ${suggestion.suggested}`}
+        >
+          Neste {suggestion.suggested}
+        </button>
+      )}
+    </div>
   )
 }
 
@@ -1704,7 +1889,10 @@ function DayForm({
               : form.country,
           items: cleaned,
           viaPoints: keptPoints,
-          legs: syncRouteLegs(keptPoints, legs),
+          legs: syncRouteLegs(keptPoints, legs).map((leg) => ({
+            ...leg,
+            departures: normalizeDepartures(leg.departures),
+          })),
           links: form.links || [],
         }
         void onSave(
@@ -2094,19 +2282,21 @@ function DayForm({
                                 placeholder="IC 512"
                               />
                             </label>
-                            <label>
-                              Avgang
-                              <input
-                                value={leg.startTime || ''}
-                                onChange={(e) =>
-                                  updateLeg(idx, {
-                                    ...leg,
-                                    startTime: e.target.value,
-                                  })
-                                }
-                                placeholder="11:40"
-                              />
-                            </label>
+                            {!modeHasDepartureSchedule(leg.mode) && (
+                              <label>
+                                Avgang
+                                <input
+                                  value={leg.startTime || ''}
+                                  onChange={(e) =>
+                                    updateLeg(idx, {
+                                      ...leg,
+                                      startTime: e.target.value,
+                                    })
+                                  }
+                                  placeholder="11:40"
+                                />
+                              </label>
+                            )}
                             <label>
                               Ankomst
                               <input
@@ -2120,6 +2310,47 @@ function DayForm({
                                 placeholder="12:10"
                               />
                             </label>
+                            {modeHasDepartureSchedule(leg.mode) && (
+                              <LegDeparturesField
+                                times={
+                                  normalizeDepartures(
+                                    leg.departures?.length
+                                      ? leg.departures
+                                      : leg.startTime
+                                        ? [leg.startTime]
+                                        : [],
+                                  )
+                                }
+                                dayDate={form.date}
+                                onChange={(departures) => {
+                                  const next = normalizeDepartures(departures)
+                                  updateLeg(idx, {
+                                    ...leg,
+                                    departures: next,
+                                    // First time = what we bet on → planned avgang
+                                    startTime: next[0] || '',
+                                  })
+                                }}
+                                onAcceptSuggested={(suggested) => {
+                                  const rest = normalizeDepartures(
+                                    leg.departures?.length
+                                      ? leg.departures
+                                      : leg.startTime
+                                        ? [leg.startTime]
+                                        : [],
+                                  ).filter((t) => t !== suggested)
+                                  const departures = normalizeDepartures([
+                                    suggested,
+                                    ...rest,
+                                  ])
+                                  updateLeg(idx, {
+                                    ...leg,
+                                    departures,
+                                    startTime: suggested,
+                                  })
+                                }}
+                              />
+                            )}
                             <label className="full">
                               Lenke
                               <input
@@ -2165,17 +2396,25 @@ function DayForm({
                   {leg && next && (
                     <div className="via-flow-leg">
                       {!editingThisLeg && (
-                        <TransportBadge
-                          mode={leg.mode}
-                          detail={
-                            [
-                              leg.title?.trim(),
-                              [leg.startTime, leg.endTime]
-                                .filter(Boolean)
-                                .join('–'),
-                            ]
-                              .filter(Boolean)
-                              .join(' · ') || undefined
+                        <LegTransportSummary
+                          leg={leg}
+                          dayDate={form.date}
+                          onAcceptSuggested={
+                            modeHasDepartureSchedule(leg.mode)
+                              ? (suggested) => {
+                                  const rest = normalizeDepartures(
+                                    leg.departures,
+                                  ).filter((t) => t !== suggested)
+                                  updateLeg(idx, {
+                                    ...leg,
+                                    departures: normalizeDepartures([
+                                      suggested,
+                                      ...rest,
+                                    ]),
+                                    startTime: suggested,
+                                  })
+                                }
+                              : undefined
                           }
                         />
                       )}
@@ -3084,6 +3323,7 @@ export default function App() {
             >
               Ny tur
             </button>
+            <GoogleLoginButton />
             <button className="btn btn-ghost" type="button" onClick={() => void loadTrips()}>
               Oppdater
             </button>
@@ -3336,6 +3576,13 @@ export default function App() {
 
   if (view.name === 'city') {
     const group = cityGroups.find((g) => g.key === view.cityKey)
+    const cityMapsUrl =
+      group && !isAtSeaDay({ city: group.city, atSea: false }) &&
+      group.city !== AT_SEA_LABEL
+        ? googleMapsPlaceUrl({
+            query: [group.city, group.country].filter(Boolean).join(', '),
+          })
+        : ''
     return (
       <div className="app-shell">
         <div className="topbar">
@@ -3345,13 +3592,27 @@ export default function App() {
               {group?.country || ''} · {activeTrip?.name || 'Tur'}
             </p>
           </div>
-          <button
-            className="btn btn-ghost"
-            type="button"
-            onClick={() => setView({ name: 'trip', tripId: view.tripId, tab: 'byer' })}
-          >
-            Tilbake
-          </button>
+          <div className="toolbar">
+            {cityMapsUrl && (
+              <a
+                className="btn btn-soft"
+                href={cityMapsUrl}
+                target="_blank"
+                rel="noreferrer"
+              >
+                Google Maps
+              </a>
+            )}
+            <button
+              className="btn btn-ghost"
+              type="button"
+              onClick={() =>
+                setView({ name: 'trip', tripId: view.tripId, tab: 'byer' })
+              }
+            >
+              Tilbake
+            </button>
+          </div>
         </div>
         <section className="panel">
           {!group && <p className="empty">Fant ikke byen.</p>}
@@ -3508,6 +3769,13 @@ export default function App() {
                                           ]
                                             .filter(Boolean)
                                             .join('–'),
+                                          formatDeparturesLabel(
+                                            day.legs[idx].departures,
+                                          )
+                                            ? `alt. ${formatDeparturesLabel(
+                                                day.legs[idx].departures,
+                                              )}`
+                                            : '',
                                         ]
                                           .filter(Boolean)
                                           .join(' · ') || undefined
@@ -3587,6 +3855,7 @@ export default function App() {
           </p>
         </div>
         <div className="toolbar">
+          <GoogleLoginButton />
           <button
             className="btn btn-primary"
             type="button"
@@ -3774,36 +4043,67 @@ export default function App() {
         {tab === 'byer' && (
           <div className="trip-list">
             {cityGroups.length === 0 && <p className="empty">Ingen byer ennå.</p>}
-            {cityGroups.map((group) => (
-              <button
-                key={group.key}
-                type="button"
-                className="city-row"
-                onClick={() =>
-                  setView({ name: 'city', tripId: view.tripId, cityKey: group.key })
-                }
-              >
-                <div>
-                  <h3>
-                    {group.city}
-                    <span style={{ color: 'var(--muted)', fontWeight: 500 }}>
-                      {' '}
-                      · {group.country}
-                    </span>
-                  </h3>
-                  <p className="meta">
-                    {group.hotels[0]?.title || 'Uten hotell'} · {group.days.length}{' '}
-                    dag
-                    {group.days.length === 1 ? '' : 'er'} · {group.items.length} ting
-                  </p>
+            {cityGroups.map((group) => {
+              const atSea =
+                group.city === AT_SEA_LABEL ||
+                group.country === AT_SEA_LABEL
+              const mapsUrl = atSea
+                ? ''
+                : googleMapsPlaceUrl({
+                    query: [group.city, group.country]
+                      .filter(Boolean)
+                      .join(', '),
+                  })
+              return (
+                <div key={group.key} className="city-row-wrap">
+                  <button
+                    type="button"
+                    className="city-row"
+                    onClick={() =>
+                      setView({
+                        name: 'city',
+                        tripId: view.tripId,
+                        cityKey: group.key,
+                      })
+                    }
+                  >
+                    <div>
+                      <h3>
+                        {group.city}
+                        <span style={{ color: 'var(--muted)', fontWeight: 500 }}>
+                          {' '}
+                          · {group.country}
+                        </span>
+                      </h3>
+                      <p className="meta">
+                        {group.hotels[0]?.title || 'Uten hotell'} ·{' '}
+                        {group.days.length} dag
+                        {group.days.length === 1 ? '' : 'er'} ·{' '}
+                        {group.items.length} ting
+                      </p>
+                    </div>
+                    <span className="chip">Åpne</span>
+                  </button>
+                  {mapsUrl && (
+                    <a
+                      className="city-row-maps"
+                      href={mapsUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      title={`Åpne ${group.city} i Google Maps`}
+                    >
+                      Maps
+                    </a>
+                  )}
                 </div>
-                <span className="chip">Åpne</span>
-              </button>
-            ))}
+              )
+            })}
           </div>
         )}
 
-        {tab === 'kart' && <TripMap days={days} />}
+        {tab === 'kart' && (
+          <TripMap days={days} tripName={activeTrip?.name || 'Reise'} />
+        )}
       </section>
     </div>
   )

@@ -46,6 +46,25 @@ Collections i prosjektet `homey-376215`:
 - `trips` — reiser
 - `trip_days` — dager knyttet til en tur via `tripId`
 
+## Google-innlogging
+
+Firebase Auth er koblet til prosjektet `homey-376215`. Innlogging huskes i nettleseren (`browserLocalPersistence`) til du logger ut.
+
+**Én gang — aktiver Google som innloggingsmetode:**
+
+1. Åpne [Firebase Authentication → Sign-in method](https://console.firebase.google.com/project/homey-376215/authentication/providers)
+2. **Google** → **Enable** → **Save** (Web client ID er vanligvis forhåndsutfylt)
+
+Eller kjør:
+
+```powershell
+powershell -File scripts/setup-google-auth.ps1
+```
+
+Lokalt ligger Firebase-config i `frontend/.env.local` (gitignorert). Cloud Run-deploy bakker den inn automatisk.
+
+Google Drive API er aktivert for «Lagre i Mine kart».
+
 ## Cloud Run
 
 Deploy API + frontend til `homey-376215` / `europe-north1`:
@@ -55,3 +74,5 @@ bash scripts/deploy-cloud-run.sh
 ```
 
 Tjenester: `reise-backend`, `reise-frontend`. Backend bruker Application Default Credentials med `FIREBASE_PROJECT_ID=homey-376215`.
+
+Valgfritt: `VITE_GOOGLE_CLIENT_ID=... bash scripts/deploy-cloud-run.sh`

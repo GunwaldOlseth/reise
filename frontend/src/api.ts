@@ -1,5 +1,12 @@
-const API_BASE =
-  import.meta.env.VITE_API_URL || 'http://localhost:8082/api';
+const API_BASE = (() => {
+  const fromEnv = (import.meta.env.VITE_API_URL as string | undefined)?.trim()
+  if (fromEnv) return fromEnv.replace(/\/$/, '')
+  // Vite production builds for Cloud Run bake this via frontend/.env.production
+  if (import.meta.env.PROD) {
+    return 'https://reise-backend-624978663833.europe-north1.run.app/api'
+  }
+  return 'http://localhost:8082/api'
+})()
 
 export type DayItemType =
   | 'hotel'
@@ -54,8 +61,16 @@ export interface RouteLeg {
   toViaPointId: string;
   mode: LegMode;
   title?: string;
+  /** Chosen / planned departure — drives via sync and map order. */
   startTime?: string;
+  /** Chosen / planned arrival — drives via sync and map order. */
   endTime?: string;
+  /**
+   * Timetable for bus/tram/train: first = preferred bet, rest = fallbacks.
+   * Fallbacks never auto-change route sync; UI may suggest the next after preferred has passed.
+   * Not used for flight/cruise.
+   */
+  departures?: string[];
   url?: string;
   notes?: string;
   sortOrder: number;
@@ -223,6 +238,7 @@ export function newRouteLeg(
     title: '',
     startTime: '',
     endTime: '',
+    departures: [],
     url: '',
     notes: '',
     sortOrder,
@@ -236,6 +252,78 @@ export function arriveTimeSortKey(time?: string): number {
   const m = t.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/);
   if (!m) return Number.POSITIVE_INFINITY;
   return Number(m[1]) * 3600 + Number(m[2]) * 60 + Number(m[3] || 0);
+}
+
+/** Parse compact timetable text like "14:05 14.50, 16:10" into HH:mm list. */
+export function parseDepartureTimes(raw: string): string[] {
+  const parts = raw.split(/[\s,;|]+/).map((s) => s.trim()).filter(Boolean);
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const part of parts) {
+    const m = part.match(/^(\d{1,2})[:.](\d{2})$/);
+    if (!m) continue;
+    const h = Number(m[1]);
+    const min = Number(m[2]);
+    if (h > 23 || min > 59) continue;
+    const norm = `${String(h).padStart(2, '0')}:${String(min).padStart(2, '0')}`;
+    if (seen.has(norm)) continue;
+    seen.add(norm);
+    out.push(norm);
+  }
+  return out.sort((a, b) => arriveTimeSortKey(a) - arriveTimeSortKey(b));
+}
+
+/** Merge and normalize departure alternatives (display order only). */
+export function normalizeDepartures(times: string[] | undefined): string[] {
+  return parseDepartureTimes((times || []).join(' '));
+}
+
+export function formatDeparturesLabel(times: string[] | undefined): string {
+  const list = normalizeDepartures(times);
+  return list.length ? list.join(' · ') : '';
+}
+
+/** Tog / bane / buss — not fly or cruise. */
+export function modeHasDepartureSchedule(mode: string): boolean {
+  return mode === 'train' || mode === 'tram' || mode === 'bus';
+}
+
+function clockMinutes(time?: string): number {
+  const key = arriveTimeSortKey(time);
+  if (key === Number.POSITIVE_INFINITY) return Number.POSITIVE_INFINITY;
+  return Math.floor(key / 60);
+}
+
+function localIsoDate(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+/**
+ * After the preferred (first) departure has passed on that calendar day,
+ * return the next still-usable time from the list. Suggestion only.
+ */
+export function nextScheduledDeparture(
+  dayDate: string,
+  departures: string[] | undefined,
+  now = new Date(),
+): { preferred: string; suggested: string } | null {
+  const list = normalizeDepartures(departures);
+  if (list.length < 2) return null;
+  const day = dayDate.trim().slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return null;
+  const today = localIsoDate(now);
+  if (day !== today) return null;
+
+  const preferred = list[0];
+  const nowMin = now.getHours() * 60 + now.getMinutes();
+  if (nowMin <= clockMinutes(preferred)) return null;
+
+  const suggested = list.find((t) => clockMinutes(t) >= nowMin);
+  if (!suggested || suggested === preferred) return null;
+  return { preferred, suggested };
 }
 
 /** Prefer arrive time, else leave time — so first stop can sort by avreise. */
@@ -883,6 +971,8 @@ export async function ensureCruiseDays(
 }
 
 export type TripMapStop = {
+  /** Day's main city — used when geocoding street/airport vias. */
+  contextCity?: string
   kind: 'port' | 'sea' | 'via'
   city: string
   country: string
@@ -972,6 +1062,7 @@ export function tripMapStopsInOrder(days: TripDay[]): TripMapStop[] {
         kind: 'via',
         city: title,
         country,
+        contextCity: city || undefined,
         date: day.date,
         key: `via|${day.id}|${p.id}`,
         timeKey,
