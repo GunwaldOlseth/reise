@@ -1,0 +1,47 @@
+# Reise
+
+Reiseplanlegger med dag-for-dag-plan, hotell-lenker og tidslinje. Go API + React/Vite mot Firestore (samme Firebase-prosjekt som beer-appen).
+
+## Oppsett
+
+### Credentials
+
+Pek på samme service account som beer-appen (anbefalt — ingen ekstra kopi):
+
+```powershell
+cd backend\api
+$env:FIREBASE_KEY_PATH = "C:\Arkiv\Utvikling\Antigravity\beer\backend\api\service-account.json"
+$env:PORT = "8082"
+go run .
+```
+
+Eller kopier nøkkelen lokalt (gitignorert):
+
+```powershell
+copy ..\Antigravity\beer\backend\api\service-account.json backend\api\service-account.json
+cd backend\api
+go run .
+```
+
+### Backend
+
+API lytter på port `8082` (eller `PORT`). Health: `GET /api/health`.
+
+Hvis `8082` er opptatt, bruk f.eks. `$env:PORT = "8083"` og sett samme port i `frontend/.env.local` (`VITE_API_URL`).
+
+### Frontend
+
+```powershell
+cd frontend
+npm install
+npm run dev
+```
+
+Åpne Vite-URL-en (typisk `http://localhost:5173`). API-kall går til `http://localhost:8082/api` via `VITE_API_URL` (se `.env.example`).
+
+## Firestore
+
+Collections i prosjektet `homey-376215`:
+
+- `trips` — reiser
+- `trip_days` — dager knyttet til en tur via `tripId`
