@@ -249,9 +249,14 @@ export function newRouteLeg(
 export function arriveTimeSortKey(time?: string): number {
   const t = (time || '').trim();
   if (!t) return Number.POSITIVE_INFINITY;
-  const m = t.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/);
+  // Accept dirty fields like "07:40 07:45" — use the first clock time.
+  const m = t.match(/(\d{1,2})[:.](\d{2})(?::(\d{2}))?/);
   if (!m) return Number.POSITIVE_INFINITY;
-  return Number(m[1]) * 3600 + Number(m[2]) * 60 + Number(m[3] || 0);
+  const h = Number(m[1]);
+  const min = Number(m[2]);
+  const sec = Number(m[3] || 0);
+  if (h > 23 || min > 59 || sec > 59) return Number.POSITIVE_INFINITY;
+  return h * 3600 + min * 60 + sec;
 }
 
 /** Parse compact timetable text like "14:05 14.50, 16:10" into HH:mm list. */
@@ -430,6 +435,8 @@ export interface PlaceSuggestion {
   admin1?: string;
   latitude: number;
   longitude: number;
+  population?: number;
+  featureCode?: string;
 }
 
 export class ApiError extends Error {

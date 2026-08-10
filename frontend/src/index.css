@@ -891,12 +891,13 @@ textarea {
 .trip-map-marker-num {
   display: grid;
   place-items: center;
-  width: 28px;
+  min-width: 28px;
   height: 28px;
+  padding: 0 0.28rem;
   border-radius: 999px;
   background: var(--teal-deep);
   color: #fff;
-  font-size: 0.78rem;
+  font-size: 0.72rem;
   font-weight: 700;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
 }
@@ -908,7 +909,7 @@ textarea {
 }
 
 .trip-map-marker-num.is-via {
-  width: 24px;
+  min-width: 26px;
   height: 24px;
   background: #7a5a1e;
   font-size: 0.7rem;

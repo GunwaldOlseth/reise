@@ -7,10 +7,14 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 )
+
+var streetHintRe = regexp.MustCompile(`(?i)(\d|[øo]vregate|gate[n]?|gata|vei[en]?|väg|street|road|strada|platz|allee|avenue|boulevard)`)
 
 // weatherDay is one calendar day's weather summary.
 type weatherDay struct {
@@ -197,10 +201,54 @@ func placeRank(p placeSuggestion) int {
 		score += 1_000_000
 	case "PPLA2":
 		score += 200_000
+	case "PPLA3":
+		score += 100_000
 	case "PPL":
 		score += 10_000
+	case "AIRP", "AIRH":
+		score += 500_000
+	case "ADDR":
+		score += 2_000_000
 	}
 	return score
+}
+
+func countryAliases(name string) []string {
+	n := strings.ToLower(strings.TrimSpace(name))
+	switch n {
+	case "italia", "italy", "italien":
+		return []string{"italia", "italy", "italien"}
+	case "spania", "spain", "spanien", "españa":
+		return []string{"spania", "spain", "spanien", "españa"}
+	case "frankrike", "france", "frankreich":
+		return []string{"frankrike", "france", "frankreich"}
+	case "norge", "norway", "norwegen":
+		return []string{"norge", "norway", "norwegen"}
+	default:
+		if n == "" {
+			return nil
+		}
+		return []string{n}
+	}
+}
+
+func countriesLooselyMatch(a, b string) bool {
+	a = strings.ToLower(strings.TrimSpace(a))
+	b = strings.ToLower(strings.TrimSpace(b))
+	if a == "" || b == "" {
+		return false
+	}
+	if a == b || strings.Contains(a, b) || strings.Contains(b, a) {
+		return true
+	}
+	for _, x := range countryAliases(a) {
+		for _, y := range countryAliases(b) {
+			if x == y {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func searchPlaces(name, language string, count int) ([]placeSuggestion, error) {
@@ -374,6 +422,126 @@ func buildWeatherDays(data meteoPayload) (today *weatherDay, forecast []weatherD
 	return today, forecast, all
 }
 
+func looksLikeStreetAddress(q string) bool {
+	return streetHintRe.MatchString(strings.TrimSpace(q))
+}
+
+// searchNominatim resolves street addresses Open-Meteo cannot find (e.g. Lille Øvregaten 10).
+func searchNominatim(q string) ([]placeSuggestion, error) {
+	q = strings.TrimSpace(q)
+	if q == "" {
+		return nil, nil
+	}
+	u := "https://nominatim.openstreetmap.org/search?format=json&limit=5&addressdetails=1&q=" +
+		url.QueryEscape(q)
+	req, err := http.NewRequest(http.MethodGet, u, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("User-Agent", "ReiseTravelPlanner/1.0 (homey-376215)")
+	req.Header.Set("Accept-Language", "nb,en")
+
+	client := &http.Client{Timeout: 8 * time.Second}
+	res, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer res.Body.Close()
+	if res.StatusCode < 200 || res.StatusCode >= 300 {
+		body, _ := io.ReadAll(io.LimitReader(res.Body, 512))
+		return nil, fmt.Errorf("nominatim %d: %s", res.StatusCode, strings.TrimSpace(string(body)))
+	}
+
+	var rows []struct {
+		Lat         string `json:"lat"`
+		Lon         string `json:"lon"`
+		DisplayName string `json:"display_name"`
+		Name        string `json:"name"`
+		Class       string `json:"class"`
+		Type        string `json:"type"`
+		Address     *struct {
+			Road        string `json:"road"`
+			HouseNumber string `json:"house_number"`
+			City        string `json:"city"`
+			Town        string `json:"town"`
+			Village     string `json:"village"`
+			Municipality string `json:"municipality"`
+			County      string `json:"county"`
+			State       string `json:"state"`
+			Country     string `json:"country"`
+		} `json:"address"`
+	}
+	if err := json.NewDecoder(res.Body).Decode(&rows); err != nil {
+		return nil, err
+	}
+
+	out := make([]placeSuggestion, 0, len(rows))
+	for _, row := range rows {
+		lat, err1 := strconv.ParseFloat(row.Lat, 64)
+		lon, err2 := strconv.ParseFloat(row.Lon, 64)
+		if err1 != nil || err2 != nil {
+			continue
+		}
+		name := strings.TrimSpace(row.Name)
+		admin1 := ""
+		country := ""
+		if row.Address != nil {
+			country = row.Address.Country
+			admin1 = firstNonEmpty(
+				row.Address.City,
+				row.Address.Town,
+				row.Address.Village,
+				row.Address.Municipality,
+				row.Address.County,
+				row.Address.State,
+			)
+			if name == "" {
+				road := strings.TrimSpace(row.Address.Road)
+				num := strings.TrimSpace(row.Address.HouseNumber)
+				switch {
+				case road != "" && num != "":
+					name = road + " " + num
+				case road != "":
+					name = road
+				}
+			}
+		}
+		if name == "" {
+			// First comma-separated part of display name is usually the house/road.
+			parts := strings.Split(row.DisplayName, ",")
+			if len(parts) > 0 {
+				name = strings.TrimSpace(parts[0])
+			}
+		}
+		if name == "" {
+			name = q
+		}
+		fc := "ADDR"
+		if row.Class == "aeroway" || row.Type == "aerodrome" {
+			fc = "AIRP"
+		}
+		out = append(out, placeSuggestion{
+			Name:        name,
+			Country:     country,
+			Admin1:      admin1,
+			Latitude:    lat,
+			Longitude:   lon,
+			Population:  0,
+			FeatureCode: fc,
+		})
+	}
+	return out, nil
+}
+
+func firstNonEmpty(vals ...string) string {
+	for _, v := range vals {
+		if strings.TrimSpace(v) != "" {
+			return strings.TrimSpace(v)
+		}
+	}
+	return ""
+}
+
 func getPlaces(w http.ResponseWriter, r *http.Request) {
 	q := strings.TrimSpace(r.URL.Query().Get("q"))
 	if q == "" {
@@ -384,6 +552,8 @@ func getPlaces(w http.ResponseWriter, r *http.Request) {
 		respondWithError(w, http.StatusBadRequest, "q is required")
 		return
 	}
+
+	streetQuery := looksLikeStreetAddress(q)
 
 	// Search several languages — Open-Meteo "nb" often omits major cities (e.g. Roma).
 	byCityEn, err := searchPlaces(q, "en", 10)
@@ -403,7 +573,7 @@ func getPlaces(w http.ResponseWriter, r *http.Request) {
 		return primary[i].Population > primary[j].Population
 	})
 
-	if country != "" {
+	if country != "" && !streetQuery {
 		withCountryEn, _ := searchPlaces(q+", "+country, "en", 8)
 		withCountryNb, _ := searchPlaces(q+", "+country, "nb", 8)
 		primary = mergePlaceSuggestions(withCountryEn, withCountryNb, primary)
@@ -414,19 +584,48 @@ func getPlaces(w http.ResponseWriter, r *http.Request) {
 			}
 			return primary[i].Population > primary[j].Population
 		})
-		// Soft-rank: same country (case-insensitive) first, keep population order within.
+		// Soft-rank: same country (incl. Italia/Italy etc.) first, keep population order within.
 		ranked := make([]placeSuggestion, 0, len(primary))
 		rest := make([]placeSuggestion, 0, len(primary))
-		want := strings.ToLower(country)
 		for _, p := range primary {
-			if strings.Contains(strings.ToLower(p.Country), want) ||
-				strings.Contains(want, strings.ToLower(p.Country)) {
+			if countriesLooselyMatch(country, p.Country) {
 				ranked = append(ranked, p)
 			} else {
 				rest = append(rest, p)
 			}
 		}
 		primary = append(ranked, rest...)
+	}
+
+	// Open-Meteo is city-centric — fall back to Nominatim for streets/house numbers.
+	if streetQuery || len(primary) == 0 {
+		nomQ := q
+		if country != "" && streetQuery {
+			// Prefer bare street first; country from the trip day is often wrong
+			// (e.g. Bergen-adresse på en Italia-dag).
+			if hits, err := searchNominatim(q); err == nil && len(hits) > 0 {
+				primary = mergePlaceSuggestions(hits, primary)
+			} else if hits, err := searchNominatim(q + ", " + country); err == nil {
+				primary = mergePlaceSuggestions(hits, primary)
+			} else if err != nil {
+				log.Printf("[Places] nominatim %q: %v", nomQ, err)
+			}
+		} else if hits, err := searchNominatim(nomQ); err == nil {
+			primary = mergePlaceSuggestions(hits, primary)
+		} else if err != nil {
+			log.Printf("[Places] nominatim %q: %v", nomQ, err)
+		}
+		if streetQuery && len(primary) > 1 {
+			// Keep Nominatim address hits ahead of weak city namesakes.
+			sort.SliceStable(primary, func(i, j int) bool {
+				ai := primary[i].FeatureCode == "ADDR" || primary[i].FeatureCode == "AIRP"
+				aj := primary[j].FeatureCode == "ADDR" || primary[j].FeatureCode == "AIRP"
+				if ai != aj {
+					return ai
+				}
+				return placeRank(primary[i]) > placeRank(primary[j])
+			})
+		}
 	}
 
 	if len(primary) > 8 {

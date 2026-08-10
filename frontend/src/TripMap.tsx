@@ -25,7 +25,7 @@ function escapeHtml(value: string) {
     .replace(/"/g, '&quot;')
 }
 
-function markerIcon(kind: TripMapStop['kind'], n: number) {
+function markerIcon(kind: TripMapStop['kind'], label: string) {
   if (kind === 'sea') {
     return L.divIcon({
       className: 'trip-map-marker is-sea',
@@ -37,17 +37,69 @@ function markerIcon(kind: TripMapStop['kind'], n: number) {
   if (kind === 'via') {
     return L.divIcon({
       className: 'trip-map-marker is-via',
-      html: `<span class="trip-map-marker-num is-via">${n}</span>`,
-      iconSize: [24, 24],
-      iconAnchor: [12, 12],
+      html: `<span class="trip-map-marker-num is-via">${escapeHtml(label)}</span>`,
+      iconSize: [28, 28],
+      iconAnchor: [14, 14],
     })
   }
   return L.divIcon({
     className: 'trip-map-marker',
-    html: `<span class="trip-map-marker-num">${n}</span>`,
+    html: `<span class="trip-map-marker-num">${escapeHtml(label)}</span>`,
     iconSize: [28, 28],
     iconAnchor: [14, 14],
   })
+}
+
+const COUNTRY_ALIASES: Record<string, string[]> = {
+  italia: ['italia', 'italy', 'italien'],
+  italy: ['italia', 'italy', 'italien'],
+  spania: ['spania', 'spain', 'spanien', 'españa'],
+  spain: ['spania', 'spain', 'spanien', 'españa'],
+  frankrike: ['frankrike', 'france', 'frankreich'],
+  france: ['frankrike', 'france', 'frankreich'],
+  norge: ['norge', 'norway', 'norwegen'],
+  norway: ['norge', 'norway', 'norwegen'],
+}
+
+function countriesMatch(a: string, b: string): boolean {
+  const x = a.trim().toLowerCase()
+  const y = b.trim().toLowerCase()
+  if (!x || !y) return false
+  if (x === y || x.includes(y) || y.includes(x)) return true
+  const ax = COUNTRY_ALIASES[x] || [x]
+  const ay = COUNTRY_ALIASES[y] || [y]
+  return ax.some((v) => ay.includes(v))
+}
+
+/** Prefer major city / same country — avoids tiny namesakes scrambling the route. */
+function pickBestPlace(
+  places: PlaceSuggestion[],
+  query: string,
+  country: string,
+): PlaceSuggestion | undefined {
+  if (!places.length) return undefined
+  const q = query.trim().toLowerCase()
+  let best = places[0]
+  let bestScore = -1
+  for (const p of places) {
+    let score = p.population || 0
+    if (p.name.trim().toLowerCase() === q) score += 2_000_000
+    else if (p.name.trim().toLowerCase().startsWith(q)) score += 400_000
+    else if (q && p.name.trim().toLowerCase().includes(q.split(/\s+\d/)[0] || q))
+      score += 200_000
+    if (country && countriesMatch(country, p.country)) score += 1_500_000
+    const fc = (p.featureCode || '').toUpperCase()
+    if (fc === 'ADDR') score += 3_000_000
+    else if (fc === 'PPLC') score += 5_000_000
+    else if (fc === 'PPLA') score += 1_000_000
+    else if (fc === 'PPLA2' || fc === 'PPLA3') score += 200_000
+    else if (fc === 'AIRP' || fc === 'AIRH') score += 800_000
+    if (score > bestScore) {
+      bestScore = score
+      best = p
+    }
+  }
+  return best
 }
 
 function clusterIcon(count: number) {
@@ -85,7 +137,7 @@ function stopPopupLine(stop: ResolvedStop): string {
     stop.kind === 'sea' ? AT_SEA_LABEL : stop.city || place?.name || 'Stopp',
   )
   const num =
-    stop.kind === 'sea' ? '~' : String(stop.markerNum ?? '')
+    stop.kind === 'sea' ? '~' : String(stop.markerLabel ?? '')
   const bits = [
     stop.kind === 'via' ? 'Via' : null,
     stop.kind === 'sea' ? place?.admin1 || null : stop.country || place?.country || null,
@@ -178,7 +230,8 @@ function midpointPlace(
 type ResolvedStop = TripMapStop & {
   place?: PlaceSuggestion
   error?: string
-  markerNum?: number
+  /** Main city/sea: "1"; vias under that city: "1a", "1b". */
+  markerLabel?: string
 }
 
 function userLocationIcon() {
@@ -238,26 +291,46 @@ export function TripMap({
           `${stop.kind}|${stop.city}|${stop.country}|${stop.contextCity || ''}`.toLowerCase()
         if (!placeCache.has(cacheKey)) {
           try {
-            let places = (await api.searchPlaces(stop.city, stop.country)).places
-            // Street / airport vias often need the day city as context.
+            const looksStreet = /\d|gate|gata|gaten|vei|street|strada/i.test(
+              stop.city,
+            )
+            // Streets/airports: search without day-country first (Bergen-gate
+            // on an Italia-day must not be forced into Italy / Rapallo).
+            let places = (
+              await api.searchPlaces(
+                stop.city,
+                stop.kind === 'via' && looksStreet ? '' : stop.country,
+              )
+            ).places
+            let picked = pickBestPlace(
+              places,
+              stop.city,
+              looksStreet ? '' : stop.country,
+            )
+            if (!picked && stop.kind === 'via' && stop.country) {
+              places = (await api.searchPlaces(stop.city, stop.country)).places
+              picked = pickBestPlace(places, stop.city, stop.country)
+            }
             if (
-              !places[0] &&
+              !picked &&
               stop.kind === 'via' &&
               stop.contextCity &&
               stop.contextCity.toLowerCase() !== stop.city.toLowerCase()
             ) {
+              // Try "street, nearby city" but never replace the via with the city itself.
               places = (
                 await api.searchPlaces(
                   `${stop.city}, ${stop.contextCity}`,
-                  stop.country,
+                  '',
                 )
               ).places
-              if (!places[0]) {
-                places = (await api.searchPlaces(stop.contextCity, stop.country))
-                  .places
-              }
+              picked = pickBestPlace(places, stop.city, '')
             }
-            placeCache.set(cacheKey, places[0] || null)
+            if (!picked && stop.kind === 'via' && !looksStreet) {
+              places = (await api.searchPlaces(stop.city, '')).places
+              picked = pickBestPlace(places, stop.city, '')
+            }
+            placeCache.set(cacheKey, picked || null)
           } catch {
             placeCache.set(cacheKey, null)
           }
@@ -270,9 +343,10 @@ export function TripMap({
         )
       }
 
-      // Number every stop in list order (also without coords), so 1…n matches
-      // the legend — missing geocode must not leave gaps that look like wrong order.
-      let seq = 0
+      // Main route numbers = byer/havner (+ sjø uten nummer).
+      // Via under neste by: 1a, 1b … så byen som 1 — unngår at flyplasser
+      // «stjeler» 1,2,3 og får hele linjen til å se rotete ut.
+      let portSeq = 0
       const next: ResolvedStop[] = geocoded.map((stop, idx) => {
         if (stop.kind === 'sea') {
           let prev: PlaceSuggestion | undefined
@@ -298,12 +372,53 @@ export function TripMap({
           return {
             ...stop,
             place: midpointPlace(prev, after, AT_SEA_LABEL),
+            markerLabel: '~',
           }
         }
-
-        seq += 1
-        return { ...stop, markerNum: seq }
+        return stop
       })
+
+      let i = 0
+      while (i < next.length) {
+        if (next[i].kind === 'sea') {
+          i += 1
+          continue
+        }
+        if (next[i].kind === 'port') {
+          portSeq += 1
+          next[i] = { ...next[i], markerLabel: String(portSeq) }
+          i += 1
+          continue
+        }
+        // Collect vias until the port they belong to (same day), else until next port/sea.
+        const viaStart = i
+        while (i < next.length && next[i].kind === 'via') i += 1
+        const viaEnd = i
+        let portIdx = -1
+        if (
+          i < next.length &&
+          next[i].kind === 'port' &&
+          next[i].date === next[viaStart].date
+        ) {
+          portIdx = i
+          portSeq += 1
+          next[portIdx] = { ...next[portIdx], markerLabel: String(portSeq) }
+        } else {
+          // Orphan vias (no new city that day) — attach to next upcoming port number.
+          portSeq += 1
+        }
+        const base = portSeq
+        let viaOrd = 0
+        for (let v = viaStart; v < viaEnd; v++) {
+          const letter =
+            viaOrd < 26
+              ? String.fromCharCode(97 + viaOrd)
+              : `-${viaOrd + 1}`
+          next[v] = { ...next[v], markerLabel: `${base}${letter}` }
+          viaOrd += 1
+        }
+        if (portIdx >= 0) i = portIdx + 1
+      }
 
       if (!cancelled) {
         setResolved(next)
@@ -342,10 +457,83 @@ export function TripMap({
 
     layer.clearLayers()
     const withCoords = resolved.filter((r) => r.place)
-    const latLngs: L.LatLngExpression[] = withCoords.map((stop) => [
+    // Main route = byer/havner + til sjøs. Skip direct city→city when that
+    // arrival day already has a via-chain (avoids Genova──Trieste on top of
+    // Genoa→Milano→Trieste).
+    const mainStops = withCoords.filter(
+      (r) => r.kind === 'port' || r.kind === 'sea',
+    )
+    const portHasInboundVias = new Set<string>()
+    for (let i = 0; i < resolved.length; i++) {
+      const stop = resolved[i]
+      if (stop.kind !== 'port' || !stop.place) continue
+      let j = i - 1
+      while (j >= 0 && resolved[j].kind === 'via' && resolved[j].date === stop.date) {
+        if (resolved[j].place) {
+          portHasInboundVias.add(stop.key)
+          break
+        }
+        j -= 1
+      }
+    }
+    const mainSegments: L.LatLngExpression[][] = []
+    let mainSeg: L.LatLngExpression[] = []
+    const flushMain = () => {
+      if (mainSeg.length >= 2) mainSegments.push(mainSeg)
+      mainSeg = []
+    }
+    for (let i = 0; i < mainStops.length; i++) {
+      const stop = mainStops[i]
+      const ll: L.LatLngExpression = [
+        stop.place!.latitude,
+        stop.place!.longitude,
+      ]
+      if (
+        i > 0 &&
+        stop.kind === 'port' &&
+        portHasInboundVias.has(stop.key)
+      ) {
+        // Break before this city — via-leg owns the inbound path.
+        flushMain()
+        mainSeg = [ll]
+        continue
+      }
+      mainSeg.push(ll)
+    }
+    flushMain()
+
+    const latLngs: L.LatLngExpression[] = mainStops.map((stop) => [
       stop.place!.latitude,
       stop.place!.longitude,
     ])
+    // Via-etapper: connect every via→via→by chain (flush leftovers too).
+    const viaLegs: L.LatLngExpression[][] = []
+    let leg: L.LatLngExpression[] = []
+    const flushViaLeg = () => {
+      if (leg.length >= 2) viaLegs.push(leg)
+      leg = []
+    }
+    for (const stop of resolved) {
+      if (!stop.place) {
+        // Broken geocode in the middle — keep chain, just skip the point.
+        if (stop.kind !== 'via') flushViaLeg()
+        continue
+      }
+      if (stop.kind === 'via') {
+        leg.push([stop.place.latitude, stop.place.longitude])
+        continue
+      }
+      if (stop.kind === 'port') {
+        if (leg.length) {
+          leg.push([stop.place.latitude, stop.place.longitude])
+          flushViaLeg()
+        }
+        continue
+      }
+      // sea / other — end current via chain
+      flushViaLeg()
+    }
+    flushViaLeg()
     const groups = groupStopsByCoord(withCoords)
 
     for (const group of groups) {
@@ -355,7 +543,7 @@ export function TripMap({
       const marker = L.marker(ll, {
         icon: stacked
           ? clusterIcon(group.length)
-          : markerIcon(group[0].kind, group[0].markerNum || 0),
+          : markerIcon(group[0].kind, group[0].markerLabel || '·'),
         zIndexOffset: stacked ? 200 : group[0].kind === 'via' ? 0 : 50,
       })
       const html = stackPopupHtml(group)
@@ -372,12 +560,24 @@ export function TripMap({
       marker.addTo(layer)
     }
 
-    if (latLngs.length >= 2) {
-      L.polyline(latLngs, {
-        color: '#147a84',
+    // Draw via legs above the basemap, under main city route.
+    for (const pts of viaLegs) {
+      L.polyline(pts, {
+        color: '#c45c26',
         weight: 3,
-        opacity: 0.75,
-        dashArray: '6 8',
+        opacity: 0.9,
+        dashArray: '4 6',
+        lineJoin: 'round',
+      }).addTo(layer)
+    }
+
+    for (const pts of mainSegments) {
+      L.polyline(pts, {
+        color: '#147a84',
+        weight: 4,
+        opacity: 0.9,
+        dashArray: '8 10',
+        lineJoin: 'round',
       }).addTo(layer)
     }
 
@@ -542,7 +742,7 @@ export function TripMap({
         <p className="section-sub" style={{ marginBottom: 0 }}>
           {status === 'loading'
             ? 'Henter posisjoner…'
-            : `${plotted} av ${stops.length} punkt på kartet (by, via og til sjøs)`}
+            : `${plotted} av ${stops.length} punkt (hovedrute = byer; via som 1a, 1b…)`}
         </p>
         <div className="trip-map-actions">
           {markerPoints.length > 0 && (
@@ -689,7 +889,7 @@ export function TripMap({
                       : ''
                 }`}
               >
-                {stop.kind === 'sea' ? '~' : stop.markerNum || '·'}
+                {stop.kind === 'sea' ? '~' : stop.markerLabel || '·'}
               </span>
               <span className="trip-map-legend-body">
                 <strong>
