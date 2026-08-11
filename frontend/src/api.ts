@@ -100,6 +100,10 @@ export interface TripDay {
   city: string;
   /** Cruise day spent entirely at sea (no port call). */
   atSea?: boolean;
+  /** Ship arrival at port (cruise), HH:mm. */
+  arriveTime?: string;
+  /** Ship departure from port (cruise), HH:mm. */
+  leaveTime?: string;
   hotelName: string;
   hotelUrl: string;
   address: string;
@@ -121,6 +125,10 @@ export interface CruiseDayPatch {
   city: string;
   country: string;
   atSea: boolean;
+  /** Ship arrival at this port (empty on embark / at sea). */
+  arriveTime?: string;
+  /** Ship departure from this port (empty on disembark / at sea). */
+  leaveTime?: string;
 }
 
 export const AT_SEA_LABEL = 'Til sjøs';
@@ -403,6 +411,28 @@ export function summarizeDayItems(items: DayItem[] | undefined): string {
     .join(' · ');
 }
 
+/** One transport item as via-style route: Rapallo → Buss → Genova */
+export function formatTransportRoute(item: DayItem): string {
+  const mode = itemTypeLabel(item.type);
+  const from = (item.from || '').trim();
+  const to = (item.to || '').trim();
+  const title = (item.title || '').trim();
+  const times = [item.startTime, item.endTime].filter(Boolean).join('–');
+  const modeBit = [mode, title && title !== mode ? title : '', times]
+    .filter(Boolean)
+    .join(' · ');
+  if (from && to) return `${from} → ${modeBit} → ${to}`;
+  if (from || to) return [from, modeBit, to].filter(Boolean).join(' → ');
+  return modeBit || mode;
+}
+
+/** All «På dagen» transport items, same arrow style as via points. */
+export function summarizeTransportItems(items: DayItem[] | undefined): string {
+  const transports = (items || []).filter((i) => isTransportType(i.type));
+  if (!transports.length) return '';
+  return transports.map(formatTransportRoute).join(' · ');
+}
+
 export function summarizeViaRoute(viaPoints: ViaPoint[] | undefined): string {
   if (!viaPoints?.length) return '';
   const names = viaPoints.map((p) => p.title.trim()).filter(Boolean);
@@ -573,6 +603,8 @@ export function emptyDay(tripId: string, date = '', sortOrder = 0): TripDayInput
     country: '',
     city: '',
     atSea: false,
+    arriveTime: '',
+    leaveTime: '',
     hotelName: '',
     hotelUrl: '',
     address: '',
@@ -585,6 +617,18 @@ export function emptyDay(tripId: string, date = '', sortOrder = 0): TripDayInput
     viaPoints: [],
     legs: [],
   };
+}
+
+/** Short label for ship port times, e.g. "Ankomst 08:00 · Avgang 18:00". */
+export function formatShipPortTimes(
+  day: Pick<TripDay, 'arriveTime' | 'leaveTime' | 'atSea' | 'city'>,
+): string {
+  if (isAtSeaDay(day)) return '';
+  const parts = [
+    day.arriveTime?.trim() ? `Ankomst ${day.arriveTime.trim()}` : '',
+    day.leaveTime?.trim() ? `Avgang ${day.leaveTime.trim()}` : '',
+  ].filter(Boolean);
+  return parts.join(' · ');
 }
 
 export function tripStats(days: TripDay[]) {
@@ -726,9 +770,52 @@ export function hotelsCheckingOutOnDay(
   return out;
 }
 
+/** Last day before `date` that has a non-empty city (skips at-sea). */
+export function previousDayPlace(
+  days: TripDay[],
+  date: string,
+): { city: string; country: string } | null {
+  if (!date) return null;
+  const prior = [...days]
+    .filter((d) => d.date && d.date < date && !isAtSeaDay(d) && d.city.trim())
+    .sort((a, b) => {
+      if (a.date !== b.date) return b.date.localeCompare(a.date);
+      return b.sortOrder - a.sortOrder;
+    });
+  const day = prior[0];
+  if (!day) return null;
+  return { city: day.city.trim(), country: day.country.trim() };
+}
+
 /**
- * Ensure all days from check-in through checkout exist in the DB with same city/country.
- * Example: check-in 02.09 + 2 nights → days 02.09 (existing), 03.09, 04.09 (checkout).
+ * Where you leave from on `date`: checkout hotel city, else previous day's city.
+ */
+export function departurePlaceForDay(
+  days: TripDay[],
+  date: string,
+): { city: string; country: string; kind: 'checkout' | 'previous' } | null {
+  const checkouts = hotelsCheckingOutOnDay(days, date);
+  if (checkouts.length) {
+    const hotelDay = checkouts[0].checkInDay;
+    const city = hotelDay.city.trim();
+    if (city) {
+      return {
+        city,
+        country: hotelDay.country.trim(),
+        kind: 'checkout',
+      };
+    }
+  }
+  const prev = previousDayPlace(days, date);
+  if (!prev) return null;
+  return { ...prev, kind: 'previous' };
+}
+
+/**
+ * Ensure overnight + checkout-morning days exist.
+ * Overnight days (before checkout) inherit hotel city; checkout morning is left
+ * without a city so the user chooses the arrival / next destination.
+ * Example: check-in 02.09 + 2 nights → 03.09 (same city), 04.09 (empty city).
  */
 export async function ensureHotelStayDays(
   tripId: string,
@@ -754,7 +841,38 @@ export async function ensureHotelStayDays(
 
   for (let offset = 1; offset <= maxOffset; offset++) {
     const stayDate = addDaysIso(checkInDay.date, offset);
+    const isCheckoutMorning = offset === maxOffset;
     const found = byDate.get(stayDate);
+
+    if (isCheckoutMorning) {
+      // Arrival city is chosen when editing — do not copy hotel city.
+      if (!found) {
+        const created = await createDay({
+          ...emptyDay(tripId, stayDate, nextSort),
+          city: '',
+          country: '',
+        });
+        byDate.set(stayDate, created);
+        nextSort += 1;
+      }
+      // If day exists with only the hotel city copied earlier, clear it once
+      // so the user is asked for the real arrival city.
+      else if (
+        found.city.trim().toLowerCase() === city.toLowerCase() &&
+        !(found.viaPoints || []).length &&
+        !(found.items || []).some((i) => isTransportType(i.type))
+      ) {
+        const { id, createdAt: _c, updatedAt: _u, ...rest } = found;
+        await updateDay(id, {
+          ...rest,
+          city: '',
+          country: '',
+        });
+      }
+      continue;
+    }
+
+    // Overnight stay day — keep hotel city/country.
     if (found) {
       if (found.city.trim() === city && found.country.trim() === country) {
         continue;
@@ -783,6 +901,30 @@ export function summarizeCheckoutHotels(stays: HotelStayRef[]): string {
     .map(({ hotel: h }) => {
       const name = h.title.trim() || 'Hotell';
       return h.endTime?.trim() ? `Utsjekk ${name} ${h.endTime}` : `Utsjekk ${name}`;
+    })
+    .join(' · ');
+}
+
+/** Hotels currently stayed in (not the check-in day itself). */
+export function summarizeStayingHotels(stays: HotelStayRef[]): string {
+  if (!stays.length) return '';
+  return stays
+    .map(({ hotel: h }) => {
+      const name = h.title.trim() || 'Hotell';
+      return `Hotell ${name}`;
+    })
+    .join(' · ');
+}
+
+/** Check-in hotels on this day (destination / «kommende»). */
+export function summarizeCheckInHotels(items: DayItem[] | undefined): string {
+  const hotels = (items || []).filter((i) => i.type === 'hotel');
+  if (!hotels.length) return '';
+  return hotels
+    .map((h) => {
+      const name = h.title.trim() || 'Hotell';
+      const time = h.startTime?.trim();
+      return time ? `Kommende ${name} ${time}` : `Kommende ${name}`;
     })
     .join(' · ');
 }
@@ -864,7 +1006,10 @@ export function buildCruiseDayPatches(
   embarkDate: string,
   cruise: DayItem,
   tripDays: TripDay[],
-  embarkForm?: Pick<TripDay, 'city' | 'country' | 'atSea' | 'date'>,
+  embarkForm?: Pick<
+    TripDay,
+    'city' | 'country' | 'atSea' | 'date' | 'arriveTime' | 'leaveTime'
+  >,
 ): CruiseDayPatch[] {
   const nights = cruiseNights(cruise);
   const home = cruiseHomePort(cruise);
@@ -877,17 +1022,30 @@ export function buildCruiseDayPatches(
       embarkForm && embarkForm.date === date
         ? embarkForm
         : byDate.get(date);
-    const isEnd = offset === 0 || offset === nights;
+    const isEmbark = offset === 0;
+    const isDisembark = offset === nights;
+    const isEnd = isEmbark || isDisembark;
     const atSea = isAtSeaDay(existing || { city: '', atSea: false });
     let city = existing?.city?.trim() || '';
     let country = existing?.country?.trim() || '';
+    let arriveTime = existing?.arriveTime?.trim() || '';
+    let leaveTime = existing?.leaveTime?.trim() || '';
     if (atSea) {
       city = AT_SEA_LABEL;
       country = '';
+      arriveTime = '';
+      leaveTime = '';
     } else if (!city && isEnd && home) {
       city = home;
     }
-    patches.push({ date, city, country, atSea });
+    // Seed embark/disembark from cruise item times when day has none yet.
+    if (!atSea && isEmbark && !leaveTime && cruise.startTime?.trim()) {
+      leaveTime = cruise.startTime.trim();
+    }
+    if (!atSea && isDisembark && !arriveTime && cruise.endTime?.trim()) {
+      arriveTime = cruise.endTime.trim();
+    }
+    patches.push({ date, city, country, atSea, arriveTime, leaveTime });
   }
   return patches;
 }
@@ -932,11 +1090,15 @@ export async function ensureCruiseDays(
     let nextCity = found?.city || '';
     let nextCountry = found?.country || '';
     let nextAtSea = found ? isAtSeaDay(found) : false;
+    let nextArrive = found?.arriveTime?.trim() || '';
+    let nextLeave = found?.leaveTime?.trim() || '';
 
     if (patch) {
       nextAtSea = patch.atSea;
       nextCity = patch.atSea ? AT_SEA_LABEL : patch.city.trim();
       nextCountry = patch.atSea ? '' : patch.country.trim();
+      nextArrive = patch.atSea ? '' : (patch.arriveTime || '').trim();
+      nextLeave = patch.atSea ? '' : (patch.leaveTime || '').trim();
     } else if (isEnd && home) {
       if (!nextAtSea && !nextCity.trim()) {
         nextCity = home;
@@ -946,13 +1108,25 @@ export async function ensureCruiseDays(
     if (nextAtSea) {
       nextCity = AT_SEA_LABEL;
       nextCountry = '';
+      nextArrive = '';
+      nextLeave = '';
     }
 
     if (found) {
       const cityChanged = found.city.trim() !== nextCity.trim();
       const countryChanged = found.country.trim() !== nextCountry.trim();
       const atSeaChanged = isAtSeaDay(found) !== nextAtSea;
-      if (!cityChanged && !countryChanged && !atSeaChanged) continue;
+      const arriveChanged = (found.arriveTime || '').trim() !== nextArrive;
+      const leaveChanged = (found.leaveTime || '').trim() !== nextLeave;
+      if (
+        !cityChanged &&
+        !countryChanged &&
+        !atSeaChanged &&
+        !arriveChanged &&
+        !leaveChanged
+      ) {
+        continue;
+      }
       // Without patches: never overwrite an already-set middle port.
       if (!patch && offset > 0 && offset < maxOffset) continue;
       if (!patch && isEnd && found.city.trim() && !atSeaChanged) continue;
@@ -963,6 +1137,8 @@ export async function ensureCruiseDays(
         city: nextCity,
         country: nextCountry,
         atSea: nextAtSea,
+        arriveTime: nextArrive,
+        leaveTime: nextLeave,
       });
     } else if (offset > 0) {
       const created = await createDay({
@@ -970,6 +1146,8 @@ export async function ensureCruiseDays(
         city: nextCity,
         country: nextCountry,
         atSea: nextAtSea,
+        arriveTime: nextArrive,
+        leaveTime: nextLeave,
       });
       byDate.set(stayDate, created);
       nextSort += 1;

@@ -94,6 +94,9 @@ type TripDay struct {
 	Country       string    `json:"country" firestore:"country"`
 	City          string    `json:"city" firestore:"city"`
 	AtSea         bool      `json:"atSea" firestore:"atSea"` // cruise: hele dagen til havs
+	// Ship port call times (cruise): empty when at sea or not set.
+	ArriveTime    string    `json:"arriveTime,omitempty" firestore:"arriveTime,omitempty"`
+	LeaveTime     string    `json:"leaveTime,omitempty" firestore:"leaveTime,omitempty"`
 	HotelName     string    `json:"hotelName" firestore:"hotelName"` // legacy; synces from items
 	HotelURL      string    `json:"hotelUrl" firestore:"hotelUrl"`
 	Address       string    `json:"address" firestore:"address"`

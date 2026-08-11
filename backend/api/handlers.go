@@ -136,11 +136,15 @@ func normalizeDay(day *TripDay) {
 	if day.AtSea {
 		day.City = "Til sjøs"
 		day.Country = ""
+		day.ArriveTime = ""
+		day.LeaveTime = ""
 	} else if strings.EqualFold(strings.TrimSpace(day.City), "Til sjøs") ||
 		strings.EqualFold(strings.TrimSpace(day.City), "Til havs") {
 		day.AtSea = true
 		day.City = "Til sjøs"
 		day.Country = ""
+		day.ArriveTime = ""
+		day.LeaveTime = ""
 	}
 
 	sort.SliceStable(day.Items, func(i, j int) bool {

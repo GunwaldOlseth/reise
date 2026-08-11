@@ -6,8 +6,8 @@ function placeLabel(place: PlaceSuggestion): string {
 }
 
 /**
- * Soft city spelling help: shows place suggestions while typing / on blur.
- * Free text is always allowed (e.g. «Hjem»).
+ * Soft city spelling help: shows place suggestions only while the city
+ * field is focused. Free text is always allowed (e.g. «Hjem»).
  */
 export function CitySuggestFields({
   city,
@@ -40,8 +40,9 @@ export function CitySuggestFields({
 }) {
   const listId = useId()
   const rootRef = useRef<HTMLDivElement | null>(null)
+  const cityFocusedRef = useRef(false)
   const [suggestions, setSuggestions] = useState<PlaceSuggestion[]>([])
-  const [open, setOpen] = useState(false)
+  const [cityFocused, setCityFocused] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [active, setActive] = useState(0)
@@ -49,6 +50,15 @@ export function CitySuggestFields({
   useEffect(() => {
     const q = city.trim()
     if (q.length < 2) {
+      setSuggestions([])
+      setLoading(false)
+      setError('')
+      return
+    }
+
+    // Only fetch while the city field is focused — avoids popups when
+    // country changes or when the value is set programmatically.
+    if (!cityFocusedRef.current) {
       setSuggestions([])
       setLoading(false)
       setError('')
@@ -63,21 +73,19 @@ export function CitySuggestFields({
       void api
         .searchPlaces(q, country.trim())
         .then((res) => {
-          if (cancelled) return
+          if (cancelled || !cityFocusedRef.current) return
           setSuggestions(res.places || [])
           setActive(0)
           setError('')
-          setOpen(true)
         })
         .catch((err: unknown) => {
-          if (cancelled) return
+          if (cancelled || !cityFocusedRef.current) return
           setSuggestions([])
           setError(
             err instanceof Error
               ? err.message
               : 'Kunne ikke hente stedsforslag',
           )
-          setOpen(true)
         })
         .finally(() => {
           if (!cancelled) setLoading(false)
@@ -88,23 +96,19 @@ export function CitySuggestFields({
       cancelled = true
       window.clearTimeout(timer)
     }
-  }, [city, country])
-
-  useEffect(() => {
-    function onDoc(e: MouseEvent) {
-      if (!rootRef.current?.contains(e.target as Node)) setOpen(false)
-    }
-    document.addEventListener('mousedown', onDoc)
-    return () => document.removeEventListener('mousedown', onDoc)
-  }, [])
+  }, [city, country, cityFocused])
 
   function pick(place: PlaceSuggestion) {
     onSelectPlace(place.name, place.country || country)
-    setOpen(false)
+    setCityFocused(false)
+    cityFocusedRef.current = false
+    setSuggestions([])
   }
 
   const showList =
-    open && (loading || suggestions.length > 0 || Boolean(error))
+    cityFocused &&
+    city.trim().length >= 2 &&
+    (loading || suggestions.length > 0 || Boolean(error))
 
   return (
     <div
@@ -134,14 +138,19 @@ export function CitySuggestFields({
           <input
             value={city}
             autoFocus={autoFocus}
-            onChange={(e) => {
-              onCityChange(e.target.value)
-              setOpen(true)
+            onChange={(e) => onCityChange(e.target.value)}
+            onFocus={() => {
+              cityFocusedRef.current = true
+              setCityFocused(true)
             }}
-            onFocus={() => setOpen(true)}
             onBlur={() => {
               // Delay so click on suggestion registers.
-              window.setTimeout(() => setOpen(false), 180)
+              window.setTimeout(() => {
+                cityFocusedRef.current = false
+                setCityFocused(false)
+                setSuggestions([])
+                setError('')
+              }, 180)
             }}
             placeholder={cityPlaceholder}
             autoComplete="off"
@@ -161,7 +170,9 @@ export function CitySuggestFields({
                 e.preventDefault()
                 pick(suggestions[active])
               } else if (e.key === 'Escape') {
-                setOpen(false)
+                cityFocusedRef.current = false
+                setCityFocused(false)
+                setSuggestions([])
               }
             }}
           />
