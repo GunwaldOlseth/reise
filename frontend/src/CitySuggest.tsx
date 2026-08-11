@@ -8,6 +8,7 @@ function placeLabel(place: PlaceSuggestion): string {
 /**
  * Soft city spelling help: shows place suggestions only while the city
  * field is focused. Free text is always allowed (e.g. «Hjem»).
+ * Country is shown as plain text after a place is chosen (not an input).
  */
 export function CitySuggestFields({
   city,
@@ -16,7 +17,7 @@ export function CitySuggestFields({
   onCountryChange,
   onSelectPlace,
   cityPlaceholder = 'Roma',
-  countryPlaceholder = 'Italia',
+  countryPlaceholder: _countryPlaceholder = 'Italia',
   cityLabel = 'By / havn',
   showCountry = true,
   hideHint = false,
@@ -31,7 +32,7 @@ export function CitySuggestFields({
   cityPlaceholder?: string
   countryPlaceholder?: string
   cityLabel?: string
-  /** When false, only the city field is shown (country still used for ranking). */
+  /** When false, country text is hidden (country still used for ranking). */
   showCountry?: boolean
   /** Hide the helper line under the fields (e.g. cruise itinerary rows). */
   hideHint?: boolean
@@ -105,15 +106,26 @@ export function CitySuggestFields({
     setSuggestions([])
   }
 
+  function handleCityChange(value: string) {
+    onCityChange(value)
+    // Drop stale country when the city text is edited by hand.
+    if (showCountry && country.trim()) {
+      onCountryChange('')
+    }
+  }
+
   const showList =
     cityFocused &&
     city.trim().length >= 2 &&
     (loading || suggestions.length > 0 || Boolean(error))
 
+  const countryText = country.trim()
+
   return (
     <div
       className={[
         'city-suggest',
+        'city-suggest-city-first',
         showCountry ? '' : 'city-suggest-city-only',
         className,
       ]
@@ -121,24 +133,13 @@ export function CitySuggestFields({
         .join(' ')}
       ref={rootRef}
     >
-      {showCountry && (
-        <label>
-          Land
-          <input
-            value={country}
-            onChange={(e) => onCountryChange(e.target.value)}
-            placeholder={countryPlaceholder}
-            autoComplete="off"
-          />
-        </label>
-      )}
       <div className="city-suggest-city">
         <label>
           {cityLabel}
           <input
             value={city}
             autoFocus={autoFocus}
-            onChange={(e) => onCityChange(e.target.value)}
+            onChange={(e) => handleCityChange(e.target.value)}
             onFocus={() => {
               cityFocusedRef.current = true
               setCityFocused(true)
@@ -177,6 +178,9 @@ export function CitySuggestFields({
             }}
           />
         </label>
+        {showCountry && countryText && city.trim() && (
+          <p className="city-suggest-country-text">{countryText}</p>
+        )}
         {showList && (
           <ul id={listId} className="city-suggest-list" role="listbox">
             {loading && suggestions.length === 0 && !error && (

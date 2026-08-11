@@ -106,6 +106,8 @@ func itemTypeLabelNO(t string) string {
 		return "Bane/trikk"
 	case ItemTaxi: // same value as LegTaxi
 		return "Taxi"
+	case ItemBoat: // same value as LegBoat
+		return "Båt"
 	case LegWalk:
 		return "Gå"
 	case LegOther:
@@ -118,7 +120,7 @@ func itemTypeLabelNO(t string) string {
 }
 
 func isTransport(t string) bool {
-	return t == ItemFlight || t == ItemTrain || t == ItemBus || t == ItemTaxi
+	return t == ItemFlight || t == ItemTrain || t == ItemBus || t == ItemTaxi || t == ItemBoat
 }
 
 func dayDescriptionICS(day TripDay) string {

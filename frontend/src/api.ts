@@ -11,11 +11,45 @@ const API_BASE = (() => {
 export type DayItemType =
   | 'hotel'
   | 'cruise'
+  | 'package'
   | 'flight'
   | 'train'
   | 'bus'
   | 'taxi'
+  | 'boat'
   | 'attraction';
+
+/** Ship arrive/leave for one cruise port day (stored on the cruise item). */
+export interface CruisePortCall {
+  date: string;
+  arriveTime?: string;
+  leaveTime?: string;
+}
+
+/** Activity for the whole cruise (stored on the cruise DayItem). */
+export interface CruiseActivity {
+  id: string;
+  title: string;
+  startTime?: string;
+  notes?: string;
+  url?: string;
+  sortOrder: number;
+}
+
+/** Extra cost on a cruise (whole sailing or one day). */
+export interface CruiseCost {
+  id: string;
+  title: string;
+  price?: string;
+  notes?: string;
+  sortOrder: number;
+}
+
+/** Extra costs for one cruise calendar day. */
+export interface CruiseDayCosts {
+  date: string;
+  costs: CruiseCost[];
+}
 
 export interface DayItem {
   id: string;
@@ -32,6 +66,20 @@ export interface DayItem {
   notes?: string;
   /** Hotel/cruise: number of nights (default 1). */
   nights?: number;
+  /** Hotel/cruise/transport: expected price as free text, e.g. "4500 kr". */
+  price?: string;
+  /** Transport: actual cost after travel (overrides price in expense totals). */
+  actualPrice?: string;
+  /** Cruise: cabin / lugar number. */
+  cabinNumber?: string;
+  /** Cruise: per-port ship times for list/timeline display. */
+  cruisePorts?: CruisePortCall[];
+  /** Cruise: activities for the whole sailing (not a single port day). */
+  activities?: CruiseActivity[];
+  /** Cruise: extra costs for the whole sailing. */
+  costs?: CruiseCost[];
+  /** Cruise: extra costs per calendar day. */
+  dayCosts?: CruiseDayCosts[];
   sortOrder: number;
 }
 
@@ -42,6 +90,7 @@ export type LegMode =
   | 'tram'
   | 'train'
   | 'flight'
+  | 'boat'
   | 'other';
 
 export interface ViaPoint {
@@ -81,14 +130,35 @@ export interface Link {
   url: string;
 }
 
+/** Optional modules enabled for a trip (set when creating / in trip settings). */
+export interface TripFeatures {
+  /** Show cruise on day editor (not on every trip by default). */
+  cruise?: boolean;
+  /** Show package-tour style content on day editor. */
+  packages?: boolean;
+}
+
 export interface Trip {
   id: string;
   name: string;
   startDate: string;
   endDate: string;
   colorByCountry?: Record<string, string>;
+  features?: TripFeatures;
   createdAt?: string;
   updatedAt?: string;
+}
+
+export function emptyTripFeatures(): TripFeatures {
+  return { cruise: false, packages: false };
+}
+
+export function tripHasCruise(trip?: Trip | null): boolean {
+  return !!trip?.features?.cruise;
+}
+
+export function tripHasPackages(trip?: Trip | null): boolean {
+  return !!trip?.features?.packages;
 }
 
 export interface TripDay {
@@ -148,11 +218,13 @@ export type TripDayInput = Omit<TripDay, 'id' | 'createdAt' | 'updatedAt'>;
 export const ITEM_TYPES: { type: DayItemType; label: string }[] = [
   { type: 'hotel', label: 'Hotell' },
   { type: 'cruise', label: 'Cruise' },
+  { type: 'package', label: 'Pakketur' },
   { type: 'flight', label: 'Fly' },
   { type: 'train', label: 'Tog' },
   { type: 'bus', label: 'Buss' },
   { type: 'taxi', label: 'Taxi' },
-  { type: 'attraction', label: 'Severdighet' },
+  { type: 'boat', label: 'Båt' },
+  { type: 'attraction', label: 'Utflukt' },
 ];
 
 export function itemTypeLabel(type: string): string {
@@ -172,16 +244,603 @@ export function newDayItem(type: DayItemType, sortOrder = 0): DayItem {
     endTime: '',
     notes: '',
     nights: type === 'hotel' || type === 'cruise' ? 1 : undefined,
+    price:
+      type === 'hotel' ||
+      type === 'cruise' ||
+      type === 'flight' ||
+      type === 'train' ||
+      type === 'bus' ||
+      type === 'taxi' ||
+      type === 'boat'
+        ? ''
+        : undefined,
+    actualPrice:
+      type === 'flight' ||
+      type === 'train' ||
+      type === 'bus' ||
+      type === 'taxi' ||
+      type === 'boat'
+        ? ''
+        : undefined,
+    cabinNumber: type === 'cruise' ? '' : undefined,
+    activities: type === 'cruise' ? [] : undefined,
+    costs: type === 'cruise' ? [] : undefined,
+    dayCosts: type === 'cruise' ? [] : undefined,
     sortOrder,
   };
 }
 
-export function hotelNights(item: DayItem): number {
+export function newCruiseActivity(sortOrder = 0): CruiseActivity {
+  return {
+    id: crypto.randomUUID(),
+    title: '',
+    startTime: '',
+    notes: '',
+    url: '',
+    sortOrder,
+  };
+}
+
+export function newCruiseCost(sortOrder = 0): CruiseCost {
+  return {
+    id: crypto.randomUUID(),
+    title: '',
+    price: '',
+    notes: '',
+    sortOrder,
+  };
+}
+
+export function cleanCruiseCosts(
+  costs: CruiseCost[] | undefined,
+): CruiseCost[] | undefined {
+  if (!costs?.length) return costs?.length === 0 ? [] : undefined;
+  const cleaned = costs
+    .map((c, i) => ({ ...c, sortOrder: i }))
+    .filter(
+      (c) => c.title.trim() || c.price?.trim() || c.notes?.trim(),
+    );
+  return cleaned;
+}
+
+export function cleanCruiseDayCosts(
+  dayCosts: CruiseDayCosts[] | undefined,
+): CruiseDayCosts[] | undefined {
+  if (!dayCosts?.length) return dayCosts?.length === 0 ? [] : undefined;
+  const cleaned = dayCosts
+    .map((row) => ({
+      date: row.date,
+      costs: cleanCruiseCosts(row.costs) || [],
+    }))
+    .filter((row) => row.date && row.costs.length > 0);
+  return cleaned;
+}
+
+export function costsForCruiseDay(
+  dayCosts: CruiseDayCosts[] | undefined,
+  date: string,
+): CruiseCost[] {
+  return dayCosts?.find((r) => r.date === date)?.costs || [];
+}
+
+export function setCostsForCruiseDay(
+  dayCosts: CruiseDayCosts[] | undefined,
+  date: string,
+  costs: CruiseCost[],
+): CruiseDayCosts[] {
+  const rest = (dayCosts || []).filter((r) => r.date !== date);
+  const cleaned = costs.map((c, i) => ({ ...c, sortOrder: i }));
+  if (!cleaned.length) return rest;
+  return [...rest, { date, costs: cleaned }].sort((a, b) =>
+    a.date.localeCompare(b.date),
+  );
+}
+
+/** Short titles for whole-cruise activities (list / city preview). */
+export function summarizeCruiseActivities(
+  activities: CruiseActivity[] | undefined,
+): string {
+  if (!activities?.length) return '';
+  return activities
+    .map((a) => {
+      const title = a.title.trim();
+      if (!title) return '';
+      const time = a.startTime?.trim();
+      return time ? `${time} ${title}` : title;
+    })
+    .filter(Boolean)
+    .join(' · ');
+}
+
+/** Short labels for cruise cost rows (list / day expense lines). */
+export function summarizeCruiseCosts(
+  costs: CruiseCost[] | undefined,
+): string {
+  if (!costs?.length) return '';
+  return costs
+    .map((c) => {
+      const title = c.title.trim();
+      const price = c.price?.trim();
+      if (!title && !price) return '';
+      if (title && price) return `${title} ${price}`;
+      return title || price || '';
+    })
+    .filter(Boolean)
+    .join(' · ');
+}
+
+/** Keep hotel/cruise items; replace the rest with `dayItems`. */
+export function mergeDayActivityItems(
+  existing: DayItem[] | undefined,
+  dayItems: DayItem[],
+): DayItem[] {
+  const keep = (existing || []).filter(
+    (i) => i.type === 'hotel' || i.type === 'cruise',
+  );
+  const cleaned = dayItems
+    .map((item, idx) => ({ ...item, sortOrder: keep.length + idx }))
+    .filter(
+      (item) =>
+        item.title.trim() ||
+        item.url?.trim() ||
+        item.from?.trim() ||
+        item.to?.trim() ||
+        item.address?.trim() ||
+        item.notes?.trim(),
+    );
+  return [...keep, ...cleaned].map((item, idx) => ({
+    ...item,
+    sortOrder: idx,
+  }));
+}
+
+/** Display expected price when set (hotel, buss, tog, …). */
+export function formatItemPrice(item: Pick<DayItem, 'price'>): string {
+  const p = item.price?.trim();
+  return p || '';
+}
+
+/** Actual transport cost when set. */
+export function formatActualPrice(
+  item: Pick<DayItem, 'actualPrice'>,
+): string {
+  return item.actualPrice?.trim() || '';
+}
+
+/**
+ * Transport display/expense price: actual if set, otherwise expected.
+ */
+export function effectiveItemPrice(
+  item: Pick<DayItem, 'price' | 'actualPrice' | 'type'>,
+): string {
+  if (isTransportType(item.type as DayItemType)) {
+    return formatActualPrice(item) || formatItemPrice(item);
+  }
+  return formatItemPrice(item);
+}
+
+/** Short label for list/summary: "45 €" or "forv. 40 · faktisk 45". */
+export function formatTransportPriceLabel(
+  item: Pick<DayItem, 'price' | 'actualPrice'>,
+): string {
+  const expected = formatItemPrice(item);
+  const actual = formatActualPrice(item);
+  if (expected && actual) {
+    if (expected === actual) return actual;
+    return `forv. ${expected} · faktisk ${actual}`;
+  }
+  if (actual) return `faktisk ${actual}`;
+  if (expected) return `forv. ${expected}`;
+  return '';
+}
+
+/** @deprecated Prefer formatItemPrice */
+export function formatHotelPrice(item: Pick<DayItem, 'price'>): string {
+  return formatItemPrice(item);
+}
+
+/**
+ * Parse free-text price to a number ("12 000 kr", "12000", "€45", "1.250,50").
+ * Returns null when no usable amount is found.
+ */
+export function parsePriceAmount(raw: string | undefined): number | null {
+  const t = (raw || '').trim();
+  if (!t) return null;
+
+  // Prefer a clear decimal with comma: 1250,50 / 1.250,50
+  const commaDec = t.match(/(\d{1,3}(?:[.\s]\d{3})*|\d+),(\d{1,2})\b/);
+  if (commaDec) {
+    const whole = commaDec[1].replace(/[.\s]/g, '');
+    const n = Number(`${whole}.${commaDec[2]}`);
+    return Number.isFinite(n) ? n : null;
+  }
+
+  // Dot decimal when not thousand-grouping: 45.5 / 1200.00
+  const dotDec = t.match(/(?:^|[^\d.])(\d+)\.(\d{1,2})\b/);
+  if (dotDec) {
+    const n = Number(`${dotDec[1]}.${dotDec[2]}`);
+    return Number.isFinite(n) ? n : null;
+  }
+
+  // Integer with optional thousand separators: 12 000 / 12.000 / 12000
+  const intMatch = t.match(/(\d{1,3}(?:[.\s]\d{3})+|\d+)/);
+  if (!intMatch) return null;
+  const n = Number(intMatch[1].replace(/[.\s]/g, ''));
+  return Number.isFinite(n) ? n : null;
+}
+
+/** Format amount for expense overview (nb-NO, no currency symbol forced). */
+export function formatExpenseAmount(amount: number): string {
+  return new Intl.NumberFormat('nb-NO', {
+    maximumFractionDigits: amount % 1 === 0 ? 0 : 2,
+    minimumFractionDigits: amount % 1 === 0 ? 0 : 2,
+  }).format(amount);
+}
+
+export type ExpenseLine = {
+  id: string;
+  title: string;
+  date?: string;
+  rawPrice: string;
+  amount: number;
+  /** When set, amount comes from actual cost (transport). */
+  isActual?: boolean;
+  expectedRaw?: string;
+};
+
+export type DayExpenseSummary = {
+  date: string;
+  place: string;
+  cruise: number;
+  hotel: number;
+  transport: number;
+  total: number;
+  lines: ExpenseLine[];
+};
+
+export type TripExpenseSummary = {
+  cruise: { total: number; days: number; avgPerDay: number; lines: ExpenseLine[] };
+  hotel: { total: number; lines: ExpenseLine[] };
+  transport: { total: number; lines: ExpenseLine[] };
+  byDay: DayExpenseSummary[];
+  total: number;
+  pricedCount: number;
+  unparsedCount: number;
+};
+
+function resolveExpenseAmount(item: DayItem): {
+  amount: number;
+  raw: string;
+  isActual?: boolean;
+  expectedRaw?: string;
+} | 'empty' | 'unparsed' {
+  const expectedRaw = item.price?.trim() || '';
+  const actualRaw = isTransportType(item.type)
+    ? item.actualPrice?.trim() || ''
+    : '';
+  const useActual = !!actualRaw;
+  const raw = useActual ? actualRaw : expectedRaw;
+  if (!raw) return 'empty';
+  const amount = parsePriceAmount(raw);
+  if (amount === null) return 'unparsed';
+  return {
+    amount,
+    raw,
+    isActual: useActual || undefined,
+    expectedRaw:
+      useActual && expectedRaw && expectedRaw !== actualRaw
+        ? expectedRaw
+        : undefined,
+  };
+}
+
+/** Sum cruise / hotel / transport prices across the trip (each item once). */
+export function tripExpenseSummary(days: TripDay[]): TripExpenseSummary {
+  const sorted = [...days].sort((a, b) => {
+    if (a.date !== b.date) return a.date.localeCompare(b.date);
+    return a.sortOrder - b.sortOrder;
+  });
+  const placeByDate = new Map(
+    sorted.map((d) => [d.date, dayPlaceLabel(d)] as const),
+  );
+
+  const cruiseLines: ExpenseLine[] = [];
+  const hotelLines: ExpenseLine[] = [];
+  const transportLines: ExpenseLine[] = [];
+  let cruiseDays = 0;
+  let unparsedCount = 0;
+  let pricedCount = 0;
+
+  type DayAcc = {
+    cruise: number;
+    hotel: number;
+    transport: number;
+    lines: ExpenseLine[];
+  };
+  const byDate = new Map<string, DayAcc>();
+
+  function dayAcc(date: string): DayAcc {
+    let acc = byDate.get(date);
+    if (!acc) {
+      acc = { cruise: 0, hotel: 0, transport: 0, lines: [] };
+      byDate.set(date, acc);
+    }
+    return acc;
+  }
+
+  function addShare(
+    date: string,
+    category: 'cruise' | 'hotel' | 'transport',
+    share: number,
+    line: ExpenseLine,
+  ) {
+    const acc = dayAcc(date);
+    acc[category] += share;
+    acc.lines.push(line);
+  }
+
+  function addCruiseCostLine(
+    embarkDate: string,
+    nights: number,
+    cost: CruiseCost,
+    spread: boolean,
+  ) {
+    const raw = cost.price?.trim() || '';
+    if (!raw) return;
+    const amount = parsePriceAmount(raw);
+    if (amount === null) {
+      unparsedCount += 1;
+      return;
+    }
+    pricedCount += 1;
+    const title = cost.title.trim() || 'Kostnad';
+    const line: ExpenseLine = {
+      id: cost.id,
+      title,
+      date: embarkDate,
+      rawPrice: raw,
+      amount,
+    };
+    cruiseLines.push(line);
+    if (!embarkDate) return;
+    if (spread && nights > 0) {
+      const share = amount / nights;
+      for (let i = 0; i < nights; i++) {
+        const date = addDaysIso(embarkDate, i);
+        addShare(date, 'cruise', share, {
+          ...line,
+          id: `${line.id}:${date}`,
+          date,
+          amount: share,
+          title: `${title} (andel)`,
+        });
+      }
+      return;
+    }
+    addShare(embarkDate, 'cruise', amount, line);
+  }
+
+  for (const day of sorted) {
+    for (const item of day.items || []) {
+      if (item.type === 'cruise') {
+        const nights = cruiseNights(item);
+        const embarkDate = day.date;
+        let countedNights = false;
+
+        const resolved = resolveExpenseAmount(item);
+        if (resolved === 'unparsed') {
+          unparsedCount += 1;
+        } else if (resolved !== 'empty') {
+          pricedCount += 1;
+          const title = item.title.trim() || itemTypeLabel(item.type);
+          const line: ExpenseLine = {
+            id: item.id,
+            title,
+            date: embarkDate,
+            rawPrice: resolved.raw,
+            amount: resolved.amount,
+          };
+          cruiseLines.push(line);
+          cruiseDays += nights;
+          countedNights = true;
+          if (nights >= 1 && embarkDate) {
+            const share = resolved.amount / nights;
+            for (let i = 0; i < nights; i++) {
+              const date = addDaysIso(embarkDate, i);
+              addShare(date, 'cruise', share, {
+                ...line,
+                id: `${line.id}:${date}`,
+                date,
+                amount: share,
+                title: `${title} (andel)`,
+              });
+            }
+          }
+        }
+
+        const wholeCosts = item.costs || [];
+        if (wholeCosts.length && !countedNights && nights > 0) {
+          cruiseDays += nights;
+          countedNights = true;
+        }
+        for (const cost of wholeCosts) {
+          addCruiseCostLine(embarkDate, nights, cost, true);
+        }
+        for (const row of item.dayCosts || []) {
+          for (const cost of row.costs || []) {
+            const raw = cost.price?.trim() || '';
+            if (!raw) continue;
+            const amount = parsePriceAmount(raw);
+            if (amount === null) {
+              unparsedCount += 1;
+              continue;
+            }
+            pricedCount += 1;
+            const title = cost.title.trim() || 'Kostnad';
+            const line: ExpenseLine = {
+              id: cost.id,
+              title,
+              date: row.date,
+              rawPrice: raw,
+              amount,
+            };
+            cruiseLines.push(line);
+            if (row.date) {
+              addShare(row.date, 'cruise', amount, line);
+            }
+          }
+        }
+        continue;
+      }
+
+      const resolved = resolveExpenseAmount(item);
+      if (resolved === 'empty') continue;
+      if (resolved === 'unparsed') {
+        unparsedCount += 1;
+        continue;
+      }
+      pricedCount += 1;
+      const title = item.title.trim() || itemTypeLabel(item.type);
+      const line: ExpenseLine = {
+        id: item.id,
+        title,
+        date: day.date,
+        rawPrice: resolved.raw,
+        amount: resolved.amount,
+        isActual: resolved.isActual,
+        expectedRaw: resolved.expectedRaw,
+      };
+
+      if (item.type === 'hotel') {
+        hotelLines.push(line);
+        const nights = hotelNights(item);
+        if (nights < 1 || !day.date) continue;
+        const share = resolved.amount / nights;
+        for (let i = 0; i < nights; i++) {
+          const date = addDaysIso(day.date, i);
+          addShare(date, 'hotel', share, {
+            ...line,
+            id: `${line.id}:${date}`,
+            date,
+            amount: share,
+            title: `${title} (andel)`,
+          });
+        }
+      } else if (isTransportType(item.type)) {
+        transportLines.push(line);
+        if (!day.date) continue;
+        addShare(day.date, 'transport', resolved.amount, line);
+      }
+    }
+  }
+
+  const sum = (lines: ExpenseLine[]) =>
+    lines.reduce((acc, l) => acc + l.amount, 0);
+  const cruiseTotal = sum(cruiseLines);
+  const hotelTotal = sum(hotelLines);
+  const transportTotal = sum(transportLines);
+
+  const byDay: DayExpenseSummary[] = [...byDate.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([date, acc]) => ({
+      date,
+      place: placeByDate.get(date) || '',
+      cruise: acc.cruise,
+      hotel: acc.hotel,
+      transport: acc.transport,
+      total: acc.cruise + acc.hotel + acc.transport,
+      lines: acc.lines,
+    }))
+    .filter((d) => d.total > 0);
+
+  return {
+    cruise: {
+      total: cruiseTotal,
+      days: cruiseDays,
+      avgPerDay: cruiseDays > 0 ? cruiseTotal / cruiseDays : 0,
+      lines: cruiseLines,
+    },
+    hotel: { total: hotelTotal, lines: hotelLines },
+    transport: { total: transportTotal, lines: transportLines },
+    byDay,
+    total: cruiseTotal + hotelTotal + transportTotal,
+    pricedCount,
+    unparsedCount,
+  };
+}
+
+/** Hotels.com search URL for hotel name / city (optional stay dates). */
+export function hotelsComSearchUrl(opts: {
+  hotelName?: string;
+  city?: string;
+  country?: string;
+  checkIn?: string;
+  checkOut?: string;
+}): string {
+  const destination = [opts.hotelName, opts.city, opts.country]
+    .map((s) => (s || '').trim())
+    .filter(Boolean)
+    .join(', ');
+  const params = new URLSearchParams();
+  if (destination) params.set('destination', destination);
+  const checkIn = (opts.checkIn || '').trim();
+  const checkOut = (opts.checkOut || '').trim();
+  if (checkIn) {
+    params.set('startDate', checkIn);
+    params.set('d1', checkIn);
+  }
+  if (checkOut) {
+    params.set('endDate', checkOut);
+    params.set('d2', checkOut);
+  }
+  const qs = params.toString();
+  return qs
+    ? `https://www.hotels.com/Hotel-Search?${qs}`
+    : 'https://www.hotels.com/';
+}
+
+export function isHotelsComUrl(url?: string): boolean {
+  const u = (url || '').trim().toLowerCase();
+  return u.includes('hotels.com');
+}
+
+/** Coerce hotel/cruise nights (API may send number or string). */
+export function hotelNights(item: { nights?: number | string }): number {
   const n = item.nights;
   if (typeof n === 'number' && Number.isFinite(n) && n >= 1) {
     return Math.min(60, Math.floor(n));
   }
+  if (typeof n === 'string' && n.trim()) {
+    const parsed = Number(n);
+    if (Number.isFinite(parsed) && parsed >= 1) {
+      return Math.min(60, Math.floor(parsed));
+    }
+  }
   return 1;
+}
+
+/** Check-in date + nights → checkout morning (ISO). */
+export function hotelCheckoutDate(
+  checkInDate: string,
+  hotel: { nights?: number | string } | number,
+): string {
+  if (!checkInDate.trim()) return '';
+  const nights =
+    typeof hotel === 'number' ? Math.max(1, hotel) : hotelNights(hotel);
+  return addDaysIso(checkInDate, nights);
+}
+
+/** Human-readable stay span, e.g. "17.09.2026 → 19.09.2026 (2 netter)". */
+export function formatHotelStaySpan(
+  checkInDate: string,
+  hotel: { nights?: number | string },
+  formatDate: (iso: string) => string,
+): string {
+  if (!checkInDate.trim()) return '';
+  const nights = hotelNights(hotel);
+  const checkout = hotelCheckoutDate(checkInDate, nights);
+  const nightWord = nights === 1 ? 'natt' : 'netter';
+  return `${formatDate(checkInDate)} → ${formatDate(checkout)} (${nights} ${nightWord})`;
 }
 
 export function cruiseNights(item: DayItem): number {
@@ -192,9 +851,180 @@ export function cruiseHomePort(item: DayItem): string {
   return (item.from || item.to || '').trim();
 }
 
+/** Persist itinerary port times onto the cruise item. */
+export function cruisePortsFromItinerary(
+  rows: CruiseDayPatch[],
+): CruisePortCall[] {
+  return rows
+    .filter((row) => !row.atSea && row.date)
+    .map((row) => ({
+      date: row.date,
+      arriveTime: (row.arriveTime || '').trim(),
+      leaveTime: (row.leaveTime || '').trim(),
+    }))
+    .filter((port) => port.arriveTime || port.leaveTime);
+}
+
+export function cruisePortTimesOnDate(
+  cruise: DayItem,
+  date: string,
+): { arriveTime: string; leaveTime: string } {
+  const port = (cruise.cruisePorts || []).find((p) => p.date === date);
+  return {
+    arriveTime: port?.arriveTime?.trim() || '',
+    leaveTime: port?.leaveTime?.trim() || '',
+  };
+}
+
 export function dayPlaceLabel(day: Pick<TripDay, 'city' | 'country' | 'atSea'>): string {
   if (isAtSeaDay(day)) return AT_SEA_LABEL;
   return day.city.trim() || 'Uten by';
+}
+
+/** Prefer the day with the most content when several share a date. */
+export function dayRichnessScore(day: TripDay): number {
+  let score = 0;
+  if (isAtSeaDay(day)) score += 1;
+  else if (day.city.trim()) score += 3;
+  if (day.country.trim()) score += 1;
+  if (day.arriveTime?.trim()) score += 1;
+  if (day.leaveTime?.trim()) score += 1;
+  if (day.notes?.trim()) score += 1;
+  score += (day.items?.length || 0) * 10;
+  score += (day.viaPoints?.length || 0) * 5;
+  score += (day.legs?.length || 0) * 2;
+  score += (day.links?.length || 0);
+  return score;
+}
+
+export function pickDayForDate(
+  days: TripDay[],
+  date: string,
+): TripDay | undefined {
+  const matches = days.filter((d) => d.date === date);
+  if (!matches.length) return undefined;
+  return [...matches].sort((a, b) => {
+    const diff = dayRichnessScore(b) - dayRichnessScore(a);
+    if (diff !== 0) return diff;
+    return a.sortOrder - b.sortOrder;
+  })[0];
+}
+
+function indexDaysByDate(days: TripDay[]): Map<string, TripDay> {
+  const map = new Map<string, TripDay>();
+  for (const d of days) {
+    const cur = map.get(d.date);
+    if (!cur || dayRichnessScore(d) > dayRichnessScore(cur)) {
+      map.set(d.date, d);
+    }
+  }
+  return map;
+}
+
+/**
+ * Merge accidental duplicate calendar days (same date) into one, then delete
+ * the extras. Keeps the richest day as base and fills missing ship times /
+ * items / via points from the others.
+ */
+export async function mergeDuplicateTripDays(
+  days: TripDay[],
+  updateDay: (id: string, day: TripDayInput) => Promise<TripDay>,
+  deleteDay: (id: string) => Promise<unknown>,
+): Promise<TripDay[]> {
+  const byDate = new Map<string, TripDay[]>();
+  for (const day of days) {
+    const list = byDate.get(day.date) || [];
+    list.push(day);
+    byDate.set(day.date, list);
+  }
+
+  let next = [...days];
+  for (const [, group] of byDate) {
+    if (group.length < 2) continue;
+    const ordered = [...group].sort((a, b) => {
+      const diff = dayRichnessScore(b) - dayRichnessScore(a);
+      if (diff !== 0) return diff;
+      return a.sortOrder - b.sortOrder;
+    });
+    const keeper = ordered[0]!;
+    const losers = ordered.slice(1);
+
+    let city = keeper.city;
+    let country = keeper.country;
+    let atSea = isAtSeaDay(keeper);
+    let arriveTime = keeper.arriveTime?.trim() || '';
+    let leaveTime = keeper.leaveTime?.trim() || '';
+    let notes = keeper.notes || '';
+    const items = [...(keeper.items || [])];
+    const viaPoints = [...(keeper.viaPoints || [])];
+    const legs = [...(keeper.legs || [])];
+    const links = [...(keeper.links || [])];
+    const itemIds = new Set(items.map((i) => i.id));
+    const viaIds = new Set(viaPoints.map((p) => p.id));
+    const legIds = new Set(legs.map((l) => l.id));
+
+    for (const other of losers) {
+      if (!atSea && !city.trim() && other.city.trim()) {
+        city = other.city;
+        country = other.country;
+        atSea = isAtSeaDay(other);
+      }
+      if (!arriveTime && other.arriveTime?.trim()) {
+        arriveTime = other.arriveTime.trim();
+      }
+      if (!leaveTime && other.leaveTime?.trim()) {
+        leaveTime = other.leaveTime.trim();
+      }
+      if (!notes.trim() && other.notes?.trim()) notes = other.notes;
+      for (const item of other.items || []) {
+        if (!itemIds.has(item.id)) {
+          items.push(item);
+          itemIds.add(item.id);
+        }
+      }
+      for (const point of other.viaPoints || []) {
+        if (!viaIds.has(point.id)) {
+          viaPoints.push(point);
+          viaIds.add(point.id);
+        }
+      }
+      for (const leg of other.legs || []) {
+        if (!legIds.has(leg.id)) {
+          legs.push(leg);
+          legIds.add(leg.id);
+        }
+      }
+      for (const link of other.links || []) {
+        if (!links.includes(link)) links.push(link);
+      }
+    }
+
+    const { id, createdAt: _c, updatedAt: _u, ...rest } = keeper;
+    const mergedInput: TripDayInput = {
+      ...rest,
+      city,
+      country,
+      atSea,
+      arriveTime,
+      leaveTime,
+      notes,
+      items,
+      viaPoints: sortViaPointsByArriveTime(viaPoints),
+      legs: syncRouteLegs(
+        sortViaPointsByArriveTime(viaPoints),
+        legs,
+      ),
+      links,
+    };
+    const updated = await updateDay(id, mergedInput);
+    for (const loser of losers) {
+      await deleteDay(loser.id);
+    }
+    next = next
+      .filter((d) => d.date !== keeper.date || d.id === keeper.id)
+      .map((d) => (d.id === keeper.id ? updated : d));
+  }
+  return next;
 }
 
 /** City/country values to persist for an at-sea day (visible in liste/tidslinje). */
@@ -203,7 +1033,13 @@ export function atSeaPlaceFields(): Pick<TripDay, 'city' | 'country' | 'atSea'> 
 }
 
 export function isTransportType(type: DayItemType): boolean {
-  return type === 'flight' || type === 'train' || type === 'bus' || type === 'taxi';
+  return (
+    type === 'flight' ||
+    type === 'train' ||
+    type === 'bus' ||
+    type === 'taxi' ||
+    type === 'boat'
+  );
 }
 
 export const LEG_MODES: { mode: LegMode; label: string }[] = [
@@ -213,6 +1049,7 @@ export const LEG_MODES: { mode: LegMode; label: string }[] = [
   { mode: 'tram', label: 'Bane/trikk' },
   { mode: 'train', label: 'Tog' },
   { mode: 'flight', label: 'Fly' },
+  { mode: 'boat', label: 'Båt' },
   { mode: 'other', label: 'Annet' },
 ];
 
@@ -253,9 +1090,41 @@ export function newRouteLeg(
   };
 }
 
+/**
+ * Normalize a clock time to HH:mm.
+ * Accepts "1800", "930", "18:00", "18.00", "9:5" → "18:00" / "09:30" / …
+ * Invalid input is returned trimmed unchanged.
+ */
+export function normalizeClockTime(raw: string): string {
+  const t = (raw || '').trim();
+  if (!t) return '';
+
+  let m = t.match(/^(\d{1,2})[:.](\d{1,2})$/);
+  if (m) {
+    const h = Number(m[1]);
+    const min = Number(m[2]);
+    if (h <= 23 && min <= 59) {
+      return `${String(h).padStart(2, '0')}:${String(min).padStart(2, '0')}`;
+    }
+    return t;
+  }
+
+  const digits = t.replace(/\D/g, '');
+  if (digits.length === 3 || digits.length === 4) {
+    const padded = digits.padStart(4, '0');
+    const h = Number(padded.slice(0, 2));
+    const min = Number(padded.slice(2, 4));
+    if (h <= 23 && min <= 59) {
+      return `${padded.slice(0, 2)}:${padded.slice(2, 4)}`;
+    }
+  }
+
+  return t;
+}
+
 /** Minutes from midnight for HH:mm / HH:mm:ss; empty/invalid sorts last. */
 export function arriveTimeSortKey(time?: string): number {
-  const t = (time || '').trim();
+  const t = normalizeClockTime(time || '');
   if (!t) return Number.POSITIVE_INFINITY;
   // Accept dirty fields like "07:40 07:45" — use the first clock time.
   const m = t.match(/(\d{1,2})[:.](\d{2})(?::(\d{2}))?/);
@@ -267,18 +1136,14 @@ export function arriveTimeSortKey(time?: string): number {
   return h * 3600 + min * 60 + sec;
 }
 
-/** Parse compact timetable text like "14:05 14.50, 16:10" into HH:mm list. */
+/** Parse compact timetable text like "14:05 14.50, 16:10, 1800" into HH:mm list. */
 export function parseDepartureTimes(raw: string): string[] {
   const parts = raw.split(/[\s,;|]+/).map((s) => s.trim()).filter(Boolean);
   const out: string[] = [];
   const seen = new Set<string>();
   for (const part of parts) {
-    const m = part.match(/^(\d{1,2})[:.](\d{2})$/);
-    if (!m) continue;
-    const h = Number(m[1]);
-    const min = Number(m[2]);
-    if (h > 23 || min > 59) continue;
-    const norm = `${String(h).padStart(2, '0')}:${String(min).padStart(2, '0')}`;
+    const norm = normalizeClockTime(part);
+    if (!/^\d{2}:\d{2}$/.test(norm)) continue;
     if (seen.has(norm)) continue;
     seen.add(norm);
     out.push(norm);
@@ -411,6 +1276,22 @@ export function summarizeDayItems(items: DayItem[] | undefined): string {
     .join(' · ');
 }
 
+/** Titles for attractions / non-transport day items (list overview). */
+export function summarizeAttractionTitles(
+  items: DayItem[] | undefined,
+): string {
+  if (!items?.length) return '';
+  return items
+    .map((item) => {
+      const title = item.title.trim();
+      if (!title) return '';
+      const time = item.startTime?.trim();
+      return time ? `${time} ${title}` : title;
+    })
+    .filter(Boolean)
+    .join(' · ');
+}
+
 /** One transport item as via-style route: Rapallo → Buss → Genova */
 export function formatTransportRoute(item: DayItem): string {
   const mode = itemTypeLabel(item.type);
@@ -418,7 +1299,8 @@ export function formatTransportRoute(item: DayItem): string {
   const to = (item.to || '').trim();
   const title = (item.title || '').trim();
   const times = [item.startTime, item.endTime].filter(Boolean).join('–');
-  const modeBit = [mode, title && title !== mode ? title : '', times]
+  const price = formatTransportPriceLabel(item);
+  const modeBit = [mode, title && title !== mode ? title : '', times, price]
     .filter(Boolean)
     .join(' · ');
   if (from && to) return `${from} → ${modeBit} → ${to}`;
@@ -426,7 +1308,7 @@ export function formatTransportRoute(item: DayItem): string {
   return modeBit || mode;
 }
 
-/** All «På dagen» transport items, same arrow style as via points. */
+/** Legacy day-item transports (prefer Via for city-to-city travel). */
 export function summarizeTransportItems(items: DayItem[] | undefined): string {
   const transports = (items || []).filter((i) => isTransportType(i.type));
   if (!transports.length) return '';
@@ -436,7 +1318,7 @@ export function summarizeTransportItems(items: DayItem[] | undefined): string {
 export function summarizeViaRoute(viaPoints: ViaPoint[] | undefined): string {
   if (!viaPoints?.length) return '';
   const names = viaPoints.map((p) => p.title.trim()).filter(Boolean);
-  if (!names.length) return `${viaPoints.length} via-punkt`;
+  if (!names.length) return `${viaPoints.length} reisestopp`;
   if (names.length <= 3) return names.join(' → ');
   return `${names[0]} → … → ${names[names.length - 1]} (${names.length} stopp)`;
 }
@@ -449,7 +1331,7 @@ export function formatViaRouteDetailed(
   if (!viaPoints?.length) return '';
   const parts: string[] = [];
   for (let i = 0; i < viaPoints.length; i++) {
-    parts.push(viaPoints[i].title.trim() || `Via ${i + 1}`);
+    parts.push(viaPoints[i].title.trim() || `Stopp ${i + 1}`);
     const leg = legs?.[i];
     if (leg && i + 1 < viaPoints.length) {
       const mode = legModeLabel(leg.mode);
@@ -619,6 +1501,206 @@ export function emptyDay(tripId: string, date = '', sortOrder = 0): TripDayInput
   };
 }
 
+function shiftDatedList<T extends { date: string }>(
+  rows: T[] | undefined,
+  delta: number,
+  fromDate: string,
+): T[] | undefined {
+  if (!rows?.length) return rows;
+  return rows.map((row) =>
+    row.date >= fromDate
+      ? { ...row, date: addDaysIso(row.date, delta) }
+      : row,
+  );
+}
+
+/** Shift cruise port/cost dates when the calendar moves. */
+function shiftCruiseItemDates(
+  item: DayItem,
+  delta: number,
+  fromDate: string,
+  opts?: { bumpNights?: boolean },
+): DayItem {
+  if (item.type !== 'cruise') return item;
+  const next: DayItem = {
+    ...item,
+    cruisePorts: shiftDatedList(item.cruisePorts, delta, fromDate),
+    dayCosts: shiftDatedList(item.dayCosts, delta, fromDate),
+  };
+  if (opts?.bumpNights) {
+    next.nights = cruiseNights(item) + delta;
+  }
+  return next;
+}
+
+/**
+ * Insert a blank calendar day after `afterDate`. Every day on/after the new
+ * date is moved +1 day; hotel/cruise stays that span the insert gain a night.
+ * New day inherits city from the day you insert after (handy when delayed).
+ */
+export async function insertCalendarDayAfter(
+  tripId: string,
+  afterDate: string,
+  existingDays: TripDay[],
+  createDay: (day: TripDayInput) => Promise<TripDay>,
+  updateDay: (id: string, day: TripDayInput) => Promise<TripDay>,
+): Promise<TripDay> {
+  if (!afterDate) {
+    throw new Error('Mangler dato å sette inn etter');
+  }
+  const insertDate = addDaysIso(afterDate, 1);
+  const afterDay = [...existingDays]
+    .filter((d) => d.date === afterDate)
+    .sort((a, b) => dayRichnessScore(b) - dayRichnessScore(a))[0];
+
+  // Move later days last→first so dates never collide mid-update.
+  const toShift = [...existingDays]
+    .filter((d) => d.date >= insertDate)
+    .sort((a, b) => {
+      const byDate = b.date.localeCompare(a.date);
+      if (byDate !== 0) return byDate;
+      return b.sortOrder - a.sortOrder;
+    });
+
+  for (const day of toShift) {
+    const { id, createdAt: _c, updatedAt: _u, ...rest } = day;
+    const items = (day.items || []).map((item) =>
+      item.type === 'cruise'
+        ? shiftCruiseItemDates(item, 1, insertDate)
+        : item,
+    );
+    await updateDay(id, {
+      ...rest,
+      date: addDaysIso(day.date, 1),
+      items,
+    });
+  }
+
+  // Stays that started before the insert and still cover it → +1 night.
+  const earlier = existingDays.filter((d) => d.date < insertDate);
+  for (const day of earlier) {
+    let changed = false;
+    const items = (day.items || []).map((item) => {
+      if (item.type === 'hotel' || item.type === 'package') {
+        const nights = hotelNights(item);
+        const checkout = addDaysIso(day.date, nights);
+        if (insertDate > day.date && insertDate <= checkout) {
+          changed = true;
+          return { ...item, nights: nights + 1 };
+        }
+        return item;
+      }
+      if (item.type === 'cruise') {
+        const nights = cruiseNights(item);
+        const disembark = addDaysIso(day.date, nights);
+        if (insertDate > day.date && insertDate <= disembark) {
+          changed = true;
+          return shiftCruiseItemDates(item, 1, insertDate, { bumpNights: true });
+        }
+      }
+      return item;
+    });
+    if (!changed) continue;
+    const { id, createdAt: _c, updatedAt: _u, ...rest } = day;
+    await updateDay(id, { ...rest, items });
+  }
+
+  const nextSort =
+    existingDays.reduce((max, d) => Math.max(max, d.sortOrder), -1) + 1;
+  return createDay({
+    ...emptyDay(tripId, insertDate, nextSort),
+    city: afterDay && !isAtSeaDay(afterDay) ? afterDay.city : '',
+    country: afterDay && !isAtSeaDay(afterDay) ? afterDay.country : '',
+    atSea: afterDay ? isAtSeaDay(afterDay) : false,
+  });
+}
+
+/** Latest calendar date among trip days (YYYY-MM-DD), or ''. */
+export function latestTripDayDate(days: TripDay[]): string {
+  if (!days.length) return '';
+  return [...days]
+    .map((d) => d.date)
+    .filter(Boolean)
+    .sort((a, b) => a.localeCompare(b))
+    .at(-1)!;
+}
+
+/** Stable trip list order: date, then sortOrder. */
+export function sortTripDays(days: TripDay[]): TripDay[] {
+  return [...days].sort((a, b) => {
+    if (a.date !== b.date) return a.date.localeCompare(b.date);
+    return a.sortOrder - b.sortOrder;
+  });
+}
+
+function swapDateToken(date: string, a: string, b: string): string {
+  if (date === a) return b;
+  if (date === b) return a;
+  return date;
+}
+
+function remapCruiseDatesOnItems(
+  items: DayItem[] | undefined,
+  dateA: string,
+  dateB: string,
+): DayItem[] {
+  return (items || []).map((item) => {
+    if (item.type !== 'cruise') return item;
+    return {
+      ...item,
+      cruisePorts: (item.cruisePorts || []).map((p) => ({
+        ...p,
+        date: swapDateToken(p.date, dateA, dateB),
+      })),
+      dayCosts: (item.dayCosts || []).map((c) => ({
+        ...c,
+        date: swapDateToken(c.date, dateA, dateB),
+      })),
+    };
+  });
+}
+
+/**
+ * Swap calendar dates of two days (content keeps its day id).
+ * Cruise port/cost dates on the whole trip are remapped for those two dates.
+ */
+export async function swapTripDayDates(
+  dayA: TripDay,
+  dayB: TripDay,
+  allDays: TripDay[],
+  updateDay: (id: string, day: TripDayInput) => Promise<TripDay>,
+): Promise<TripDay[]> {
+  if (dayA.id === dayB.id || !dayA.date || !dayB.date) {
+    return allDays;
+  }
+  const dateA = dayA.date;
+  const dateB = dayB.date;
+
+  const nextById = new Map(allDays.map((d) => [d.id, d]));
+
+  for (const day of allDays) {
+    const isSwapPartner = day.id === dayA.id || day.id === dayB.id;
+    let nextDate = day.date;
+    if (day.id === dayA.id) nextDate = dateB;
+    if (day.id === dayB.id) nextDate = dateA;
+
+    const items = remapCruiseDatesOnItems(day.items, dateA, dateB);
+    const itemsChanged =
+      JSON.stringify(items) !== JSON.stringify(day.items || []);
+    if (!isSwapPartner && !itemsChanged) continue;
+
+    const { id, createdAt: _c, updatedAt: _u, ...rest } = day;
+    const updated = await updateDay(id, {
+      ...rest,
+      date: nextDate,
+      items,
+    });
+    nextById.set(id, updated);
+  }
+
+  return sortTripDays([...nextById.values()]);
+}
+
 /** Short label for ship port times, e.g. "Ankomst 08:00 · Avgang 18:00". */
 export function formatShipPortTimes(
   day: Pick<TripDay, 'arriveTime' | 'leaveTime' | 'atSea' | 'city'>,
@@ -629,6 +1711,117 @@ export function formatShipPortTimes(
     day.leaveTime?.trim() ? `Avgang ${day.leaveTime.trim()}` : '',
   ].filter(Boolean);
   return parts.join(' · ');
+}
+
+/**
+ * Effective ship times for a day: day fields, then cruisePorts on the cruise
+ * item, then embark/disembark times on the cruise item.
+ * `city` is the ship port when known (may differ from overnight `day.city`).
+ */
+export function resolveShipPortTimes(
+  day: TripDay,
+  allDays: TripDay[],
+): Pick<TripDay, 'arriveTime' | 'leaveTime' | 'atSea' | 'city'> {
+  if (isAtSeaDay(day)) {
+    return {
+      city: day.city,
+      atSea: true,
+      arriveTime: '',
+      leaveTime: '',
+    };
+  }
+  let arriveTime = day.arriveTime?.trim() || '';
+  let leaveTime = day.leaveTime?.trim() || '';
+  let shipPort = '';
+
+  const stays = [
+    ...cruisesCoveringDay(allDays, day.date),
+    ...cruisesDisembarkingOnDay(allDays, day.date),
+  ];
+  for (const stay of stays) {
+    const port = cruisePortTimesOnDate(stay.cruise, day.date);
+    if (!arriveTime && port.arriveTime) arriveTime = port.arriveTime;
+    if (!leaveTime && port.leaveTime) leaveTime = port.leaveTime;
+  }
+
+  if (!leaveTime) {
+    for (const stay of stays) {
+      if (stay.embarkDate === day.date && stay.cruise.startTime?.trim()) {
+        leaveTime = stay.cruise.startTime.trim();
+        break;
+      }
+    }
+  }
+  if (!arriveTime) {
+    for (const stay of stays) {
+      if (
+        stay.disembarkDate === day.date &&
+        stay.cruise.endTime?.trim()
+      ) {
+        arriveTime = stay.cruise.endTime.trim();
+        break;
+      }
+    }
+  }
+
+  for (const stay of stays) {
+    if (stay.disembarkDate === day.date || stay.embarkDate === day.date) {
+      shipPort = cruiseHomePort(stay.cruise);
+      if (shipPort) break;
+    }
+    // Middle port days: overnight city is usually the ship port.
+    if (stay.embarkDate < day.date && day.date < stay.disembarkDate) {
+      shipPort = day.city.trim();
+      break;
+    }
+  }
+
+  return {
+    city: shipPort || day.city,
+    atSea: false,
+    arriveTime,
+    leaveTime,
+  };
+}
+
+/** List label for ship arrival, e.g. "Ankomst Genova 09:00" when overnight differs. */
+export function formatShipArriveLabel(
+  day: TripDay,
+  allDays: TripDay[],
+): string {
+  const ship = resolveShipPortTimes(day, allDays);
+  const time = ship.arriveTime?.trim();
+  if (!time) return '';
+  const port = ship.city.trim();
+  const overnight = day.city.trim();
+  if (
+    port &&
+    overnight &&
+    port.toLowerCase() !== overnight.toLowerCase()
+  ) {
+    return `Ankomst ${port} ${time}`;
+  }
+  return `Ankomst ${time}`;
+}
+
+/** List label for ship departure. */
+export function formatShipDepartLabel(
+  day: TripDay,
+  allDays: TripDay[],
+): string {
+  const ship = resolveShipPortTimes(day, allDays);
+  const time = ship.leaveTime?.trim();
+  if (!time) return '';
+  const port = ship.city.trim();
+  const overnight = day.city.trim();
+  if (
+    port &&
+    overnight &&
+    port.toLowerCase() !== overnight.toLowerCase()
+  ) {
+    return `Avgang ${port} ${time}`;
+  }
+  return `Avgang ${time}`;
 }
 
 export function tripStats(days: TripDay[]) {
@@ -835,51 +2028,34 @@ export async function ensureHotelStayDays(
   const maxOffset = Math.max(...hotels.map((h) => hotelNights(h)), 0);
   if (maxOffset < 1) return;
 
-  const byDate = new Map(existingDays.map((d) => [d.date, d]));
+  const byDate = indexDaysByDate(existingDays);
   let nextSort =
     existingDays.reduce((max, d) => Math.max(max, d.sortOrder), -1) + 1;
 
   for (let offset = 1; offset <= maxOffset; offset++) {
     const stayDate = addDaysIso(checkInDay.date, offset);
-    const isCheckoutMorning = offset === maxOffset;
     const found = byDate.get(stayDate);
 
-    if (isCheckoutMorning) {
-      // Arrival city is chosen when editing — do not copy hotel city.
-      if (!found) {
-        const created = await createDay({
-          ...emptyDay(tripId, stayDate, nextSort),
-          city: '',
-          country: '',
-        });
-        byDate.set(stayDate, created);
-        nextSort += 1;
-      }
-      // If day exists with only the hotel city copied earlier, clear it once
-      // so the user is asked for the real arrival city.
-      else if (
-        found.city.trim().toLowerCase() === city.toLowerCase() &&
-        !(found.viaPoints || []).length &&
-        !(found.items || []).some((i) => isTransportType(i.type))
-      ) {
-        const { id, createdAt: _c, updatedAt: _u, ...rest } = found;
-        await updateDay(id, {
-          ...rest,
-          city: '',
-          country: '',
-        });
-      }
-      continue;
-    }
-
-    // Overnight stay day — keep hotel city/country.
+    // Stay + checkout morning keep hotel city until the user changes it
+    // (e.g. land in Genova, overnight Trieste, checkout still Trieste).
     if (found) {
       if (found.city.trim() === city && found.country.trim() === country) {
+        continue;
+      }
+      // Do not overwrite a deliberately different overnight / onward city.
+      if (found.city.trim() && found.city.trim().toLowerCase() !== city.toLowerCase()) {
         continue;
       }
       const { id, createdAt: _c, updatedAt: _u, ...rest } = found;
       await updateDay(id, {
         ...rest,
+        city,
+        country,
+        arriveTime: found.arriveTime || '',
+        leaveTime: found.leaveTime || '',
+      });
+      byDate.set(stayDate, {
+        ...found,
         city,
         country,
       });
@@ -888,6 +2064,8 @@ export async function ensureHotelStayDays(
         ...emptyDay(tripId, stayDate, nextSort),
         city,
         country,
+        arriveTime: '',
+        leaveTime: '',
       });
       byDate.set(stayDate, created);
       nextSort += 1;
@@ -900,7 +2078,10 @@ export function summarizeCheckoutHotels(stays: HotelStayRef[]): string {
   return stays
     .map(({ hotel: h }) => {
       const name = h.title.trim() || 'Hotell';
-      return h.endTime?.trim() ? `Utsjekk ${name} ${h.endTime}` : `Utsjekk ${name}`;
+      // Price belongs on check-in — not repeated on checkout morning.
+      return h.endTime?.trim()
+        ? `Utsjekk ${name} ${h.endTime}`
+        : `Utsjekk ${name}`;
     })
     .join(' · ');
 }
@@ -911,6 +2092,7 @@ export function summarizeStayingHotels(stays: HotelStayRef[]): string {
   return stays
     .map(({ hotel: h }) => {
       const name = h.title.trim() || 'Hotell';
+      // Price only on check-in day — avoid repeating full stay cost every night.
       return `Hotell ${name}`;
     })
     .join(' · ');
@@ -924,7 +2106,9 @@ export function summarizeCheckInHotels(items: DayItem[] | undefined): string {
     .map((h) => {
       const name = h.title.trim() || 'Hotell';
       const time = h.startTime?.trim();
-      return time ? `Kommende ${name} ${time}` : `Kommende ${name}`;
+      const price = formatHotelPrice(h);
+      const base = time ? `Kommende ${name} ${time}` : `Kommende ${name}`;
+      return price ? `${base} · ${price}` : base;
     })
     .join(' · ');
 }
@@ -1030,6 +2214,13 @@ export function buildCruiseDayPatches(
     let country = existing?.country?.trim() || '';
     let arriveTime = existing?.arriveTime?.trim() || '';
     let leaveTime = existing?.leaveTime?.trim() || '';
+    const storedPort = cruisePortTimesOnDate(cruise, date);
+    if (!arriveTime && storedPort.arriveTime) {
+      arriveTime = storedPort.arriveTime;
+    }
+    if (!leaveTime && storedPort.leaveTime) {
+      leaveTime = storedPort.leaveTime;
+    }
     if (atSea) {
       city = AT_SEA_LABEL;
       country = '';
@@ -1077,7 +2268,30 @@ export async function ensureCruiseDays(
     (dayPatches || []).map((p) => [p.date, p] as const),
   );
 
-  const byDate = new Map(existingDays.map((d) => [d.date, d]));
+  /** Fallback ship times from cruisePorts + embark/disembark clocks. */
+  const timeHints = new Map<string, { arrive: string; leave: string }>();
+  for (const cruise of cruises) {
+    const nights = cruiseNights(cruise);
+    const emb = embarkDay.date;
+    const dis = addDaysIso(emb, nights);
+    const touch = (date: string, arrive: string, leave: string) => {
+      const cur = timeHints.get(date) || { arrive: '', leave: '' };
+      if (arrive) cur.arrive = arrive;
+      if (leave) cur.leave = leave;
+      timeHints.set(date, cur);
+    };
+    if (cruise.startTime?.trim()) touch(emb, '', cruise.startTime.trim());
+    if (cruise.endTime?.trim()) touch(dis, cruise.endTime.trim(), '');
+    for (const port of cruise.cruisePorts || []) {
+      touch(
+        port.date,
+        (port.arriveTime || '').trim(),
+        (port.leaveTime || '').trim(),
+      );
+    }
+  }
+
+  const byDate = indexDaysByDate(existingDays);
   let nextSort =
     existingDays.reduce((max, d) => Math.max(max, d.sortOrder), -1) + 1;
 
@@ -1093,12 +2307,37 @@ export async function ensureCruiseDays(
     let nextArrive = found?.arriveTime?.trim() || '';
     let nextLeave = found?.leaveTime?.trim() || '';
 
+    const isDisembark = offset === maxOffset;
     if (patch) {
       nextAtSea = patch.atSea;
-      nextCity = patch.atSea ? AT_SEA_LABEL : patch.city.trim();
-      nextCountry = patch.atSea ? '' : patch.country.trim();
       nextArrive = patch.atSea ? '' : (patch.arriveTime || '').trim();
       nextLeave = patch.atSea ? '' : (patch.leaveTime || '').trim();
+      if (patch.atSea) {
+        nextCity = AT_SEA_LABEL;
+        nextCountry = '';
+      } else if (isDisembark) {
+        // Disembark port lives on the cruise (hjemhavn / ankomst).
+        // day.city is overnight destination and may be further inland
+        // the same day (e.g. ship→Genova, continue to Trieste).
+        const existingCity = (found?.city || '').trim();
+        if (
+          existingCity &&
+          existingCity.toLowerCase() !== AT_SEA_LABEL.toLowerCase()
+        ) {
+          nextCity = existingCity;
+          nextCountry = (found?.country || '').trim();
+        } else {
+          nextCity = patch.city.trim() || home || '';
+          nextCountry = patch.country.trim();
+        }
+      } else {
+        nextCity = patch.city.trim();
+        nextCountry = patch.country.trim();
+        // Embark with empty city — fill home port.
+        if (!nextCity && isEnd && home) {
+          nextCity = home;
+        }
+      }
     } else if (isEnd && home) {
       if (!nextAtSea && !nextCity.trim()) {
         nextCity = home;
@@ -1110,6 +2349,13 @@ export async function ensureCruiseDays(
       nextCountry = '';
       nextArrive = '';
       nextLeave = '';
+    } else {
+      // Fill gaps from cruisePorts / embark-disembark clocks on the cruise item.
+      const hint = timeHints.get(stayDate);
+      if (hint) {
+        if (!nextArrive && hint.arrive) nextArrive = hint.arrive;
+        if (!nextLeave && hint.leave) nextLeave = hint.leave;
+      }
     }
 
     if (found) {
@@ -1127,9 +2373,27 @@ export async function ensureCruiseDays(
       ) {
         continue;
       }
-      // Without patches: never overwrite an already-set middle port.
-      if (!patch && offset > 0 && offset < maxOffset) continue;
-      if (!patch && isEnd && found.city.trim() && !atSeaChanged) continue;
+      // Without patches: never overwrite an already-set middle port city,
+      // but always allow ship-time updates from cruisePorts / clocks.
+      if (
+        !patch &&
+        offset > 0 &&
+        offset < maxOffset &&
+        !arriveChanged &&
+        !leaveChanged
+      ) {
+        continue;
+      }
+      if (
+        !patch &&
+        isEnd &&
+        found.city.trim() &&
+        !atSeaChanged &&
+        !arriveChanged &&
+        !leaveChanged
+      ) {
+        continue;
+      }
 
       const { id, createdAt: _c, updatedAt: _u, ...rest } = found;
       await updateDay(id, {
@@ -1137,8 +2401,16 @@ export async function ensureCruiseDays(
         city: nextCity,
         country: nextCountry,
         atSea: nextAtSea,
-        arriveTime: nextArrive,
-        leaveTime: nextLeave,
+        arriveTime: nextArrive || '',
+        leaveTime: nextLeave || '',
+      });
+      byDate.set(stayDate, {
+        ...found,
+        city: nextCity,
+        country: nextCountry,
+        atSea: nextAtSea,
+        arriveTime: nextArrive || '',
+        leaveTime: nextLeave || '',
       });
     } else if (offset > 0) {
       const created = await createDay({
@@ -1146,11 +2418,14 @@ export async function ensureCruiseDays(
         city: nextCity,
         country: nextCountry,
         atSea: nextAtSea,
-        arriveTime: nextArrive,
-        leaveTime: nextLeave,
+        arriveTime: nextArrive || '',
+        leaveTime: nextLeave || '',
       });
       byDate.set(stayDate, created);
       nextSort += 1;
+    } else if (patch) {
+      // Embark day missing from existingDays (race) — still apply times via create skip;
+      // caller already saved the embark day payload separately.
     }
   }
 }
@@ -1190,6 +2465,23 @@ export function tripCitiesInOrder(
   return tripMapStopsInOrder(days)
     .filter((s) => s.kind === 'port')
     .map(({ city, country, date, key }) => ({ city, country, date, key }));
+}
+
+/**
+ * Fingerprint of calendar route order — changes when days are reordered or
+ * cities/via stops change, so the map can remount and redraw lines.
+ */
+export function tripMapRouteKey(days: TripDay[]): string {
+  return sortTripDays(days)
+    .map((d) => {
+      const vias = sortViaPointsByArriveTime(d.viaPoints || [])
+        .map((p) => p.title.trim())
+        .filter(Boolean)
+        .join('>');
+      const place = isAtSeaDay(d) ? AT_SEA_LABEL : d.city.trim();
+      return `${d.id}:${d.date}:${place}:${vias}`;
+    })
+    .join('|');
 }
 
 /**
