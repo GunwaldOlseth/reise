@@ -81,7 +81,7 @@ function dayDescription(day: TripDay) {
     const route: string[] = []
     for (let i = 0; i < day.viaPoints.length; i++) {
       const point = day.viaPoints[i]
-      route.push(point.title || `Via ${i + 1}`)
+      route.push(point.title || `Stopp ${i + 1}`)
       const leg = day.legs?.[i]
       if (leg && i + 1 < day.viaPoints.length) {
         route.push(`[${legModeLabel(leg.mode)}${leg.title ? ` ${leg.title}` : ''}]`)

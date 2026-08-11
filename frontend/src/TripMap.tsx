@@ -4,6 +4,7 @@ import 'leaflet/dist/leaflet.css'
 import {
   api,
   AT_SEA_LABEL,
+  tripMapRouteKey,
   tripMapStopsInOrder,
   type PlaceSuggestion,
   type TripDay,
@@ -139,7 +140,7 @@ function stopPopupLine(stop: ResolvedStop): string {
   const num =
     stop.kind === 'sea' ? '~' : String(stop.markerLabel ?? '')
   const bits = [
-    stop.kind === 'via' ? 'Via' : null,
+    stop.kind === 'via' ? 'Reise' : null,
     stop.kind === 'sea' ? place?.admin1 || null : stop.country || place?.country || null,
     formatDateNO(stop.date),
     formatMapTime(stop.timeKey) || null,
@@ -250,7 +251,8 @@ export function TripMap({
   days: TripDay[]
   tripName?: string
 }) {
-  const stops = useMemo(() => tripMapStopsInOrder(days), [days])
+  const routeKey = useMemo(() => tripMapRouteKey(days), [days])
+  const stops = useMemo(() => tripMapStopsInOrder(days), [days, routeKey])
   const mapEl = useRef<HTMLDivElement | null>(null)
   const mapRef = useRef<L.Map | null>(null)
   const layerRef = useRef<L.LayerGroup | null>(null)
@@ -429,25 +431,46 @@ export function TripMap({
     return () => {
       cancelled = true
     }
-  }, [stops])
+  }, [stops, routeKey])
 
+  // Recreate the Leaflet map when itinerary order changes so polylines
+  // cannot linger from the previous route.
   useEffect(() => {
-    if (!mapEl.current) return
-    if (!mapRef.current) {
-      const map = L.map(mapEl.current, {
-        scrollWheelZoom: true,
-        attributionControl: true,
-      }).setView([46.5, 10.5], 4)
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution:
-          '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-        maxZoom: 18,
-      }).addTo(map)
-      layerRef.current = L.layerGroup().addTo(map)
-      userLayerRef.current = L.layerGroup().addTo(map)
-      mapRef.current = map
+    const el = mapEl.current
+    if (!el) return
+
+    if (mapRef.current) {
+      mapRef.current.remove()
+      mapRef.current = null
+      layerRef.current = null
+      userLayerRef.current = null
     }
 
+    const map = L.map(el, {
+      scrollWheelZoom: true,
+      attributionControl: true,
+    }).setView([46.5, 10.5], 4)
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution:
+        '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+      maxZoom: 18,
+    }).addTo(map)
+    layerRef.current = L.layerGroup().addTo(map)
+    userLayerRef.current = L.layerGroup().addTo(map)
+    mapRef.current = map
+    requestAnimationFrame(() => map.invalidateSize())
+
+    return () => {
+      map.remove()
+      if (mapRef.current === map) {
+        mapRef.current = null
+        layerRef.current = null
+        userLayerRef.current = null
+      }
+    }
+  }, [routeKey])
+
+  useEffect(() => {
     const map = mapRef.current
     const layer = layerRef.current
     if (!map || !layer) return
@@ -594,7 +617,7 @@ export function TripMap({
     requestAnimationFrame(() => map.invalidateSize())
     const t = window.setTimeout(() => map.invalidateSize(), 120)
     return () => window.clearTimeout(t)
-  }, [resolved])
+  }, [resolved, routeKey])
 
   useEffect(() => {
     return () => {
@@ -721,7 +744,7 @@ export function TripMap({
           lng: r.place!.longitude,
           label: r.city,
           description: [
-            r.kind === 'via' ? 'Via' : null,
+            r.kind === 'via' ? 'Reise' : null,
             r.country || null,
             formatDateNO(r.date),
             formatMapTime(r.timeKey) || null,
@@ -733,7 +756,7 @@ export function TripMap({
   )
 
   if (!stops.length) {
-    return <p className="empty">Ingen byer eller via-punkter å vise på kartet ennå.</p>
+    return <p className="empty">Ingen byer eller reisestopp å vise på kartet ennå.</p>
   }
 
   return (
@@ -861,7 +884,7 @@ export function TripMap({
           ref={mapEl}
           className="trip-map"
           role="img"
-          aria-label="Kart over byer, via-punkter og til sjøs på turen"
+          aria-label="Kart over byer, reisestopp og til sjøs på turen"
         />
       </div>
       <ol className="trip-map-legend">

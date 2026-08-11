@@ -1,4 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type InputHTMLAttributes,
+} from 'react'
 import {
   api,
   ApiError,
@@ -9,16 +15,22 @@ import {
   isAtSeaDay,
   isTransportType,
   itemTypeLabel,
-  ITEM_TYPES,
   LEG_MODES,
   legModeLabel,
+  cleanCruiseCosts,
+  cleanCruiseDayCosts,
+  costsForCruiseDay,
+  newCruiseActivity,
+  newCruiseCost,
   newDayItem,
   newViaPoint,
+  setCostsForCruiseDay,
   formatViaRouteDetailed,
   addDaysIso,
   buildCruiseDayPatches,
   cruiseHomePort,
   cruiseNights,
+  cruisePortsFromItinerary,
   cruisesCoveringDay,
   cruisesDisembarkingOnDay,
   dayPlaceLabel,
@@ -26,29 +38,57 @@ import {
   ensureCruiseDays,
   ensureHotelStayDays,
   formatDeparturesLabel,
+  formatShipArriveLabel,
+  formatShipDepartLabel,
   formatShipPortTimes,
   formatViaStopTimes,
+  mergeDuplicateTripDays,
+  resolveShipPortTimes,
+  formatHotelPrice,
+  formatItemPrice,
   hotelNights,
+  hotelCheckoutDate,
+  formatHotelStaySpan,
   hotelsCheckingOutOnDay,
+  hotelsComSearchUrl,
   hotelsStayingOnDay,
+  isHotelsComUrl,
+  mergeDayActivityItems,
   modeHasDepartureSchedule,
   nextScheduledDeparture,
+  normalizeClockTime,
   normalizeDepartures,
   parseDepartureTimes,
   sortViaPointsByArriveTime,
   summarizeCheckInHotels,
   summarizeCheckoutHotels,
+  formatExpenseAmount,
+  formatTransportPriceLabel,
+  summarizeAttractionTitles,
+  summarizeCruiseActivities,
+  summarizeCruiseCosts,
   summarizeDayItems,
   summarizeStayingHotels,
   summarizeTransportItems,
   summarizeViaRoute,
   syncRouteLegs,
+  emptyTripFeatures,
+  insertCalendarDayAfter,
+  latestTripDayDate,
+  sortTripDays,
+  swapTripDayDates,
+  tripExpenseSummary,
+  tripHasCruise,
+  tripHasPackages,
+  tripMapRouteKey,
   tripStats,
+  type CruiseActivity,
+  type CruiseCost,
   type CruiseDayPatch,
   type CruiseStayRef,
   type DayItem,
-  type DayItemType,
   type HotelStayRef,
+  type TripFeatures,
   type PlaceSuggestion,
   type RouteLeg,
   type ViaPoint,
@@ -106,6 +146,7 @@ type View =
   | { name: 'trip'; tripId: string; tab: TripTab }
   | { name: 'day'; tripId: string; dayId: string | 'new' }
   | { name: 'city'; tripId: string; cityKey: string }
+  | { name: 'expenses'; tripId: string }
 
 type TripTab = 'liste' | 'kalender' | 'tidslinje' | 'byer' | 'kart'
 
@@ -143,6 +184,42 @@ function CloseIcon() {
     >
       <path d="M18 6 6 18" />
       <path d="m6 6 12 12" />
+    </svg>
+  )
+}
+
+function ChevronUpIcon() {
+  return (
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.25"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="m18 15-6-6-6 6" />
+    </svg>
+  )
+}
+
+function ChevronDownIcon() {
+  return (
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.25"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="m6 9 6 6 6-6" />
     </svg>
   )
 }
@@ -236,6 +313,15 @@ function TransportModeIcon({
           <path d="M3.5 13.2 20.5 8.4a1.2 1.2 0 0 1 1.1 2.1L12.8 15.2l-1.4 5.1-2.1-.7 1-4.2-4.8 1.1-1.5 2.4-1.7-.5 1.1-2.8-1.9-1.4Z" />
         </svg>
       )
+    case 'boat':
+      return (
+        <svg {...props}>
+          <path d="M4 14.5 12 8.5l8 6" />
+          <path d="M3.5 16.2h17l-1.4 2.6a2 2 0 0 1-1.7 1H6.6a2 2 0 0 1-1.7-1L3.5 16.2Z" />
+          <path d="M12 8.5V5.8" />
+          <path d="M12 5.8h4.2l-1.2 2.2" />
+        </svg>
+      )
     default:
       return (
         <svg {...props}>
@@ -255,6 +341,42 @@ function useNowTick(intervalMs = 30000) {
     return () => window.clearInterval(id)
   }, [intervalMs])
   return now
+}
+
+/** Text time input: "1800" → "18:00" while typing; "930" → "09:30" on blur. */
+function ClockTimeInput({
+  value,
+  onChange,
+  ...rest
+}: {
+  value: string
+  onChange: (value: string) => void
+} & Omit<
+  InputHTMLAttributes<HTMLInputElement>,
+  'value' | 'onChange' | 'type'
+>) {
+  function commit(raw: string) {
+    const next = normalizeClockTime(raw)
+    if (next !== raw) onChange(next)
+  }
+
+  return (
+    <input
+      {...rest}
+      inputMode="numeric"
+      value={value}
+      onChange={(e) => {
+        const raw = e.target.value
+        onChange(raw)
+        // Only auto-format complete 4-digit times while typing.
+        // Formatting at 3 digits turned "1100" into "01:10" + "0" → "01:100".
+        if (/^\d{4}$/.test(raw.trim())) {
+          commit(raw)
+        }
+      }}
+      onBlur={() => commit(value)}
+    />
+  )
 }
 
 /**
@@ -483,27 +605,264 @@ function mergeCruiseItinerary(
   })
 }
 
+function CompactActivityFields({
+  title,
+  startTime,
+  url,
+  notes,
+  titlePlaceholder,
+  onChange,
+  onRemove,
+}: {
+  title: string
+  startTime: string
+  url: string
+  notes: string
+  titlePlaceholder?: string
+  onChange: (patch: {
+    title?: string
+    startTime?: string
+    url?: string
+    notes?: string
+  }) => void
+  onRemove: () => void
+}) {
+  return (
+    <div className="cruise-activity-row">
+      <label>
+        Aktivitet
+        <input
+          value={title}
+          onChange={(e) => onChange({ title: e.target.value })}
+          placeholder={titlePlaceholder || 'Utflukt, show, middag…'}
+        />
+      </label>
+      <label>
+        Tid
+        <ClockTimeInput
+          value={startTime}
+          onChange={(v) => onChange({ startTime: v })}
+          placeholder="10:00"
+        />
+      </label>
+      <label className="cruise-activity-wide">
+        Lenke
+        <input
+          type="url"
+          value={url}
+          onChange={(e) => onChange({ url: e.target.value })}
+          placeholder="https://"
+        />
+      </label>
+      <label className="cruise-activity-wide">
+        Notat
+        <input
+          value={notes}
+          onChange={(e) => onChange({ notes: e.target.value })}
+          placeholder="Billett, møtested…"
+        />
+      </label>
+      <button
+        type="button"
+        className="btn btn-ghost btn-sm cruise-activity-remove"
+        onClick={onRemove}
+      >
+        Fjern
+      </button>
+    </div>
+  )
+}
+
+function CompactCostFields({
+  title,
+  price,
+  notes,
+  titlePlaceholder,
+  onChange,
+  onRemove,
+}: {
+  title: string
+  price: string
+  notes: string
+  titlePlaceholder?: string
+  onChange: (patch: { title?: string; price?: string; notes?: string }) => void
+  onRemove: () => void
+}) {
+  return (
+    <div className="cruise-activity-row cruise-cost-row">
+      <label>
+        Kostnad
+        <input
+          value={title}
+          onChange={(e) => onChange({ title: e.target.value })}
+          placeholder={titlePlaceholder || 'Drikkepakke, tips, wifi…'}
+        />
+      </label>
+      <label>
+        Pris
+        <input
+          value={price}
+          onChange={(e) => onChange({ price: e.target.value })}
+          placeholder="500 kr"
+          inputMode="decimal"
+        />
+      </label>
+      <label className="cruise-activity-wide">
+        Notat
+        <input
+          value={notes}
+          onChange={(e) => onChange({ notes: e.target.value })}
+          placeholder="Valgfritt"
+        />
+      </label>
+      <button
+        type="button"
+        className="btn btn-ghost btn-sm cruise-activity-remove"
+        onClick={onRemove}
+      >
+        Fjern
+      </button>
+    </div>
+  )
+}
+
 function CruiseItemEditor({
   cruise,
   embarkDate,
   itinerary,
+  dayItemsByDate,
   onChange,
   onItineraryChange,
+  onDayItemsChange,
   onRemove,
 }: {
   cruise: DayItem
   embarkDate: string
   itinerary: CruiseDayPatch[]
+  dayItemsByDate: Record<string, DayItem[]>
   onChange: (cruise: DayItem) => void
   onItineraryChange: (rows: CruiseDayPatch[]) => void
+  onDayItemsChange: (date: string, items: DayItem[]) => void
   onRemove: () => void
 }) {
+  const [confirmRemove, setConfirmRemove] = useState(false)
   const nights = cruiseNights(cruise)
   const home = cruiseHomePort(cruise)
   const disembarkDate = embarkDate ? addDaysIso(embarkDate, nights) : ''
+  const activities = cruise.activities || []
+  const costs = cruise.costs || []
 
   function setField<K extends keyof DayItem>(key: K, value: DayItem[K]) {
     onChange({ ...cruise, [key]: value })
+  }
+
+  function setActivities(next: CruiseActivity[]) {
+    onChange({
+      ...cruise,
+      activities: next.map((a, i) => ({ ...a, sortOrder: i })),
+    })
+  }
+
+  function setCosts(next: CruiseCost[]) {
+    onChange({
+      ...cruise,
+      costs: next.map((c, i) => ({ ...c, sortOrder: i })),
+    })
+  }
+
+  function addWholeCruiseActivity() {
+    setActivities([...activities, newCruiseActivity(activities.length)])
+  }
+
+  function updateWholeCruiseActivity(
+    id: string,
+    patch: Partial<CruiseActivity>,
+  ) {
+    setActivities(
+      activities.map((a) => (a.id === id ? { ...a, ...patch } : a)),
+    )
+  }
+
+  function removeWholeCruiseActivity(id: string) {
+    setActivities(activities.filter((a) => a.id !== id))
+  }
+
+  function addWholeCruiseCost() {
+    setCosts([...costs, newCruiseCost(costs.length)])
+  }
+
+  function updateWholeCruiseCost(id: string, patch: Partial<CruiseCost>) {
+    setCosts(costs.map((c) => (c.id === id ? { ...c, ...patch } : c)))
+  }
+
+  function removeWholeCruiseCost(id: string) {
+    setCosts(costs.filter((c) => c.id !== id))
+  }
+
+  function dayActs(date: string): DayItem[] {
+    return dayItemsByDate[date] || []
+  }
+
+  function dayCosts(date: string): CruiseCost[] {
+    return costsForCruiseDay(cruise.dayCosts, date)
+  }
+
+  function setDayCosts(date: string, next: CruiseCost[]) {
+    onChange({
+      ...cruise,
+      dayCosts: setCostsForCruiseDay(cruise.dayCosts, date, next),
+    })
+  }
+
+  function addDayCost(date: string) {
+    const current = dayCosts(date)
+    setDayCosts(date, [...current, newCruiseCost(current.length)])
+  }
+
+  function updateDayCost(
+    date: string,
+    id: string,
+    patch: Partial<CruiseCost>,
+  ) {
+    setDayCosts(
+      date,
+      dayCosts(date).map((c) => (c.id === id ? { ...c, ...patch } : c)),
+    )
+  }
+
+  function removeDayCost(date: string, id: string) {
+    setDayCosts(
+      date,
+      dayCosts(date).filter((c) => c.id !== id),
+    )
+  }
+
+  function addDayActivity(date: string) {
+    const current = dayActs(date)
+    onDayItemsChange(date, [
+      ...current,
+      newDayItem('attraction', current.length),
+    ])
+  }
+
+  function updateDayActivity(
+    date: string,
+    id: string,
+    patch: Partial<DayItem>,
+  ) {
+    onDayItemsChange(
+      date,
+      dayActs(date).map((item) =>
+        item.id === id ? { ...item, ...patch } : item,
+      ),
+    )
+  }
+
+  function removeDayActivity(date: string, id: string) {
+    onDayItemsChange(
+      date,
+      dayActs(date).filter((item) => item.id !== id),
+    )
   }
 
   function setHomePort(port: string, country?: string) {
@@ -536,8 +895,10 @@ function CruiseItemEditor({
   }
 
   function setEmbarkTime(value: string) {
-    setField('startTime', value)
-    if (!itinerary.length) return
+    if (!itinerary.length) {
+      setField('startTime', value)
+      return
+    }
     onItineraryChange(
       itinerary.map((row, i) =>
         i === 0 && !row.atSea ? { ...row, leaveTime: value } : row,
@@ -546,8 +907,10 @@ function CruiseItemEditor({
   }
 
   function setDisembarkTime(value: string) {
-    setField('endTime', value)
-    if (itinerary.length < 1) return
+    if (itinerary.length < 1) {
+      setField('endTime', value)
+      return
+    }
     const last = itinerary.length - 1
     onItineraryChange(
       itinerary.map((row, i) =>
@@ -568,79 +931,91 @@ function CruiseItemEditor({
       }
       return next
     })
+    // Parent syncs embark/disembark + cruisePorts from the full itinerary.
     onItineraryChange(nextRows)
-    // Keep cruise embark/disembark times in sync with first/last port.
-    const touched = nextRows[idx]
-    if (idx === 0 && ('leaveTime' in patch || patch.atSea)) {
-      onChange({ ...cruise, startTime: touched?.leaveTime || '' })
-    }
-    if (
-      idx === itinerary.length - 1 &&
-      ('arriveTime' in patch || patch.atSea)
-    ) {
-      onChange({ ...cruise, endTime: touched?.arriveTime || '' })
-    }
   }
 
   return (
     <div className="item-card item-cruise via-inline-editor">
-      <div className="form-grid">
-        <label className="full">
-          Skip
-          <input
-            autoFocus
-            value={cruise.title}
-            onChange={(e) => setField('title', e.target.value)}
-            placeholder="MSC Orchestra"
-          />
-        </label>
-        <label>
-          Netter om bord
-          <input
-            type="number"
-            min={1}
-            max={60}
-            value={nights}
-            onChange={(e) => setNights(Number(e.target.value) || 1)}
-          />
-        </label>
-        <label>
-          Embark
-          <input
-            value={cruise.startTime || ''}
-            onChange={(e) => setEmbarkTime(e.target.value)}
-            placeholder="16:00"
-          />
-        </label>
-        <label>
-          Disembark
-          <input
-            value={cruise.endTime || ''}
-            onChange={(e) => setDisembarkTime(e.target.value)}
-            placeholder="08:00"
-          />
-        </label>
-        <div className="full">
-          <span className="cruise-home-label">Hjemhavn (start og slutt)</span>
-          <CitySuggestFields
-            className="city-suggest-cruise city-suggest-home-port"
-            hideHint
-            city={home}
-            country={homeCountry}
-            cityPlaceholder="Barcelona"
-            countryPlaceholder="Spania"
-            onCityChange={(city) => setHomePort(city)}
-            onCountryChange={(country) => setHomePort(home, country)}
-            onSelectPlace={(city, country) => setHomePort(city, country)}
-          />
+      <div className="form-grid cruise-form-grid">
+        <div className="cruise-title-row full">
+          <label className="cruise-ship-field">
+            Skip
+            <input
+              autoFocus
+              value={cruise.title}
+              onChange={(e) => setField('title', e.target.value)}
+              placeholder="MSC Orchestra"
+            />
+          </label>
+          <div className="cruise-home-field">
+            <CitySuggestFields
+              className="city-suggest-cruise city-suggest-home-port"
+              hideHint
+              cityLabel="Hjemhavn"
+              city={home}
+              country={homeCountry}
+              cityPlaceholder="Barcelona"
+              countryPlaceholder="Spania"
+              onCityChange={(city) => setHomePort(city)}
+              onCountryChange={(country) => setHomePort(home, country)}
+              onSelectPlace={(city, country) => setHomePort(city, country)}
+            />
+          </div>
+          <label className="cruise-nights-field">
+            Netter
+            <input
+              type="number"
+              min={1}
+              max={60}
+              value={nights}
+              onChange={(e) => setNights(Number(e.target.value) || 1)}
+            />
+          </label>
+        </div>
+        <div className="cruise-timing-row full">
+          <label>
+            Embark
+            <ClockTimeInput
+              value={cruise.startTime || ''}
+              onChange={setEmbarkTime}
+              placeholder="16:00"
+            />
+          </label>
+          <label>
+            Disembark
+            <ClockTimeInput
+              value={cruise.endTime || ''}
+              onChange={setDisembarkTime}
+              placeholder="08:00"
+            />
+          </label>
+          <label className="cruise-cabin-field">
+            Lugar
+            <input
+              value={cruise.cabinNumber || ''}
+              onChange={(e) => setField('cabinNumber', e.target.value)}
+              placeholder="8271"
+              autoComplete="off"
+            />
+          </label>
+          <label className="cruise-price-field">
+            Pris
+            <input
+              value={cruise.price || ''}
+              onChange={(e) => setField('price', e.target.value)}
+              placeholder="12000 kr"
+              inputMode="decimal"
+            />
+          </label>
         </div>
         {embarkDate && disembarkDate && (
-          <p className="meta full" style={{ margin: 0 }}>
+          <p className="meta full cruise-date-range">
             {formatDateNO(embarkDate)} → {formatDateNO(disembarkDate)} (
             {nights} {nights === 1 ? 'natt' : 'netter'})
           </p>
         )}
-        <label className="full">
+        <label>
           Lenke
           <input
             type="url"
@@ -649,7 +1024,7 @@ function CruiseItemEditor({
             placeholder="https://"
           />
         </label>
-        <label className="full">
+        <label>
           Notat
           <input
             value={cruise.notes || ''}
@@ -658,108 +1033,266 @@ function CruiseItemEditor({
         </label>
       </div>
 
+      <div className="cruise-activities-block">
+        <div className="cruise-activities-head">
+          <h4 className="cruise-itinerary-title">For hele cruiset</h4>
+          <div className="cruise-activities-actions">
+            <button
+              type="button"
+              className="btn btn-soft btn-sm"
+              onClick={addWholeCruiseActivity}
+            >
+              + Aktivitet
+            </button>
+            <button
+              type="button"
+              className="btn btn-soft btn-sm"
+              onClick={addWholeCruiseCost}
+            >
+              + Kostnad
+            </button>
+          </div>
+        </div>
+        {activities.length === 0 && costs.length === 0 ? (
+          <p className="meta cruise-activities-empty">
+            Aktiviteter og ekstra kostnader som gjelder hele seilasen.
+          </p>
+        ) : null}
+        {activities.length > 0 && (
+          <div className="cruise-activities-list">
+            {activities.map((act) => (
+              <CompactActivityFields
+                key={act.id}
+                title={act.title}
+                startTime={act.startTime || ''}
+                url={act.url || ''}
+                notes={act.notes || ''}
+                onChange={(patch) => updateWholeCruiseActivity(act.id, patch)}
+                onRemove={() => removeWholeCruiseActivity(act.id)}
+              />
+            ))}
+          </div>
+        )}
+        {costs.length > 0 && (
+          <div className="cruise-activities-list">
+            {costs.map((cost) => (
+              <CompactCostFields
+                key={cost.id}
+                title={cost.title}
+                price={cost.price || ''}
+                notes={cost.notes || ''}
+                onChange={(patch) => updateWholeCruiseCost(cost.id, patch)}
+                onRemove={() => removeWholeCruiseCost(cost.id)}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+
       <div className="cruise-itinerary">
         <h4 className="cruise-itinerary-title">Seilingsplan</h4>
         <div className="cruise-itinerary-list">
-          {itinerary.map((row, idx) => (
-            <div
-              key={row.date || idx}
-              className={[
-                'cruise-itinerary-row',
-                row.atSea ? 'is-at-sea' : '',
-              ]
-                .filter(Boolean)
-                .join(' ')}
-            >
-              <div className="cruise-itinerary-head">
-                <span className="cruise-itinerary-date">
-                  {formatDateNO(row.date) || `Dag ${idx + 1}`}
-                  {idx === 0 ? ' · Embark' : ''}
-                  {idx === itinerary.length - 1 && itinerary.length > 1
-                    ? ' · Disembark'
-                    : ''}
-                </span>
-                <label className="cruise-at-sea-toggle">
-                  <input
-                    type="checkbox"
-                    checked={row.atSea}
-                    onChange={(e) =>
-                      updateRow(idx, {
-                        atSea: e.target.checked,
-                        city: e.target.checked
-                          ? AT_SEA_LABEL
-                          : row.city === AT_SEA_LABEL
-                            ? home
-                            : row.city || home,
-                      })
-                    }
-                  />
-                  {AT_SEA_LABEL}
-                </label>
-              </div>
-              {!row.atSea && (
-                <div className="cruise-itinerary-body">
-                  <CitySuggestFields
-                    className="city-suggest-cruise"
-                    hideHint
-                    city={row.city === AT_SEA_LABEL ? '' : row.city}
-                    country={row.country}
-                    cityLabel="Havn"
-                    cityPlaceholder={home || 'Havn'}
-                    countryPlaceholder="Spania"
-                    onCityChange={(city) => updateRow(idx, { city })}
-                    onCountryChange={(country) => updateRow(idx, { country })}
-                    onSelectPlace={(city, country) =>
-                      updateRow(idx, { city, country, atSea: false })
-                    }
-                  />
-                  <div className="cruise-port-times">
-                    <label>
-                      Ankomst
-                      <input
-                        value={row.arriveTime || ''}
-                        onChange={(e) =>
-                          updateRow(idx, { arriveTime: e.target.value })
-                        }
-                        placeholder={idx === 0 ? '—' : '08:00'}
-                        disabled={idx === 0}
-                        title={
-                          idx === 0
-                            ? 'Embark-dagen har vanligvis ingen ankomst'
-                            : undefined
-                        }
-                      />
-                    </label>
-                    <label>
-                      Avgang
-                      <input
-                        value={row.leaveTime || ''}
-                        onChange={(e) =>
-                          updateRow(idx, { leaveTime: e.target.value })
-                        }
-                        placeholder={
-                          idx === itinerary.length - 1 ? '—' : '18:00'
-                        }
-                        disabled={idx === itinerary.length - 1}
-                        title={
-                          idx === itinerary.length - 1
-                            ? 'Disembark-dagen har vanligvis ingen avgang'
-                            : undefined
-                        }
-                      />
-                    </label>
-                  </div>
+          {itinerary.map((row, idx) => {
+            const rowActs = dayActs(row.date)
+            const rowCosts = dayCosts(row.date)
+            return (
+              <div
+                key={row.date || idx}
+                className={[
+                  'cruise-itinerary-row',
+                  row.atSea ? 'is-at-sea' : '',
+                ]
+                  .filter(Boolean)
+                  .join(' ')}
+              >
+                <div className="cruise-itinerary-head">
+                  <span className="cruise-itinerary-date">
+                    {formatDateNO(row.date) || `Dag ${idx + 1}`}
+                    {idx === 0 ? ' · Embark' : ''}
+                    {idx === itinerary.length - 1 && itinerary.length > 1
+                      ? ' · Disembark'
+                      : ''}
+                  </span>
+                  <label className="cruise-at-sea-toggle">
+                    <input
+                      type="checkbox"
+                      checked={row.atSea}
+                      onChange={(e) =>
+                        updateRow(idx, {
+                          atSea: e.target.checked,
+                          city: e.target.checked
+                            ? AT_SEA_LABEL
+                            : row.city === AT_SEA_LABEL
+                              ? home
+                              : row.city || home,
+                        })
+                      }
+                    />
+                    Er hele dagen til sjøs
+                  </label>
                 </div>
-              )}
-            </div>
-          ))}
+                {!row.atSea && (
+                  <div className="cruise-itinerary-body">
+                    <CitySuggestFields
+                      className="city-suggest-cruise"
+                      hideHint
+                      city={row.city === AT_SEA_LABEL ? '' : row.city}
+                      country={row.country}
+                      cityLabel="Havn"
+                      cityPlaceholder={home || 'Havn'}
+                      countryPlaceholder="Spania"
+                      onCityChange={(city) => updateRow(idx, { city })}
+                      onCountryChange={(country) =>
+                        updateRow(idx, { country })
+                      }
+                      onSelectPlace={(city, country) =>
+                        updateRow(idx, { city, country, atSea: false })
+                      }
+                    />
+                    <div className="cruise-port-times">
+                      <label>
+                        Ankomst
+                        <ClockTimeInput
+                          value={row.arriveTime || ''}
+                          onChange={(v) => updateRow(idx, { arriveTime: v })}
+                          placeholder={idx === 0 ? '—' : '08:00'}
+                          disabled={idx === 0}
+                          title={
+                            idx === 0
+                              ? 'Embark-dagen har vanligvis ingen ankomst'
+                              : undefined
+                          }
+                        />
+                      </label>
+                      <label>
+                        Avgang
+                        <ClockTimeInput
+                          value={row.leaveTime || ''}
+                          onChange={(v) => updateRow(idx, { leaveTime: v })}
+                          placeholder={
+                            idx === itinerary.length - 1 ? '—' : '18:00'
+                          }
+                          disabled={idx === itinerary.length - 1}
+                          title={
+                            idx === itinerary.length - 1
+                              ? 'Disembark-dagen har vanligvis ingen avgang'
+                              : undefined
+                          }
+                        />
+                      </label>
+                    </div>
+                  </div>
+                )}
+                <div className="cruise-day-activities">
+                  <div className="cruise-activities-head">
+                    <span className="cruise-day-activities-label">
+                      Aktiviteter
+                      {rowActs.length ? ` (${rowActs.length})` : ''}
+                    </span>
+                    <button
+                      type="button"
+                      className="btn btn-soft btn-sm"
+                      onClick={() => addDayActivity(row.date)}
+                    >
+                      + Aktivitet
+                    </button>
+                  </div>
+                  {rowActs.length > 0 && (
+                    <div className="cruise-activities-list">
+                      {rowActs.map((act) => (
+                        <CompactActivityFields
+                          key={act.id}
+                          title={act.title}
+                          startTime={act.startTime || ''}
+                          url={act.url || ''}
+                          notes={act.notes || ''}
+                          titlePlaceholder={
+                            row.atSea
+                              ? 'Show, spa, middag…'
+                              : 'Utflukt, byvandring…'
+                          }
+                          onChange={(patch) =>
+                            updateDayActivity(row.date, act.id, patch)
+                          }
+                          onRemove={() => removeDayActivity(row.date, act.id)}
+                        />
+                      ))}
+                    </div>
+                  )}
+                  <div className="cruise-activities-head">
+                    <span className="cruise-day-activities-label">
+                      Kostnader
+                      {rowCosts.length ? ` (${rowCosts.length})` : ''}
+                    </span>
+                    <button
+                      type="button"
+                      className="btn btn-soft btn-sm"
+                      onClick={() => addDayCost(row.date)}
+                    >
+                      + Kostnad
+                    </button>
+                  </div>
+                  {rowCosts.length > 0 && (
+                    <div className="cruise-activities-list">
+                      {rowCosts.map((cost) => (
+                        <CompactCostFields
+                          key={cost.id}
+                          title={cost.title}
+                          price={cost.price || ''}
+                          notes={cost.notes || ''}
+                          titlePlaceholder={
+                            row.atSea
+                              ? 'Wifi, drikkepakke…'
+                              : 'Utflukt, taxi i havn…'
+                          }
+                          onChange={(patch) =>
+                            updateDayCost(row.date, cost.id, patch)
+                          }
+                          onRemove={() => removeDayCost(row.date, cost.id)}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )
+          })}
         </div>
       </div>
 
-      <div className="toolbar" style={{ marginTop: '0.5rem' }}>
-        <button type="button" className="btn btn-danger" onClick={onRemove}>
-          Fjern cruise
-        </button>
+      <div className="cruise-remove-block">
+        {!confirmRemove ? (
+          <button
+            type="button"
+            className="btn btn-ghost cruise-remove-trigger"
+            onClick={() => setConfirmRemove(true)}
+          >
+            Fjern cruise…
+          </button>
+        ) : (
+          <div className="cruise-remove-confirm">
+            <p className="meta">
+              Fjerne {cruise.title?.trim() || 'dette cruise'}? Seilingsplanen
+              og koblingen til dagene blir borte. Dette kan ikke angres herfra.
+            </p>
+            <div className="toolbar">
+              <button
+                type="button"
+                className="btn btn-danger"
+                onClick={onRemove}
+              >
+                Ja, fjern cruise
+              </button>
+              <button
+                type="button"
+                className="btn btn-soft"
+                onClick={() => setConfirmRemove(false)}
+              >
+                Avbryt
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )
@@ -942,6 +1475,191 @@ function DatePickerField({
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+function ExpensesView({ days }: { days: TripDay[] }) {
+  const summary = useMemo(() => tripExpenseSummary(days), [days])
+
+  function CategoryBlock({
+    title,
+    total,
+    lines,
+  }: {
+    title: string
+    total: number
+    lines: {
+      id: string
+      title: string
+      date?: string
+      amount: number
+      rawPrice: string
+      isActual?: boolean
+      expectedRaw?: string
+    }[]
+  }) {
+    return (
+      <div className="expense-category">
+        <div className="expense-category-head">
+          <h3>{title}</h3>
+          <strong>{formatExpenseAmount(total)}</strong>
+        </div>
+        {lines.length === 0 ? (
+          <p className="meta expense-empty">Ingen priser registrert</p>
+        ) : (
+          <ul className="expense-lines">
+            {lines.map((line) => (
+              <li key={line.id}>
+                <span className="expense-line-title">
+                  {line.title}
+                  {line.date ? (
+                    <span className="meta"> · {formatDateNO(line.date)}</span>
+                  ) : null}
+                  {line.isActual ? (
+                    <span className="meta">
+                      {' '}
+                      · faktisk
+                      {line.expectedRaw
+                        ? ` (forv. ${line.expectedRaw})`
+                        : ''}
+                    </span>
+                  ) : line.expectedRaw === undefined && title === 'Transport' ? (
+                    <span className="meta"> · forventet</span>
+                  ) : null}
+                </span>
+                <span className="expense-line-amount">
+                  {formatExpenseAmount(line.amount)}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    )
+  }
+
+  return (
+    <div className="expense-overview">
+      <div className="expense-total-card">
+        <p className="expense-total-label">Totalt</p>
+        <p className="expense-total-amount">
+          {formatExpenseAmount(summary.total)}
+        </p>
+        <p className="meta expense-total-breakdown">
+          Cruise {formatExpenseAmount(summary.cruise.total)}
+          {' · '}
+          Hotell {formatExpenseAmount(summary.hotel.total)}
+          {' · '}
+          Transport {formatExpenseAmount(summary.transport.total)}
+        </p>
+      </div>
+
+      <div className="expense-cruise-avg">
+        <span>Cruise snitt per dag</span>
+        <strong>
+          {summary.cruise.days > 0
+            ? formatExpenseAmount(summary.cruise.avgPerDay)
+            : '—'}
+        </strong>
+        {summary.cruise.days > 0 ? (
+          <span className="meta">
+            {formatExpenseAmount(summary.cruise.total)} over{' '}
+            {summary.cruise.days}{' '}
+            {summary.cruise.days === 1 ? 'dag' : 'dager'} (etter netter om
+            bord)
+          </span>
+        ) : (
+          <span className="meta">Ingen cruisepris ennå</span>
+        )}
+      </div>
+
+      <CategoryBlock
+        title="Cruise"
+        total={summary.cruise.total}
+        lines={summary.cruise.lines}
+      />
+      <CategoryBlock
+        title="Hotell"
+        total={summary.hotel.total}
+        lines={summary.hotel.lines}
+      />
+      <CategoryBlock
+        title="Transport"
+        total={summary.transport.total}
+        lines={summary.transport.lines}
+      />
+
+      <div className="expense-by-day">
+        <h3 className="expense-by-day-title">Per dag</h3>
+        <p className="meta expense-by-day-hint">
+          Generelt for cruise (billett og kostnader for hele cruiset) og hotell
+          fordeles jevnt over nettene. Kostnader registrert på en cruisedag, og
+          transport, vises bare den dagen.
+        </p>
+        {summary.byDay.length === 0 ? (
+          <p className="meta expense-empty">Ingen dagsutgifter ennå</p>
+        ) : (
+          <ul className="expense-day-list">
+            {summary.byDay.map((day) => {
+              const parts = [
+                day.cruise > 0
+                  ? `Cruise ${formatExpenseAmount(day.cruise)}`
+                  : '',
+                day.hotel > 0
+                  ? `Hotell ${formatExpenseAmount(day.hotel)}`
+                  : '',
+                day.transport > 0
+                  ? `Transport ${formatExpenseAmount(day.transport)}`
+                  : '',
+              ].filter(Boolean)
+              return (
+                <li key={day.date} className="expense-day-row">
+                  <div className="expense-day-main">
+                    <div className="expense-day-head">
+                      <span className="expense-day-date">
+                        {formatNiceDate(day.date)}
+                        {day.place && day.place !== 'Uten by'
+                          ? ` · ${day.place}`
+                          : ''}
+                      </span>
+                      <strong className="expense-day-total">
+                        {formatExpenseAmount(day.total)}
+                      </strong>
+                    </div>
+                    {parts.length > 0 ? (
+                      <span className="meta">{parts.join(' · ')}</span>
+                    ) : null}
+                    {day.lines.length > 0 ? (
+                      <ul className="expense-day-lines">
+                        {day.lines.map((line) => (
+                          <li key={line.id}>
+                            <span>{line.title}</span>
+                            <span className="expense-line-amount">
+                              {formatExpenseAmount(line.amount)}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : null}
+                  </div>
+                </li>
+              )
+            })}
+          </ul>
+        )}
+      </div>
+
+      <p className="meta expense-footnote">
+        Summerer tall fra prisfeltene (f.eks. «12000 kr»). For transport brukes
+        faktisk kostnad når den er fylt inn, ellers forventet pris. Blandede
+        valutaer summeres som tall uten omregning.
+        {summary.unparsedCount > 0
+          ? ` ${summary.unparsedCount} pris${
+              summary.unparsedCount === 1 ? '' : 'er'
+            } kunne ikke tolkes.`
+          : ''}
+      </p>
     </div>
   )
 }
@@ -1400,6 +2118,16 @@ function itemSummary(item: DayItem): string {
   if (item.startTime || item.endTime) {
     bits.push([item.startTime, item.endTime].filter(Boolean).join('–'))
   }
+  if (item.type === 'attraction' && item.notes?.trim()) {
+    bits.push(item.notes.trim())
+  }
+  if (isTransportType(item.type)) {
+    const price = formatTransportPriceLabel(item)
+    if (price) bits.push(price)
+  } else {
+    const price = formatItemPrice(item)
+    if (price) bits.push(price)
+  }
   return bits.filter(Boolean).join(' · ')
 }
 
@@ -1427,6 +2155,8 @@ function DayItemEditor({
   onChange,
   onRemove,
   dayDate = '',
+  city = '',
+  country = '',
   embedded = false,
 }: {
   item: DayItem
@@ -1434,14 +2164,31 @@ function DayItemEditor({
   onRemove: () => void
   /** Used to show hotel checkout date from overnattinger. */
   dayDate?: string
+  /** City/country for Hotels.com search. */
+  city?: string
+  country?: string
   /** Compact inline editor under a summary row (via-style). */
   embedded?: boolean
 }) {
   const transport = isTransportType(item.type)
   const hotel = item.type === 'hotel'
+  const packageTour = item.type === 'package'
   const nights = hotelNights(item)
   const checkoutDate =
-    hotel && dayDate.trim() ? addDaysIso(dayDate, nights) : ''
+    hotel && dayDate.trim() ? hotelCheckoutDate(dayDate, nights) : ''
+  const staySpan =
+    hotel && dayDate.trim()
+      ? formatHotelStaySpan(dayDate, item, formatDateNO)
+      : ''
+  const hotelsComUrl = hotel
+    ? hotelsComSearchUrl({
+        hotelName: item.title,
+        city,
+        country,
+        checkIn: dayDate,
+        checkOut: checkoutDate,
+      })
+    : ''
 
   function set<K extends keyof DayItem>(key: K, value: DayItem[K]) {
     onChange({ ...item, [key]: value })
@@ -1466,7 +2213,13 @@ function DayItemEditor({
       )}
       <div className="form-grid">
         <label className="full">
-          {hotel ? 'Hotellnavn' : transport ? 'Navn / rute' : 'Navn'}
+          {hotel
+            ? 'Hotellnavn'
+            : packageTour
+              ? 'Pakketur / arrangør'
+              : transport
+                ? 'Navn / rute'
+                : 'Navn'}
           <input
             autoFocus={embedded}
             value={item.title}
@@ -1474,9 +2227,11 @@ function DayItemEditor({
             placeholder={
               hotel
                 ? 'Hotel Eden'
-                : transport
-                  ? 'RY 123 / Intercity'
-                  : 'Colosseum'
+                : packageTour
+                  ? 'Vin-tur Toscana'
+                  : transport
+                    ? 'RY 123 / Intercity'
+                    : 'Byvandring, museum, utsiktspunkt…'
             }
           />
         </label>
@@ -1500,7 +2255,7 @@ function DayItemEditor({
             </label>
           </>
         )}
-        {(hotel || item.type === 'attraction') && (
+        {(hotel || item.type === 'attraction' || packageTour) && (
           <label className="full">
             Adresse
             <input
@@ -1510,22 +2265,22 @@ function DayItemEditor({
           </label>
         )}
         <label>
-          {hotel ? 'Innsjekk' : transport ? 'Avgang' : 'Tid'}
-          <input
+          {hotel ? 'Innsjekk-klokkeslett' : transport ? 'Avgang' : 'Tid'}
+          <ClockTimeInput
             value={item.startTime || ''}
-            onChange={(e) => set('startTime', e.target.value)}
+            onChange={(v) => set('startTime', v)}
             placeholder={hotel ? '15:00' : '10:40'}
           />
         </label>
         <label>
           {hotel ? 'Utsjekk-klokkeslett' : transport ? 'Ankomst' : 'Slutt'}
-          <input
+          <ClockTimeInput
             value={item.endTime || ''}
-            onChange={(e) => set('endTime', e.target.value)}
+            onChange={(v) => set('endTime', v)}
             placeholder={hotel ? '11:00' : ''}
           />
         </label>
-        {hotel && (
+        {(hotel || packageTour) && (
           <label>
             Overnattinger
             <input
@@ -1539,21 +2294,99 @@ function DayItemEditor({
             />
           </label>
         )}
-        {hotel && checkoutDate && (
-          <p className="meta full" style={{ margin: 0 }}>
-            Utsjekk-dato: {formatDateNO(checkoutDate)} ({nights}{' '}
-            {nights === 1 ? 'natt' : 'netter'})
+        {(hotel || item.type === 'attraction' || packageTour) && (
+          <label>
+            Pris
+            <input
+              value={item.price || ''}
+              onChange={(e) => set('price', e.target.value)}
+              placeholder={hotel ? '4500 kr' : '15 €'}
+              inputMode="decimal"
+            />
+          </label>
+        )}
+        {transport && (
+          <>
+            <label>
+              Forventet pris
+              <input
+                value={item.price || ''}
+                onChange={(e) => set('price', e.target.value)}
+                placeholder="45 €"
+                inputMode="decimal"
+              />
+            </label>
+            <label>
+              Faktisk kostnad
+              <input
+                value={item.actualPrice || ''}
+                onChange={(e) => set('actualPrice', e.target.value)}
+                placeholder="Fyll inn etterpå"
+                inputMode="decimal"
+              />
+            </label>
+          </>
+        )}
+        {hotel && dayDate.trim() && checkoutDate && (
+          <p className="meta full hotel-stay-span" style={{ margin: 0 }}>
+            <strong>Opphold:</strong> {staySpan}
+            <br />
+            Innsjekk-dato {formatDateNO(dayDate)} · Utsjekk-dato{' '}
+            {formatDateNO(checkoutDate)}
+            {nights > 0 ? (
+              <>
+                {' '}
+                · overnatter{' '}
+                {nights === 1
+                  ? formatDateNO(dayDate)
+                  : `${formatDateNO(dayDate)}–${formatDateNO(
+                      addDaysIso(dayDate, nights - 1),
+                    )}`}
+              </>
+            ) : null}
           </p>
         )}
-        <label className={hotel ? '' : 'full'}>
-          Lenke
-          <input
-            type="url"
-            value={item.url || ''}
-            onChange={(e) => set('url', e.target.value)}
-            placeholder="https://"
-          />
-        </label>
+        {hotel ? (
+          <div className="full hotel-hotelscom">
+            <label>
+              Hotels.com
+              <input
+                type="url"
+                value={item.url || ''}
+                onChange={(e) => set('url', e.target.value)}
+                placeholder="https://www.hotels.com/..."
+              />
+            </label>
+            <div className="toolbar hotel-hotelscom-actions">
+              <button
+                type="button"
+                className="btn btn-soft btn-sm"
+                onClick={() => set('url', hotelsComUrl)}
+                title="Fyll inn søkelenke med hotell, by og datoer"
+              >
+                Fyll Hotels.com-søk
+              </button>
+              <a
+                className="btn btn-soft btn-sm"
+                href={item.url?.trim() || hotelsComUrl}
+                target="_blank"
+                rel="noreferrer"
+              >
+                Åpne Hotels.com
+              </a>
+            </div>
+          </div>
+        ) : (
+          <label className="full">
+            Lenke
+            <input
+              type="url"
+              value={item.url || ''}
+              onChange={(e) => set('url', e.target.value)}
+              placeholder="https://"
+            />
+          </label>
+        )}
         <label className="full">
           Notat
           <input
@@ -1576,6 +2409,7 @@ function DayItemEditor({
 function DayForm({
   initial,
   tripDays,
+  tripFeatures,
   onSave,
   onSaveHotelStay,
   onRemoveHotelStay,
@@ -1583,13 +2417,17 @@ function DayForm({
   onRemoveCruiseStay,
   onCancel,
   onDelete,
+  onInsertDayAfter,
   saving,
 }: {
   initial: TripDayInput & { id?: string }
   tripDays: TripDay[]
+  /** Trip-level modules (cruise / packages). */
+  tripFeatures?: TripFeatures
   onSave: (
     day: TripDayInput,
     cruisePatches?: CruiseDayPatch[],
+    cruiseDayItemsByDate?: Record<string, DayItem[]>,
   ) => Promise<void>
   /** Persist hotel edits that belong to another day's check-in. */
   onSaveHotelStay: (sourceDayId: string, hotel: DayItem) => Promise<void>
@@ -1598,10 +2436,13 @@ function DayForm({
     sourceDayId: string,
     cruise: DayItem,
     patches?: CruiseDayPatch[],
+    dayItemsByDate?: Record<string, DayItem[]>,
   ) => Promise<void>
   onRemoveCruiseStay: (sourceDayId: string, cruiseId: string) => Promise<void>
   onCancel: () => void
   onDelete?: () => Promise<void>
+  /** Insert a blank day after this one and shift later days. */
+  onInsertDayAfter?: () => void
   saving: boolean
 }) {
   const [form, setForm] = useState<TripDayInput>(initial)
@@ -1628,15 +2469,24 @@ function DayForm({
   const [cruiseItineraries, setCruiseItineraries] = useState<
     Record<string, CruiseDayPatch[]>
   >({})
+  /** Per-cruise drafts of non-hotel/cruise day items keyed by YYYY-MM-DD. */
+  const [cruiseDayItems, setCruiseDayItems] = useState<
+    Record<string, Record<string, DayItem[]>>
+  >({})
   const [savingLinkedHotel, setSavingLinkedHotel] = useState(false)
   const [savingLinkedCruise, setSavingLinkedCruise] = useState(false)
   const [dirty, setDirty] = useState(!initial.id)
 
   const hotels = items.filter((i) => i.type === 'hotel')
   const cruises = items.filter((i) => i.type === 'cruise')
-  const otherItems = items.filter(
-    (i) => i.type !== 'hotel' && i.type !== 'cruise',
-  )
+  const packageItems = items.filter((i) => i.type === 'package')
+  /** Excursions / sights — not city-to-city travel (that belongs in Via). */
+  const excursionItems = items.filter((i) => i.type === 'attraction')
+  /** Older transport day-items; new travel should use Via. */
+  const legacyTransportItems = items.filter((i) => isTransportType(i.type))
+  const cruiseModuleOn = !!tripFeatures?.cruise
+  const packagesModuleOn = !!tripFeatures?.packages
+  const showPackagesSection = packagesModuleOn || packageItems.length > 0
   const stayHotels = useMemo(() => {
     const stays = hotelsStayingOnDay(tripDays, form.date)
     // Local hotels already listed from items; keep linked stays from other days.
@@ -1658,12 +2508,20 @@ function DayForm({
     () => cruisesDisembarkingOnDay(tripDays, form.date),
     [tripDays, form.date],
   )
-  const canSave = dirty || !initial.id
-  /** «Til sjøs» applies only on cruise days (embark / om bord / disembark). */
-  const showAtSeaToggle =
+  const showCruiseSection =
+    cruiseModuleOn ||
     cruises.length > 0 ||
     stayCruises.length > 0 ||
     disembarkCruises.length > 0
+  /** Day already belongs to a cruise — do not offer adding another. */
+  const dayAlreadyOnCruise =
+    cruises.length > 0 ||
+    stayCruises.length > 0 ||
+    disembarkCruises.length > 0
+  const canAddCruise = cruiseModuleOn && !dayAlreadyOnCruise
+  const canSave = dirty || !initial.id
+  /** «Til sjøs» applies only on cruise days (embark / om bord / disembark). */
+  const showAtSeaToggle = showCruiseSection
   const departure = useMemo(
     () => departurePlaceForDay(tripDays, form.date),
     [tripDays, form.date],
@@ -1731,29 +2589,54 @@ function DayForm({
   }
 
   function updateLinkedCruise(stay: CruiseStayRef, next: DayItem) {
+    const prevCruise = linkedCruise(stay)
+    const nightsChanged = cruiseNights(next) !== cruiseNights(prevCruise)
     setLinkedCruiseDrafts((prev) => ({ ...prev, [stay.cruise.id]: next }))
+    if (!nightsChanged) return
+    const embarkForm = {
+      date: stay.embarkDate,
+      city: stay.embarkDay.city,
+      country: stay.embarkDay.country,
+      atSea: stay.embarkDay.atSea,
+      arriveTime: stay.embarkDay.arriveTime,
+      leaveTime: stay.embarkDay.leaveTime,
+    }
     setCruiseItineraries((prev) => ({
       ...prev,
       [stay.cruise.id]: mergeCruiseItinerary(
         stay.embarkDate,
         next,
         tripDays,
-        {
-          date: stay.embarkDate,
-          city: stay.embarkDay.city,
-          country: stay.embarkDay.country,
-          atSea: stay.embarkDay.atSea,
-        },
+        embarkForm,
         prev[stay.cruise.id],
       ),
     }))
+    ensureCruiseDayItems(stay.cruise.id, stay.embarkDate, next, embarkForm)
+  }
+
+  function setLinkedCruiseItinerary(stay: CruiseStayRef, rows: CruiseDayPatch[]) {
+    const cruise = linkedCruise(stay)
+    const withPorts = {
+      ...cruise,
+      cruisePorts: cruisePortsFromItinerary(rows),
+      startTime: rows[0] && !rows[0].atSea ? rows[0].leaveTime || '' : cruise.startTime,
+      endTime:
+        rows.length && !rows[rows.length - 1].atSea
+          ? rows[rows.length - 1].arriveTime || ''
+          : cruise.endTime,
+    }
+    setLinkedCruiseDrafts((prev) => ({ ...prev, [cruise.id]: withPorts }))
+    setCruiseItineraries((prev) => ({ ...prev, [cruise.id]: rows }))
   }
 
   function itineraryFor(
     cruiseId: string,
     cruise: DayItem,
     embarkDate: string,
-    embarkForm: Pick<TripDay, 'city' | 'country' | 'atSea' | 'date'>,
+    embarkForm: Pick<
+      TripDay,
+      'city' | 'country' | 'atSea' | 'date' | 'arriveTime' | 'leaveTime'
+    >,
   ): CruiseDayPatch[] {
     return (
       cruiseItineraries[cruiseId] ||
@@ -1761,22 +2644,219 @@ function DayForm({
     )
   }
 
+  function isDayActivityItem(item: DayItem) {
+    return (
+      item.type !== 'hotel' &&
+      item.type !== 'cruise' &&
+      item.type !== 'package'
+    )
+  }
+
+  function seedDayItemsByDate(
+    cruiseId: string,
+    embarkDate: string,
+    cruise: DayItem,
+    embarkForm: Pick<
+      TripDay,
+      'city' | 'country' | 'atSea' | 'date' | 'arriveTime' | 'leaveTime'
+    >,
+  ): Record<string, DayItem[]> {
+    const rows = itineraryFor(cruiseId, cruise, embarkDate, embarkForm)
+    const existing = cruiseDayItems[cruiseId] || {}
+    const out: Record<string, DayItem[]> = { ...existing }
+    for (const row of rows) {
+      if (out[row.date]) continue
+      if (row.date === form.date) {
+        out[row.date] = items.filter(isDayActivityItem)
+      } else {
+        const day = tripDays.find((d) => d.date === row.date)
+        out[row.date] = (day?.items || []).filter(isDayActivityItem)
+      }
+    }
+    return out
+  }
+
+  function dayItemsForCruise(
+    cruiseId: string,
+    embarkDate: string,
+    cruise: DayItem,
+    embarkForm: Pick<
+      TripDay,
+      'city' | 'country' | 'atSea' | 'date' | 'arriveTime' | 'leaveTime'
+    >,
+  ): Record<string, DayItem[]> {
+    return (
+      cruiseDayItems[cruiseId] ||
+      seedDayItemsByDate(cruiseId, embarkDate, cruise, embarkForm)
+    )
+  }
+
+  /** Load per-day activities from trip days / current form (fresh each open). */
+  function loadCruiseDayItems(
+    cruiseId: string,
+    embarkDate: string,
+    cruise: DayItem,
+    embarkForm: Pick<
+      TripDay,
+      'city' | 'country' | 'atSea' | 'date' | 'arriveTime' | 'leaveTime'
+    >,
+  ) {
+    const rows =
+      cruiseItineraries[cruiseId] ||
+      buildCruiseDayPatches(embarkDate, cruise, tripDays, embarkForm)
+    const byDate: Record<string, DayItem[]> = {}
+    for (const row of rows) {
+      if (row.date === form.date) {
+        byDate[row.date] = items.filter(isDayActivityItem)
+      } else {
+        const day = tripDays.find((d) => d.date === row.date)
+        byDate[row.date] = (day?.items || []).filter(isDayActivityItem)
+      }
+    }
+    setCruiseDayItems((prev) => ({ ...prev, [cruiseId]: byDate }))
+  }
+
+  /** When nights grow, fill missing dates without wiping drafts. */
+  function ensureCruiseDayItems(
+    cruiseId: string,
+    embarkDate: string,
+    cruise: DayItem,
+    embarkForm: Pick<
+      TripDay,
+      'city' | 'country' | 'atSea' | 'date' | 'arriveTime' | 'leaveTime'
+    >,
+  ) {
+    setCruiseDayItems((prev) => {
+      const rows = itineraryFor(cruiseId, cruise, embarkDate, embarkForm)
+      const cur = { ...(prev[cruiseId] || {}) }
+      let changed = !prev[cruiseId]
+      for (const row of rows) {
+        if (cur[row.date]) continue
+        changed = true
+        if (row.date === form.date) {
+          cur[row.date] = items.filter(isDayActivityItem)
+        } else {
+          const day = tripDays.find((d) => d.date === row.date)
+          cur[row.date] = (day?.items || []).filter(isDayActivityItem)
+        }
+      }
+      if (!changed) return prev
+      return { ...prev, [cruiseId]: cur }
+    })
+  }
+
+  function setCruiseDayItemsForDate(
+    cruiseId: string,
+    date: string,
+    dayItems: DayItem[],
+    syncLocalForm: boolean,
+  ) {
+    markDirty()
+    setCruiseDayItems((prev) => ({
+      ...prev,
+      [cruiseId]: { ...(prev[cruiseId] || {}), [date]: dayItems },
+    }))
+    if (syncLocalForm && date === form.date) {
+      setItems((prev) => mergeDayActivityItems(prev, dayItems))
+    }
+  }
+
+  function cleanCruiseActivities(
+    activities: CruiseActivity[] | undefined,
+  ): CruiseActivity[] | undefined {
+    if (!activities?.length) return activities?.length === 0 ? [] : undefined
+    const cleaned = activities
+      .map((a, i) => ({ ...a, sortOrder: i }))
+      .filter(
+        (a) => a.title.trim() || a.notes?.trim() || a.url?.trim() || a.startTime?.trim(),
+      )
+    return cleaned
+  }
+
   async function persistLinkedCruise(stay: CruiseStayRef) {
     const cruise = linkedCruise(stay)
+    const embarkForm = {
+      date: stay.embarkDate,
+      city: stay.embarkDay.city,
+      country: stay.embarkDay.country,
+      atSea: stay.embarkDay.atSea,
+      arriveTime: stay.embarkDay.arriveTime,
+      leaveTime: stay.embarkDay.leaveTime,
+    }
     const patches = itineraryFor(
       cruise.id,
       cruise,
       stay.embarkDate,
-      {
-        date: stay.embarkDate,
-        city: stay.embarkDay.city,
-        country: stay.embarkDay.country,
-        atSea: stay.embarkDay.atSea,
-      },
+      embarkForm,
+    )
+    const dayItemsByDate = dayItemsForCruise(
+      cruise.id,
+      stay.embarkDate,
+      cruise,
+      embarkForm,
     )
     setSavingLinkedCruise(true)
     try {
-      await onSaveCruiseStay(stay.embarkDay.id, cruise, patches)
+      await onSaveCruiseStay(
+        stay.embarkDay.id,
+        {
+          ...cruise,
+          cruisePorts: cruisePortsFromItinerary(patches),
+          activities: cleanCruiseActivities(cruise.activities),
+          costs: cleanCruiseCosts(cruise.costs),
+          dayCosts: cleanCruiseDayCosts(cruise.dayCosts),
+        },
+        patches,
+        dayItemsByDate,
+      )
+      setEditingCruiseId(null)
+    } finally {
+      setSavingLinkedCruise(false)
+    }
+  }
+
+  /** Save local embark-day cruise + stamp ankomst/avgang on all port days. */
+  async function persistLocalCruise(cruiseId: string) {
+    if (!initial.id) return
+    const cruise = items.find((i) => i.id === cruiseId)
+    if (!cruise || cruise.type !== 'cruise') return
+    const patches = itineraryFor(cruise.id, cruise, form.date, form)
+    const withPorts = {
+      ...cruise,
+      cruisePorts: cruisePortsFromItinerary(patches),
+      startTime:
+        patches[0] && !patches[0].atSea
+          ? patches[0].leaveTime || cruise.startTime || ''
+          : cruise.startTime,
+      endTime:
+        patches.length && !patches[patches.length - 1].atSea
+          ? patches[patches.length - 1].arriveTime || cruise.endTime || ''
+          : cruise.endTime,
+      activities: cleanCruiseActivities(cruise.activities),
+      costs: cleanCruiseCosts(cruise.costs),
+      dayCosts: cleanCruiseDayCosts(cruise.dayCosts),
+    }
+    setItems((prev) =>
+      prev.map((item) => (item.id === cruiseId ? withPorts : item)),
+    )
+    const emb = patches.find((p) => p.date === form.date)
+    if (emb && !emb.atSea) {
+      setForm((prev) => ({
+        ...prev,
+        arriveTime: emb.arriveTime || '',
+        leaveTime: emb.leaveTime || '',
+      }))
+    }
+    const dayItemsByDate = dayItemsForCruise(
+      cruise.id,
+      form.date,
+      withPorts,
+      form,
+    )
+    setSavingLinkedCruise(true)
+    try {
+      await onSaveCruiseStay(initial.id, withPorts, patches, dayItemsByDate)
+      setDirty(true)
       setEditingCruiseId(null)
     } finally {
       setSavingLinkedCruise(false)
@@ -1805,14 +2885,9 @@ function DayForm({
     }))
   }
 
-  function addItem(type: DayItemType) {
-    if (isTransportType(type) && !cityReady) return
+  function addExcursion() {
     markDirty()
-    const item = newDayItem(type, items.length)
-    if (isTransportType(type)) {
-      item.from = departure?.city || ''
-      item.to = form.city.trim()
-    }
+    const item = newDayItem('attraction', items.length)
     setItems((prev) => [...prev, item])
     setEditingDayItemId(item.id)
   }
@@ -1825,6 +2900,7 @@ function DayForm({
   }
 
   function addCruise() {
+    if (!canAddCruise) return
     markDirty()
     const cruise = newDayItem('cruise', items.length)
     cruise.nights = 7
@@ -1835,10 +2911,29 @@ function DayForm({
     }
     setItems((prev) => [...prev, cruise])
     setEditingCruiseId(cruise.id)
+    const rows = buildCruiseDayPatches(form.date, cruise, tripDays, form)
     setCruiseItineraries((prev) => ({
       ...prev,
-      [cruise.id]: buildCruiseDayPatches(form.date, cruise, tripDays, form),
+      [cruise.id]: rows,
     }))
+    const byDate: Record<string, DayItem[]> = {}
+    for (const row of rows) {
+      if (row.date === form.date) {
+        byDate[row.date] = items.filter(isDayActivityItem)
+      } else {
+        const day = tripDays.find((d) => d.date === row.date)
+        byDate[row.date] = (day?.items || []).filter(isDayActivityItem)
+      }
+    }
+    setCruiseDayItems((prev) => ({ ...prev, [cruise.id]: byDate }))
+  }
+
+  function addPackageTour() {
+    if (!packagesModuleOn) return
+    markDirty()
+    const item = newDayItem('package', items.length)
+    setItems((prev) => [...prev, item])
+    setEditingDayItemId(item.id)
   }
 
   function updateItemById(id: string, next: DayItem) {
@@ -1848,7 +2943,13 @@ function DayForm({
 
   function updateLocalCruise(id: string, next: DayItem) {
     markDirty()
+    const prevCruise = items.find((i) => i.id === id)
+    const nightsChanged =
+      !!prevCruise && cruiseNights(next) !== cruiseNights(prevCruise)
     setItems((prev) => prev.map((item) => (item.id === id ? next : item)))
+    // Only rebuild itinerary when nights change — remarging on every
+    // keystroke was wiping unsaved ankomst/avgang.
+    if (!nightsChanged) return
     setCruiseItineraries((prev) => ({
       ...prev,
       [id]: mergeCruiseItinerary(
@@ -1859,6 +2960,29 @@ function DayForm({
         prev[id],
       ),
     }))
+    ensureCruiseDayItems(id, form.date, next, form)
+  }
+
+  function setLocalCruiseItinerary(id: string, rows: CruiseDayPatch[]) {
+    markDirty()
+    setCruiseItineraries((prev) => ({ ...prev, [id]: rows }))
+    setItems((prev) =>
+      prev.map((item) => {
+        if (item.id !== id) return item
+        return {
+          ...item,
+          cruisePorts: cruisePortsFromItinerary(rows),
+          startTime:
+            rows[0] && !rows[0].atSea
+              ? rows[0].leaveTime || ''
+              : item.startTime,
+          endTime:
+            rows.length && !rows[rows.length - 1].atSea
+              ? rows[rows.length - 1].arriveTime || ''
+              : item.endTime,
+        }
+      }),
+    )
   }
 
   function removeItemById(id: string) {
@@ -1873,6 +2997,12 @@ function DayForm({
       delete next[id]
       return next
     })
+    setCruiseDayItems((prev) => {
+      if (!(id in prev)) return prev
+      const next = { ...prev }
+      delete next[id]
+      return next
+    })
   }
 
   function addViaPoint() {
@@ -1880,7 +3010,13 @@ function DayForm({
     markDirty()
     // First etappe: create fra + til at once so reisemåte is available immediately.
     if (viaPoints.length === 0) {
-      const from = newViaPoint(0)
+      const fromCity =
+        departure?.city?.trim() ||
+        ''
+      const from = {
+        ...newViaPoint(0),
+        title: fromCity,
+      }
       const to = {
         ...newViaPoint(1),
         title: form.city.trim(),
@@ -1956,7 +3092,14 @@ function DayForm({
       onSubmit={(e) => {
         e.preventDefault()
         if (!cityReady) return
-        const cleaned = items
+        let itemsForSave = items
+        for (const cruise of items.filter((i) => i.type === 'cruise')) {
+          const draft = cruiseDayItems[cruise.id]?.[form.date]
+          if (draft) {
+            itemsForSave = mergeDayActivityItems(itemsForSave, draft)
+          }
+        }
+        const cleaned = itemsForSave
           .map((item, idx) => ({
             ...item,
             sortOrder: idx,
@@ -1974,6 +3117,18 @@ function DayForm({
               item.type === 'cruise'
                 ? cruiseHomePort(item) || item.to
                 : item.to,
+            activities:
+              item.type === 'cruise'
+                ? cleanCruiseActivities(item.activities)
+                : undefined,
+            costs:
+              item.type === 'cruise'
+                ? cleanCruiseCosts(item.costs)
+                : undefined,
+            dayCosts:
+              item.type === 'cruise'
+                ? cleanCruiseDayCosts(item.dayCosts)
+                : undefined,
           }))
           .filter(
             (item) =>
@@ -1984,7 +3139,10 @@ function DayForm({
               item.address?.trim() ||
               item.notes?.trim() ||
               (item.type === 'hotel' && hotelNights(item) >= 1) ||
-              (item.type === 'cruise' && cruiseNights(item) >= 1),
+              (item.type === 'cruise' && cruiseNights(item) >= 1) ||
+              (item.type === 'cruise' && (item.activities?.length || 0) > 0) ||
+              (item.type === 'cruise' && (item.costs?.length || 0) > 0) ||
+              (item.type === 'cruise' && (item.dayCosts?.length || 0) > 0),
           )
         const keptPoints = sortViaPointsByArriveTime(
           viaPoints.filter(
@@ -1998,33 +3156,45 @@ function DayForm({
           ),
         )
         const localCruises = cleaned.filter((i) => i.type === 'cruise')
-        const cruisePatches = localCruises.flatMap((cruise) => {
-          const rows = itineraryFor(cruise.id, cruise, form.date, form).map(
-            (row) =>
-              row.date === form.date
-                ? {
-                    date: form.date,
-                    atSea: isAtSeaDay(form),
-                    city: isAtSeaDay(form) ? AT_SEA_LABEL : form.city,
-                    country: isAtSeaDay(form) ? '' : form.country,
-                    arriveTime: isAtSeaDay(form)
-                      ? ''
-                      : row.arriveTime || form.arriveTime || '',
-                    leaveTime: isAtSeaDay(form)
-                      ? ''
-                      : row.leaveTime || form.leaveTime || '',
-                  }
-                : row.atSea
+        const patchesByCruise = new Map(
+          localCruises.map((cruise) => {
+            const rows = itineraryFor(cruise.id, cruise, form.date, form).map(
+              (row) =>
+                row.date === form.date
                   ? {
-                      ...row,
-                      city: AT_SEA_LABEL,
-                      country: '',
-                      arriveTime: '',
-                      leaveTime: '',
+                      date: form.date,
+                      atSea: isAtSeaDay(form),
+                      city: isAtSeaDay(form) ? AT_SEA_LABEL : form.city,
+                      country: isAtSeaDay(form) ? '' : form.country,
+                      arriveTime: isAtSeaDay(form)
+                        ? ''
+                        : row.arriveTime || form.arriveTime || '',
+                      leaveTime: isAtSeaDay(form)
+                        ? ''
+                        : row.leaveTime || form.leaveTime || '',
                     }
-                  : row,
-          )
-          return rows
+                  : row.atSea
+                    ? {
+                        ...row,
+                        city: AT_SEA_LABEL,
+                        country: '',
+                        arriveTime: '',
+                        leaveTime: '',
+                      }
+                    : row,
+            )
+            return [cruise.id, rows] as const
+          }),
+        )
+        const cruisePatches = [...patchesByCruise.values()].flat()
+        const cleanedWithPorts = cleaned.map((item) => {
+          if (item.type !== 'cruise') return item
+          return {
+            ...item,
+            cruisePorts: cruisePortsFromItinerary(
+              patchesByCruise.get(item.id) || [],
+            ),
+          }
         })
         const embarkPatch = cruisePatches.find((p) => p.date === form.date)
         const dayAtSea = embarkPatch
@@ -2045,11 +3215,11 @@ function DayForm({
               : form.country,
           arriveTime: dayAtSea
             ? ''
-            : embarkPatch?.arriveTime ?? form.arriveTime ?? '',
+            : (embarkPatch?.arriveTime || form.arriveTime || '').trim(),
           leaveTime: dayAtSea
             ? ''
-            : embarkPatch?.leaveTime ?? form.leaveTime ?? '',
-          items: cleaned,
+            : (embarkPatch?.leaveTime || form.leaveTime || '').trim(),
+          items: cleanedWithPorts,
           viaPoints: keptPoints,
           legs: syncRouteLegs(keptPoints, legs).map((leg) => ({
             ...leg,
@@ -2057,15 +3227,71 @@ function DayForm({
           })),
           links: form.links || [],
         }
-        void onSave(
-          dayPayload,
-          cruisePatches.length ? cruisePatches : undefined,
-        ).then(() => {
+        void (async () => {
+          // Flush linked cruise edits (port times) before day save — otherwise
+          // "Lagre" on a middle port day would drop ankomst/avgang.
+          const linkedStays = [...stayCruises, ...disembarkCruises]
+          for (const stay of linkedStays) {
+            const hasDraft =
+              stay.cruise.id in linkedCruiseDrafts ||
+              stay.cruise.id in cruiseItineraries ||
+              stay.cruise.id in cruiseDayItems
+            if (!hasDraft) continue
+            const cruise = linkedCruise(stay)
+            const embarkForm = {
+              date: stay.embarkDate,
+              city: stay.embarkDay.city,
+              country: stay.embarkDay.country,
+              atSea: stay.embarkDay.atSea,
+              arriveTime: stay.embarkDay.arriveTime,
+              leaveTime: stay.embarkDay.leaveTime,
+            }
+            const patches = itineraryFor(
+              cruise.id,
+              cruise,
+              stay.embarkDate,
+              embarkForm,
+            )
+            await onSaveCruiseStay(
+              stay.embarkDay.id,
+              {
+                ...cruise,
+                cruisePorts: cruisePortsFromItinerary(patches),
+                activities: cleanCruiseActivities(cruise.activities),
+                costs: cleanCruiseCosts(cruise.costs),
+                dayCosts: cleanCruiseDayCosts(cruise.dayCosts),
+              },
+              patches,
+              dayItemsForCruise(
+                cruise.id,
+                stay.embarkDate,
+                cruise,
+                embarkForm,
+              ),
+            )
+          }
+          const localDayItemsByDate: Record<string, DayItem[]> = {}
+          for (const cruise of localCruises) {
+            const byDate = cruiseDayItems[cruise.id]
+            if (!byDate) continue
+            for (const [date, dayItems] of Object.entries(byDate)) {
+              if (date === form.date) continue
+              localDayItemsByDate[date] = dayItems
+            }
+          }
+          await onSave(
+            dayPayload,
+            cruisePatches.length ? cruisePatches : undefined,
+            Object.keys(localDayItemsByDate).length
+              ? localDayItemsByDate
+              : undefined,
+          )
           setDirty(false)
           setEditingVia(null)
           setEditingHotelId(null)
           setEditingCruiseId(null)
-        })
+          setLinkedCruiseDrafts({})
+        })()
       }}
     >
       <div className="day-meta-row">
@@ -2182,14 +3408,18 @@ function DayForm({
 
       <div className="stack">
         <h3 className="section-title" style={{ fontSize: '1.2rem' }}>
-          Via-rute
+          Reise
         </h3>
+        <p className="section-sub">
+          Når du kommer fra en annen by — etapper og reisemåte underveis
+          {form.city.trim() ? ` til ${form.city.trim()}` : ''}.
+        </p>
 
-        {viaPoints.length === 0 && editingVia === null && (
+        {viaPoints.length === 0 &&
+          editingVia === null &&
+          legacyTransportItems.length === 0 && (
           <p className="empty">
-            Ingen etapper ennå. Første steg åpner fra-by, til-by og reisemåte
-            sammen
-            {form.city.trim() ? ` (til ${form.city.trim()})` : ''}.
+            Ingen reiseetapper ennå. Legg inn fra-by, til-by og reisemåte.
           </p>
         )}
 
@@ -2217,7 +3447,7 @@ function DayForm({
                       <div className="via-city-tile is-editing">
                         <span className="via-city-main">
                           <span className="via-city-name">
-                            {viaPoints[0].title || 'Via 1'}
+                            {viaPoints[0].title || 'Stopp 1'}
                           </span>
                         </span>
                         <button
@@ -2271,12 +3501,12 @@ function DayForm({
                           </label>
                           <label>
                             Ankomst
-                            <input
+                            <ClockTimeInput
                               value={viaPoints[0].arriveTime || ''}
-                              onChange={(e) =>
+                              onChange={(v) =>
                                 updateViaPoint(0, {
                                   ...viaPoints[0],
-                                  arriveTime: e.target.value,
+                                  arriveTime: v,
                                 })
                               }
                               placeholder="10:00"
@@ -2284,12 +3514,12 @@ function DayForm({
                           </label>
                           <label>
                             Avreise
-                            <input
+                            <ClockTimeInput
                               value={viaPoints[0].leaveTime || ''}
-                              onChange={(e) =>
+                              onChange={(v) =>
                                 updateViaPoint(0, {
                                   ...viaPoints[0],
-                                  leaveTime: e.target.value,
+                                  leaveTime: v,
                                 })
                               }
                               placeholder="11:30"
@@ -2322,7 +3552,7 @@ function DayForm({
                     >
                       <span className="via-city-main">
                         <span className="via-city-name">
-                          {point.title || `Via ${idx + 1}`}
+                          {point.title || `Stopp ${idx + 1}`}
                         </span>
                         {timeLabel && (
                           <span className="via-city-arrive">{timeLabel}</span>
@@ -2486,12 +3716,12 @@ function DayForm({
                             {!modeHasDepartureSchedule(leg.mode) && (
                               <label>
                                 Avgang
-                                <input
+                                <ClockTimeInput
                                   value={leg.startTime || ''}
-                                  onChange={(e) =>
+                                  onChange={(v) =>
                                     updateLeg(idx, {
                                       ...leg,
-                                      startTime: e.target.value,
+                                      startTime: v,
                                     })
                                   }
                                   placeholder="11:40"
@@ -2500,12 +3730,12 @@ function DayForm({
                             )}
                             <label>
                               Ankomst
-                              <input
+                              <ClockTimeInput
                                 value={leg.endTime || ''}
-                                onChange={(e) =>
+                                onChange={(v) =>
                                   updateLeg(idx, {
                                     ...leg,
-                                    endTime: e.target.value,
+                                    endTime: v,
                                   })
                                 }
                                 placeholder="12:10"
@@ -2656,9 +3886,90 @@ function DayForm({
           title={!cityReady ? 'Velg by først' : undefined}
         >
           {viaPoints.length === 0
-            ? '+ Legg til etappe (by + reisemåte)'
+            ? '+ Legg til reise (fra-by → hit)'
             : '+ Legg til neste by'}
         </button>
+
+        {legacyTransportItems.length > 0 && (
+          <div className="via-summary-list" style={{ marginTop: '0.75rem' }}>
+            <p className="meta">
+              Eldre transport lagret som dags-element — bruk Reise for ny
+              reise mellom byer.
+            </p>
+            {legacyTransportItems.map((item) => {
+              const editing = editingDayItemId === item.id
+              const from = (item.from || '').trim()
+              const to = (item.to || '').trim()
+              const timeLabel = [item.startTime, item.endTime]
+                .filter(Boolean)
+                .join('–')
+              return (
+                <div key={item.id}>
+                  <div
+                    className={`via-flow transport-day-flow${
+                      editing ? ' is-editing' : ''
+                    }`}
+                  >
+                    <div className="via-flow-unit">
+                      <div className="via-city-tile">
+                        <span className="via-city-main">
+                          <span className="via-city-name">
+                            {from || 'Fra'}
+                          </span>
+                        </span>
+                      </div>
+                      <div className="via-flow-leg">
+                        <TransportBadge
+                          mode={item.type}
+                          label={itemTypeLabel(item.type)}
+                          detail={
+                            [
+                              item.title?.trim(),
+                              timeLabel,
+                              formatTransportPriceLabel(item),
+                            ]
+                              .filter(Boolean)
+                              .join(' · ') || undefined
+                          }
+                        />
+                        <button
+                          type="button"
+                          className={`icon-btn icon-btn-sm ${
+                            editing ? 'icon-btn-close' : ''
+                          }`}
+                          title={editing ? 'Lukk redigering' : 'Rediger'}
+                          aria-label={
+                            editing
+                              ? `Lukk redigering av ${itemTypeLabel(item.type)}`
+                              : `Rediger ${itemTypeLabel(item.type)}`
+                          }
+                          onClick={() =>
+                            setEditingDayItemId(editing ? null : item.id)
+                          }
+                        >
+                          {editing ? <CloseIcon /> : <PencilIcon />}
+                        </button>
+                      </div>
+                      <div className="via-city-tile">
+                        <span className="via-city-main">
+                          <span className="via-city-name">{to || 'Til'}</span>
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                  {editing && (
+                    <DayItemEditor
+                      embedded
+                      item={item}
+                      onChange={(next) => updateItemById(item.id, next)}
+                      onRemove={() => removeItemById(item.id)}
+                    />
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        )}
       </div>
 
       <div className="stack">
@@ -2676,6 +3987,8 @@ function DayForm({
                   <DayItemEditor
                     item={hotel}
                     dayDate={stay.checkInDate}
+                    city={stay.checkInDay.city}
+                    country={stay.checkInDay.country}
                     onChange={(next) => updateLinkedHotel(stay, next)}
                     onRemove={() =>
                       void onRemoveHotelStay(stay.checkInDay.id, hotel.id).then(
@@ -2720,14 +4033,32 @@ function DayForm({
                     </span>
                     <span className="meta via-summary-address">
                       {[
+                        stay.checkInDay.city?.trim()
+                          ? `Fra ${stay.checkInDay.city.trim()}`
+                          : '',
+                        `Innsjekk ${formatDateNO(stay.checkInDate)} · Utsjekk-dato ${formatDateNO(stay.checkoutDate)}`,
                         hotel.endTime?.trim()
-                          ? `Utsjekk ${hotel.endTime}`
+                          ? `Utsjekk kl. ${hotel.endTime}`
                           : 'Utsjekk i dag',
                         hotel.address?.trim() || '',
+                        formatHotelPrice(hotel),
                       ]
                         .filter(Boolean)
                         .join(' · ')}
                     </span>
+                    {hotel.url?.trim() && (
+                      <a
+                        href={hotel.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="meta"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        {isHotelsComUrl(hotel.url)
+                          ? 'Hotels.com'
+                          : 'Åpne lenke'}
+                      </a>
+                    )}
                   </div>
                   <button
                     type="button"
@@ -2754,6 +4085,8 @@ function DayForm({
                   <DayItemEditor
                     item={hotel}
                     dayDate={stay.checkInDate}
+                    city={stay.checkInDay.city}
+                    country={stay.checkInDay.country}
                     onChange={(next) => updateLinkedHotel(stay, next)}
                     onRemove={() =>
                       void onRemoveHotelStay(stay.checkInDay.id, hotel.id).then(
@@ -2802,6 +4135,7 @@ function DayForm({
                         `${hotelNights(hotel)} ${
                           hotelNights(hotel) === 1 ? 'natt' : 'netter'
                         }`,
+                        formatHotelPrice(hotel),
                         `Innsjekk ${formatDateNO(stay.checkInDate)}`,
                         `Utsjekk ${formatDateNO(stay.checkoutDate)}`,
                         hotel.startTime || hotel.endTime
@@ -2811,6 +4145,19 @@ function DayForm({
                         .filter(Boolean)
                         .join(' · ')}
                     </span>
+                    {hotel.url?.trim() && (
+                      <a
+                        href={hotel.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="meta"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        {isHotelsComUrl(hotel.url)
+                          ? 'Hotels.com'
+                          : 'Åpne lenke'}
+                      </a>
+                    )}
                   </div>
                   <button
                     type="button"
@@ -2842,6 +4189,8 @@ function DayForm({
                   <DayItemEditor
                     item={hotel}
                     dayDate={form.date}
+                    city={form.city}
+                    country={form.country}
                     onChange={(next) => updateItemById(hotel.id, next)}
                     onRemove={() => removeItemById(hotel.id)}
                   />
@@ -2857,20 +4206,23 @@ function DayForm({
                       {(hotel.address ||
                         hotel.startTime ||
                         hotel.endTime ||
-                        hotelNights(hotel) > 1) && (
+                        formatHotelPrice(hotel) ||
+                        hotelNights(hotel) >= 1) && (
                         <span className="meta via-summary-address">
                           {[
                             hotel.address,
-                            hotelNights(hotel) > 1
-                              ? `${hotelNights(hotel)} overnattinger`
-                              : '',
-                            hotel.startTime || hotel.endTime
-                              ? `Innsjekk ${hotel.startTime || '—'} · Utsjekk ${hotel.endTime || '—'}`
-                              : '',
                             form.date
-                              ? `Utsjekk ${formatDateNO(
-                                  addDaysIso(form.date, hotelNights(hotel)),
-                                )}`
+                              ? formatHotelStaySpan(
+                                  form.date,
+                                  hotel,
+                                  formatDateNO,
+                                )
+                              : hotelNights(hotel) > 1
+                                ? `${hotelNights(hotel)} overnattinger`
+                                : '',
+                            formatHotelPrice(hotel),
+                            hotel.startTime || hotel.endTime
+                              ? `Kl. innsjekk ${hotel.startTime || '—'} · utsjekk ${hotel.endTime || '—'}`
                               : '',
                           ]
                             .filter(Boolean)
@@ -2885,7 +4237,9 @@ function DayForm({
                           className="meta"
                           onClick={(e) => e.stopPropagation()}
                         >
-                          Åpne lenke
+                          {isHotelsComUrl(hotel.url)
+                            ? 'Hotels.com'
+                            : 'Åpne lenke'}
                         </a>
                       )}
                     </div>
@@ -2921,6 +4275,7 @@ function DayForm({
         </button>
       </div>
 
+      {showCruiseSection && (
       <div className="stack">
         <h3 className="section-title" style={{ fontSize: '1.2rem' }}>
           Cruise
@@ -2947,13 +4302,31 @@ function DayForm({
                         atSea: stay.embarkDay.atSea,
                       },
                     )}
+                    dayItemsByDate={dayItemsForCruise(
+                      cruise.id,
+                      stay.embarkDate,
+                      cruise,
+                      {
+                        date: stay.embarkDate,
+                        city: stay.embarkDay.city,
+                        country: stay.embarkDay.country,
+                        atSea: stay.embarkDay.atSea,
+                        arriveTime: stay.embarkDay.arriveTime,
+                        leaveTime: stay.embarkDay.leaveTime,
+                      },
+                    )}
                     onChange={(next) => updateLinkedCruise(stay, next)}
-                    onItineraryChange={(rows) => {
-                      setCruiseItineraries((prev) => ({
-                        ...prev,
-                        [cruise.id]: rows,
-                      }))
-                    }}
+                    onItineraryChange={(rows) =>
+                      setLinkedCruiseItinerary(stay, rows)
+                    }
+                    onDayItemsChange={(date, dayItems) =>
+                      setCruiseDayItemsForDate(
+                        cruise.id,
+                        date,
+                        dayItems,
+                        false,
+                      )
+                    }
                     onRemove={() =>
                       void onRemoveCruiseStay(
                         stay.embarkDay.id,
@@ -3014,6 +4387,14 @@ function DayForm({
                     aria-label={`Rediger ${cruise.title || 'cruise'}`}
                     onClick={() => {
                       setEditingCruiseId(cruise.id)
+                      const embarkForm = {
+                        date: stay.embarkDate,
+                        city: stay.embarkDay.city,
+                        country: stay.embarkDay.country,
+                        atSea: stay.embarkDay.atSea,
+                        arriveTime: stay.embarkDay.arriveTime,
+                        leaveTime: stay.embarkDay.leaveTime,
+                      }
                       setCruiseItineraries((prev) => ({
                         ...prev,
                         [cruise.id]:
@@ -3022,14 +4403,15 @@ function DayForm({
                             stay.embarkDate,
                             cruise,
                             tripDays,
-                            {
-                              date: stay.embarkDate,
-                              city: stay.embarkDay.city,
-                              country: stay.embarkDay.country,
-                              atSea: stay.embarkDay.atSea,
-                            },
+                            embarkForm,
                           ),
                       }))
+                      loadCruiseDayItems(
+                        cruise.id,
+                        stay.embarkDate,
+                        cruise,
+                        embarkForm,
+                      )
                     }}
                   >
                     <PencilIcon />
@@ -3061,13 +4443,31 @@ function DayForm({
                         atSea: stay.embarkDay.atSea,
                       },
                     )}
+                    dayItemsByDate={dayItemsForCruise(
+                      cruise.id,
+                      stay.embarkDate,
+                      cruise,
+                      {
+                        date: stay.embarkDate,
+                        city: stay.embarkDay.city,
+                        country: stay.embarkDay.country,
+                        atSea: stay.embarkDay.atSea,
+                        arriveTime: stay.embarkDay.arriveTime,
+                        leaveTime: stay.embarkDay.leaveTime,
+                      },
+                    )}
                     onChange={(next) => updateLinkedCruise(stay, next)}
-                    onItineraryChange={(rows) => {
-                      setCruiseItineraries((prev) => ({
-                        ...prev,
-                        [cruise.id]: rows,
-                      }))
-                    }}
+                    onItineraryChange={(rows) =>
+                      setLinkedCruiseItinerary(stay, rows)
+                    }
+                    onDayItemsChange={(date, dayItems) =>
+                      setCruiseDayItemsForDate(
+                        cruise.id,
+                        date,
+                        dayItems,
+                        false,
+                      )
+                    }
                     onRemove={() =>
                       void onRemoveCruiseStay(
                         stay.embarkDay.id,
@@ -3118,6 +4518,10 @@ function DayForm({
                         }`,
                         `Embark ${formatDateNO(stay.embarkDate)}`,
                         `Disembark ${formatDateNO(stay.disembarkDate)}`,
+                        cruise.cabinNumber?.trim()
+                          ? `Lugar ${cruise.cabinNumber.trim()}`
+                          : '',
+                        formatItemPrice(cruise),
                       ]
                         .filter(Boolean)
                         .join(' · ')}
@@ -3130,6 +4534,14 @@ function DayForm({
                     aria-label={`Rediger ${cruise.title || 'cruise'}`}
                     onClick={() => {
                       setEditingCruiseId(cruise.id)
+                      const embarkForm = {
+                        date: stay.embarkDate,
+                        city: stay.embarkDay.city,
+                        country: stay.embarkDay.country,
+                        atSea: stay.embarkDay.atSea,
+                        arriveTime: stay.embarkDay.arriveTime,
+                        leaveTime: stay.embarkDay.leaveTime,
+                      }
                       setCruiseItineraries((prev) => ({
                         ...prev,
                         [cruise.id]:
@@ -3138,14 +4550,15 @@ function DayForm({
                             stay.embarkDate,
                             cruise,
                             tripDays,
-                            {
-                              date: stay.embarkDate,
-                              city: stay.embarkDay.city,
-                              country: stay.embarkDay.country,
-                              atSea: stay.embarkDay.atSea,
-                            },
+                            embarkForm,
                           ),
                       }))
+                      loadCruiseDayItems(
+                        cruise.id,
+                        stay.embarkDate,
+                        cruise,
+                        embarkForm,
+                      )
                     }}
                   >
                     <PencilIcon />
@@ -3196,6 +4609,11 @@ function DayForm({
                           cruise.startTime || cruise.endTime
                             ? `Embark ${cruise.startTime || '—'} · Disembark ${cruise.endTime || '—'}`
                             : '',
+                          cruise.cabinNumber?.trim()
+                            ? `Lugar ${cruise.cabinNumber.trim()}`
+                            : '',
+                          formatItemPrice(cruise),
+                          summarizeCruiseActivities(cruise.activities),
                         ]
                           .filter(Boolean)
                           .join(' · ')}
@@ -3240,31 +4658,68 @@ function DayForm({
                               form,
                             ),
                         }))
+                        loadCruiseDayItems(
+                          cruise.id,
+                          form.date,
+                          cruise,
+                          form,
+                        )
                       }}
                     >
                       {editing ? <CloseIcon /> : <PencilIcon />}
                     </button>
                   </div>
                   {editing && (
-                    <CruiseItemEditor
-                      cruise={cruise}
-                      embarkDate={form.date}
-                      itinerary={itineraryFor(
-                        cruise.id,
-                        cruise,
-                        form.date,
-                        form,
-                      )}
-                      onChange={(next) => updateLocalCruise(cruise.id, next)}
-                      onItineraryChange={(rows) => {
-                        markDirty()
-                        setCruiseItineraries((prev) => ({
-                          ...prev,
-                          [cruise.id]: rows,
-                        }))
-                      }}
-                      onRemove={() => removeItemById(cruise.id)}
-                    />
+                    <div className="stack">
+                      <CruiseItemEditor
+                        cruise={cruise}
+                        embarkDate={form.date}
+                        itinerary={itineraryFor(
+                          cruise.id,
+                          cruise,
+                          form.date,
+                          form,
+                        )}
+                        dayItemsByDate={dayItemsForCruise(
+                          cruise.id,
+                          form.date,
+                          cruise,
+                          form,
+                        )}
+                        onChange={(next) => updateLocalCruise(cruise.id, next)}
+                        onItineraryChange={(rows) =>
+                          setLocalCruiseItinerary(cruise.id, rows)
+                        }
+                        onDayItemsChange={(date, dayItems) =>
+                          setCruiseDayItemsForDate(
+                            cruise.id,
+                            date,
+                            dayItems,
+                            true,
+                          )
+                        }
+                        onRemove={() => removeItemById(cruise.id)}
+                      />
+                      <div className="toolbar">
+                        <button
+                          type="button"
+                          className="btn btn-primary"
+                          disabled={savingLinkedCruise || !initial.id}
+                          onClick={() => void persistLocalCruise(cruise.id)}
+                        >
+                          {savingLinkedCruise
+                            ? 'Lagrer…'
+                            : 'Lagre cruise (ankomst/avgang)'}
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-soft"
+                          onClick={() => setEditingCruiseId(null)}
+                        >
+                          Lukk
+                        </button>
+                      </div>
+                    </div>
                   )}
                 </div>
               )
@@ -3272,95 +4727,36 @@ function DayForm({
           </div>
         )}
 
-        <button type="button" className="btn btn-soft btn-sm" onClick={addCruise}>
-          + Legg til cruise
-        </button>
+        {canAddCruise && (
+          <button
+            type="button"
+            className="btn btn-soft btn-sm"
+            onClick={addCruise}
+          >
+            + Legg til cruise
+          </button>
+        )}
       </div>
+      )}
 
+      {showPackagesSection && (
       <div className="stack">
         <h3 className="section-title" style={{ fontSize: '1.2rem' }}>
-          På dagen
+          Pakketurer
         </h3>
+        <p className="section-sub">
+          Organiserte turer og lignende — ikke vanlig hotell/via.
+        </p>
 
-        {otherItems.length === 0 && editingDayItemId === null && (
-          <p className="empty">Ingen elementer ennå.</p>
+        {packageItems.length === 0 && editingDayItemId === null && (
+          <p className="empty">Ingen pakketurer ennå.</p>
         )}
 
-        {otherItems.length > 0 && (
+        {packageItems.length > 0 && (
           <div className="via-summary-list">
-            {otherItems.map((item) => {
+            {packageItems.map((item) => {
               const editing = editingDayItemId === item.id
               const summary = itemSummary(item)
-              const transport = isTransportType(item.type)
-              const from = (item.from || '').trim()
-              const to = (item.to || '').trim()
-              const timeLabel = [item.startTime, item.endTime]
-                .filter(Boolean)
-                .join('–')
-              if (transport && (from || to)) {
-                return (
-                  <div key={item.id}>
-                    <div
-                      className={`via-flow transport-day-flow${
-                        editing ? ' is-editing' : ''
-                      }`}
-                    >
-                      <div className="via-flow-unit">
-                        <div className="via-city-tile">
-                          <span className="via-city-main">
-                            <span className="via-city-name">
-                              {from || 'Fra'}
-                            </span>
-                          </span>
-                        </div>
-                        <div className="via-flow-leg">
-                          <TransportBadge
-                            mode={item.type}
-                            label={itemTypeLabel(item.type)}
-                            detail={
-                              [item.title?.trim(), timeLabel]
-                                .filter(Boolean)
-                                .join(' · ') || undefined
-                            }
-                          />
-                          <button
-                            type="button"
-                            className={`icon-btn icon-btn-sm ${
-                              editing ? 'icon-btn-close' : ''
-                            }`}
-                            title={editing ? 'Lukk redigering' : 'Rediger'}
-                            aria-label={
-                              editing
-                                ? `Lukk redigering av ${itemTypeLabel(item.type)}`
-                                : `Rediger ${itemTypeLabel(item.type)}`
-                            }
-                            onClick={() =>
-                              setEditingDayItemId(editing ? null : item.id)
-                            }
-                          >
-                            {editing ? <CloseIcon /> : <PencilIcon />}
-                          </button>
-                        </div>
-                        <div className="via-city-tile">
-                          <span className="via-city-main">
-                            <span className="via-city-name">
-                              {to || 'Til'}
-                            </span>
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                    {editing && (
-                      <DayItemEditor
-                        embedded
-                        item={item}
-                        onChange={(next) => updateItemById(item.id, next)}
-                        onRemove={() => removeItemById(item.id)}
-                      />
-                    )}
-                  </div>
-                )
-              }
               return (
                 <div key={item.id}>
                   <div
@@ -3372,11 +4768,7 @@ function DayForm({
                       className={`day-item-badge type-${item.type}`}
                       aria-hidden="true"
                     >
-                      {transport ? (
-                        <TransportModeIcon mode={item.type} size={18} />
-                      ) : (
-                        <AttractionIcon size={18} />
-                      )}
+                      <AttractionIcon size={18} />
                     </span>
                     <div className="via-summary-main">
                       <span className="chip">{itemTypeLabel(item.type)}</span>
@@ -3405,13 +4797,11 @@ function DayForm({
                       className={`icon-btn ${
                         editing ? 'icon-btn-close' : ''
                       }`}
-                      title={
-                        editing ? 'Lukk redigering' : 'Rediger'
-                      }
+                      title={editing ? 'Lukk redigering' : 'Rediger'}
                       aria-label={
                         editing
-                          ? `Lukk redigering av ${item.title || itemTypeLabel(item.type)}`
-                          : `Rediger ${item.title || itemTypeLabel(item.type)}`
+                          ? `Lukk redigering av ${item.title || 'pakketur'}`
+                          : `Rediger ${item.title || 'pakketur'}`
                       }
                       onClick={() =>
                         setEditingDayItemId(editing ? null : item.id)
@@ -3434,29 +4824,110 @@ function DayForm({
           </div>
         )}
 
-        <div className="add-item-bar">
-          {ITEM_TYPES.filter(
-            (t) => t.type !== 'hotel' && t.type !== 'cruise',
-          ).map(({ type, label }) => (
-            <button
-              key={type}
-              type="button"
-              className="btn btn-soft btn-sm"
-              disabled={isTransportType(type) && !cityReady}
-              title={
-                isTransportType(type) && !cityReady
-                  ? 'Velg by først'
-                  : undefined
-              }
-              onClick={() => addItem(type)}
-            >
-              + {label}
-            </button>
-          ))}
-        </div>
-        {!cityReady && (
-          <p className="meta">Velg by først for å legge til transport.</p>
+        {packagesModuleOn && (
+          <button
+            type="button"
+            className="btn btn-soft btn-sm"
+            onClick={addPackageTour}
+          >
+            + Pakketur
+          </button>
         )}
+      </div>
+      )}
+
+      <div className="stack">
+        <h3 className="section-title" style={{ fontSize: '1.2rem' }}>
+          Utflukter
+        </h3>
+        <p className="section-sub">
+          Ting å gjøre i byen — ikke reise videre til neste sted (bruk Reise).
+        </p>
+
+        {excursionItems.length === 0 &&
+          editingDayItemId === null && (
+          <p className="empty">Ingen utflukter ennå.</p>
+        )}
+
+        {excursionItems.length > 0 && (
+          <div className="via-summary-list">
+            {excursionItems.map((item) => {
+              const editing = editingDayItemId === item.id
+              const summary = itemSummary(item)
+              return (
+                <div key={item.id}>
+                  <div
+                    className={`via-summary-row day-item-summary-row${
+                      editing ? ' is-editing' : ''
+                    }`}
+                  >
+                    <span
+                      className={`day-item-badge type-${item.type}`}
+                      aria-hidden="true"
+                    >
+                      <AttractionIcon size={18} />
+                    </span>
+                    <div className="via-summary-main">
+                      <span className="chip">{itemTypeLabel(item.type)}</span>
+                      <span className="via-summary-city">
+                        {item.title || itemTypeLabel(item.type)}
+                      </span>
+                      {!editing && summary && (
+                        <span className="meta via-summary-address">
+                          {summary}
+                        </span>
+                      )}
+                      {!editing && item.url && (
+                        <a
+                          href={item.url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="meta"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          Åpne lenke
+                        </a>
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      className={`icon-btn ${
+                        editing ? 'icon-btn-close' : ''
+                      }`}
+                      title={editing ? 'Lukk redigering' : 'Rediger'}
+                      aria-label={
+                        editing
+                          ? `Lukk redigering av ${item.title || 'utflukt'}`
+                          : `Rediger ${item.title || 'utflukt'}`
+                      }
+                      onClick={() =>
+                        setEditingDayItemId(editing ? null : item.id)
+                      }
+                    >
+                      {editing ? <CloseIcon /> : <PencilIcon />}
+                    </button>
+                  </div>
+                  {editing && (
+                    <DayItemEditor
+                      embedded
+                      item={item}
+                      onChange={(next) => updateItemById(item.id, next)}
+                      onRemove={() => removeItemById(item.id)}
+                    />
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        )}
+
+        <button
+          type="button"
+          className="btn btn-soft btn-sm"
+          onClick={addExcursion}
+        >
+          + Utflukt
+        </button>
       </div>
 
       <div className="toolbar">
@@ -3471,6 +4942,21 @@ function DayForm({
         <button className="btn btn-soft" type="button" onClick={onCancel}>
           Avbryt
         </button>
+        {onInsertDayAfter && initial.id && (
+          <button
+            className="btn btn-soft"
+            type="button"
+            disabled={saving || dirty}
+            title={
+              dirty
+                ? 'Lagre dagen først'
+                : 'Sett inn en dag etter denne — senere dager flyttes én dag frem'
+            }
+            onClick={() => onInsertDayAfter()}
+          >
+            Sett inn dag etter
+          </button>
+        )}
         {onDelete && (
           <button
             className="btn btn-danger"
@@ -3498,6 +4984,7 @@ export default function App() {
     startDate: '',
     endDate: '',
     colorByCountry: {},
+    features: emptyTripFeatures(),
   })
   const [showNewTrip, setShowNewTrip] = useState(false)
   const [tripDayCounts, setTripDayCounts] = useState<
@@ -3533,8 +5020,17 @@ export default function App() {
     setError('')
     try {
       const list = await api.listDays(tripId)
-      setDays(list)
-      setTripDayCounts((prev) => ({ ...prev, [tripId]: tripStats(list) }))
+      const hasDupes = list.some(
+        (d, _, arr) => arr.filter((x) => x.date === d.date).length > 1,
+      )
+      const merged = hasDupes
+        ? await mergeDuplicateTripDays(list, api.updateDay, api.deleteDay)
+        : list
+      setDays(sortTripDays(merged))
+      setTripDayCounts((prev) => ({
+        ...prev,
+        [tripId]: tripStats(merged),
+      }))
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Kunne ikke hente dager')
     }
@@ -3545,7 +5041,12 @@ export default function App() {
   }, [])
 
   useEffect(() => {
-    if (view.name === 'trip' || view.name === 'day' || view.name === 'city') {
+    if (
+      view.name === 'trip' ||
+      view.name === 'day' ||
+      view.name === 'city' ||
+      view.name === 'expenses'
+    ) {
       void loadDays(view.tripId)
     }
   }, [view.name === 'home' ? 'home' : view.tripId])
@@ -3566,9 +5067,19 @@ export default function App() {
         ...newTrip,
         name: newTrip.name.trim(),
         colorByCountry: {},
+        features: {
+          cruise: !!newTrip.features?.cruise,
+          packages: !!newTrip.features?.packages,
+        },
       })
       setShowNewTrip(false)
-      setNewTrip({ name: '', startDate: '', endDate: '', colorByCountry: {} })
+      setNewTrip({
+        name: '',
+        startDate: '',
+        endDate: '',
+        colorByCountry: {},
+        features: emptyTripFeatures(),
+      })
       await loadTrips()
       setView({ name: 'trip', tripId: created.id, tab: 'liste' })
     } catch (err) {
@@ -3588,6 +5099,103 @@ export default function App() {
       await loadTrips()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Kunne ikke slette tur')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function handleUpdateTripFeatures(
+    trip: Trip,
+    patch: Partial<TripFeatures>,
+  ) {
+    setError('')
+    const nextFeatures: TripFeatures = {
+      ...emptyTripFeatures(),
+      ...trip.features,
+      ...patch,
+    }
+    const { id, createdAt: _c, updatedAt: _u, ...rest } = trip
+    try {
+      const updated = await api.updateTrip(id, {
+        ...rest,
+        features: nextFeatures,
+      })
+      setTrips((prev) => prev.map((t) => (t.id === id ? updated : t)))
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : 'Kunne ikke oppdatere turvalg',
+      )
+    }
+  }
+
+  async function handleInsertDayAfter(afterDay: TripDay) {
+    const insertDate = addDaysIso(afterDay.date, 1)
+    const laterCount = days.filter((d) => d.date >= insertDate).length
+    const ok = confirm(
+      laterCount > 0
+        ? `Sett inn en dag etter ${formatDateNO(afterDay.date)}?\n\n${laterCount} senere dag${laterCount === 1 ? '' : 'er'} flyttes én dag frem i tid.`
+        : `Sett inn en dag etter ${formatDateNO(afterDay.date)}?`,
+    )
+    if (!ok) return
+    setSaving(true)
+    setError('')
+    try {
+      const created = await insertCalendarDayAfter(
+        afterDay.tripId,
+        afterDay.date,
+        days,
+        api.createDay,
+        api.updateDay,
+      )
+      const latest = await api.listDays(afterDay.tripId)
+      const last = latestTripDayDate(latest)
+      const trip = trips.find((t) => t.id === afterDay.tripId)
+      if (trip && last && (!trip.endDate || trip.endDate < last)) {
+        const { id, createdAt: _c, updatedAt: _u, ...rest } = trip
+        const updated = await api.updateTrip(id, { ...rest, endDate: last })
+        setTrips((prev) => prev.map((t) => (t.id === id ? updated : t)))
+      }
+      setDays(sortTripDays(latest))
+      setTripDayCounts((prev) => ({
+        ...prev,
+        [afterDay.tripId]: tripStats(latest),
+      }))
+      setView({ name: 'day', tripId: afterDay.tripId, dayId: created.id })
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : 'Kunne ikke sette inn dag',
+      )
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function handleMoveDay(dayId: string, direction: -1 | 1) {
+    const ordered = sortTripDays(days)
+    const idx = ordered.findIndex((d) => d.id === dayId)
+    const other = ordered[idx + direction]
+    if (idx < 0 || !other) return
+    setSaving(true)
+    setError('')
+    try {
+      const next = await swapTripDayDates(
+        ordered[idx],
+        other,
+        ordered,
+        api.updateDay,
+      )
+      setDays(next)
+      setTripDayCounts((prev) => ({
+        ...prev,
+        [ordered[idx].tripId]: tripStats(next),
+      }))
+      // Refresh from server so kart/liste always see the saved order.
+      await loadDays(ordered[idx].tripId)
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : 'Kunne ikke bytte rekkefølge',
+      )
+      await loadDays(ordered[idx].tripId)
     } finally {
       setSaving(false)
     }
@@ -3676,6 +5284,49 @@ export default function App() {
                   onChange={(endDate) => setNewTrip({ ...newTrip, endDate })}
                 />
               </label>
+              <fieldset className="full trip-features-fieldset">
+                <legend>Innhold på turen</legend>
+                <p className="section-sub" style={{ marginTop: 0 }}>
+                  Velg moduler du trenger. Uten cruise holder dagskjemaet seg
+                  kompakt.
+                </p>
+                <div className="trip-features-options">
+                  <label className="trip-feature-option">
+                    <input
+                      type="checkbox"
+                      checked={!!newTrip.features?.cruise}
+                      onChange={(e) =>
+                        setNewTrip({
+                          ...newTrip,
+                          features: {
+                            ...emptyTripFeatures(),
+                            ...newTrip.features,
+                            cruise: e.target.checked,
+                          },
+                        })
+                      }
+                    />
+                    Cruise
+                  </label>
+                  <label className="trip-feature-option">
+                    <input
+                      type="checkbox"
+                      checked={!!newTrip.features?.packages}
+                      onChange={(e) =>
+                        setNewTrip({
+                          ...newTrip,
+                          features: {
+                            ...emptyTripFeatures(),
+                            ...newTrip.features,
+                            packages: e.target.checked,
+                          },
+                        })
+                      }
+                    />
+                    Pakketurer
+                  </label>
+                </div>
+              </fieldset>
             </div>
             <div className="toolbar" style={{ marginTop: '1rem' }}>
               <button
@@ -3737,8 +5388,14 @@ export default function App() {
           <DayForm
             initial={initial}
             tripDays={days}
+            tripFeatures={activeTrip?.features}
             saving={saving}
             onCancel={() => setView({ name: 'trip', tripId: view.tripId, tab: 'liste' })}
+            onInsertDayAfter={
+              existing
+                ? () => void handleInsertDayAfter(existing)
+                : undefined
+            }
             onDelete={
               existing
                 ? async () => {
@@ -3783,14 +5440,55 @@ export default function App() {
               await api.updateDay(id, { ...rest, items: nextItems })
               await loadDays(view.tripId)
             }}
-            onSaveCruiseStay={async (sourceDayId, cruise, patches) => {
+            onSaveCruiseStay={async (
+              sourceDayId,
+              cruise,
+              patches,
+              dayItemsByDate,
+            ) => {
               const source = days.find((d) => d.id === sourceDayId)
               if (!source) throw new Error('Fant ikke embark-dagen')
-              const nextItems = (source.items || []).map((item) =>
+              let nextItems = (source.items || []).map((item) =>
                 item.id === cruise.id ? cruise : item,
               )
+              const embDayItems = dayItemsByDate?.[source.date]
+              if (embDayItems) {
+                nextItems = mergeDayActivityItems(nextItems, embDayItems)
+              }
+              const embPatch = (patches || []).find(
+                (p) => p.date === source.date,
+              )
+              const home = cruiseHomePort(cruise)
               const { id, createdAt: _c, updatedAt: _u, ...rest } = source
-              const payload = { ...rest, items: nextItems }
+              const embAtSea = embPatch ? embPatch.atSea : !!rest.atSea
+              const embCity = embAtSea
+                ? AT_SEA_LABEL
+                : (
+                    embPatch?.city ||
+                    rest.city ||
+                    home ||
+                    ''
+                  ).trim()
+              const embCountry = embAtSea
+                ? ''
+                : (embPatch?.country || rest.country || '').trim()
+              const payload = {
+                ...rest,
+                items: nextItems,
+                atSea: embAtSea,
+                city: embCity,
+                country: embCountry,
+                arriveTime: embPatch
+                  ? embPatch.atSea
+                    ? ''
+                    : (embPatch.arriveTime || '').trim()
+                  : rest.arriveTime || '',
+                leaveTime: embPatch
+                  ? embPatch.atSea
+                    ? ''
+                    : (embPatch.leaveTime || cruise.startTime || '').trim()
+                  : (rest.leaveTime || cruise.startTime || '').trim(),
+              }
               await api.updateDay(id, payload)
               const latest = await api.listDays(view.tripId)
               await ensureCruiseDays(
@@ -3801,6 +5499,22 @@ export default function App() {
                 api.updateDay,
                 patches,
               )
+              if (dayItemsByDate && Object.keys(dayItemsByDate).length) {
+                const afterCruise = await api.listDays(view.tripId)
+                for (const [date, dayItems] of Object.entries(dayItemsByDate)) {
+                  if (date === source.date) continue
+                  const found = afterCruise.find((d) => d.date === date)
+                  if (!found) continue
+                  const merged = mergeDayActivityItems(found.items, dayItems)
+                  const {
+                    id: dayId,
+                    createdAt: _dc,
+                    updatedAt: _du,
+                    ...dayRest
+                  } = found
+                  await api.updateDay(dayId, { ...dayRest, items: merged })
+                }
+              }
               await loadDays(view.tripId)
             }}
             onRemoveCruiseStay={async (sourceDayId, cruiseId) => {
@@ -3811,7 +5525,7 @@ export default function App() {
               await api.updateDay(id, { ...rest, items: nextItems })
               await loadDays(view.tripId)
             }}
-            onSave={async (day, cruisePatches) => {
+            onSave={async (day, cruisePatches, cruiseDayItemsByDate) => {
               setSaving(true)
               setError('')
               try {
@@ -3819,8 +5533,36 @@ export default function App() {
                 if (existing) {
                   await api.updateDay(existing.id, day)
                 } else {
-                  const created = await api.createDay(day)
-                  savedId = created.id
+                  // One calendar day per date — merge into an existing row if any.
+                  const before = await api.listDays(view.tripId)
+                  const clash = before.find((d) => d.date === day.date)
+                  if (clash) {
+                    const {
+                      id: clashId,
+                      createdAt: _cc,
+                      updatedAt: _cu,
+                      ...clashRest
+                    } = clash
+                    await api.updateDay(clashId, {
+                      ...clashRest,
+                      ...day,
+                      items: day.items?.length ? day.items : clash.items,
+                      viaPoints: day.viaPoints?.length
+                        ? day.viaPoints
+                        : clash.viaPoints,
+                      legs: day.legs?.length ? day.legs : clash.legs,
+                      arriveTime:
+                        day.arriveTime?.trim() || clash.arriveTime || '',
+                      leaveTime:
+                        day.leaveTime?.trim() || clash.leaveTime || '',
+                      city: day.city.trim() || clash.city,
+                      country: day.country.trim() || clash.country,
+                    })
+                    savedId = clashId
+                  } else {
+                    const created = await api.createDay(day)
+                    savedId = created.id
+                  }
                 }
                 const latest = await api.listDays(view.tripId)
                 await ensureHotelStayDays(
@@ -3839,6 +5581,27 @@ export default function App() {
                   api.updateDay,
                   cruisePatches,
                 )
+                if (
+                  cruiseDayItemsByDate &&
+                  Object.keys(cruiseDayItemsByDate).length
+                ) {
+                  const afterCruise = await api.listDays(view.tripId)
+                  for (const [date, dayItems] of Object.entries(
+                    cruiseDayItemsByDate,
+                  )) {
+                    if (date === day.date) continue
+                    const found = afterCruise.find((d) => d.date === date)
+                    if (!found) continue
+                    const merged = mergeDayActivityItems(found.items, dayItems)
+                    const {
+                      id: dayId,
+                      createdAt: _dc,
+                      updatedAt: _du,
+                      ...dayRest
+                    } = found
+                    await api.updateDay(dayId, { ...dayRest, items: merged })
+                  }
+                }
                 await loadDays(view.tripId)
                 if (savedId && view.dayId !== savedId) {
                   setView({
@@ -3915,11 +5678,28 @@ export default function App() {
                       </span>
                       <p className="meta" style={{ margin: 0 }}>
                         <strong>{hotel.title || 'Hotell'}</strong>
-                        {hotel.url && (
+                        {hotel.url ? (
                           <>
                             {' · '}
                             <a href={hotel.url} target="_blank" rel="noreferrer">
-                              Åpne lenke
+                              {isHotelsComUrl(hotel.url)
+                                ? 'Hotels.com'
+                                : 'Åpne lenke'}
+                            </a>
+                          </>
+                        ) : (
+                          <>
+                            {' · '}
+                            <a
+                              href={hotelsComSearchUrl({
+                                hotelName: hotel.title,
+                                city: group.city,
+                                country: group.country,
+                              })}
+                              target="_blank"
+                              rel="noreferrer"
+                            >
+                              Søk Hotels.com
                             </a>
                           </>
                         )}
@@ -3927,7 +5707,11 @@ export default function App() {
                     </div>
                     {hotel.address && <p className="meta">{hotel.address}</p>}
                     <p className="meta">
-                      Innsjekk: {hotel.startTime || '—'} · Utsjekk: {hotel.endTime || '—'}
+                      Innsjekk: {hotel.startTime || '—'} · Utsjekk:{' '}
+                      {hotel.endTime || '—'}
+                      {formatHotelPrice(hotel)
+                        ? ` · Pris: ${formatHotelPrice(hotel)}`
+                        : ''}
                     </p>
                   </div>
                 ))}
@@ -3951,15 +5735,39 @@ export default function App() {
                             {` · ${cruiseNights(cruise)} ${
                               cruiseNights(cruise) === 1 ? 'natt' : 'netter'
                             }`}
+                            {cruise.cabinNumber?.trim()
+                              ? ` · Lugar ${cruise.cabinNumber.trim()}`
+                              : ''}
+                            {formatItemPrice(cruise)
+                              ? ` · ${formatItemPrice(cruise)}`
+                              : ''}
                           </p>
                         </div>
+                        {summarizeCruiseActivities(cruise.activities) ? (
+                          <p className="meta">
+                            Hele cruiset:{' '}
+                            {summarizeCruiseActivities(cruise.activities)}
+                          </p>
+                        ) : null}
                         {group.days
                           .map((d) => {
-                            const times = formatShipPortTimes(d)
-                            if (!times) return null
+                            const times = formatShipPortTimes(
+                              resolveShipPortTimes(d, days),
+                            )
+                            const dayActs = summarizeDayItems(
+                              (d.items || []).filter(
+                                (i) =>
+                                  i.type !== 'hotel' &&
+                                  i.type !== 'cruise' &&
+                                  !isTransportType(i.type),
+                              ),
+                            )
+                            if (!times && !dayActs) return null
                             return (
-                              <p key={d.id} className="meta">
-                                {formatNiceDate(d.date)}: {times}
+                              <p key={d.id} className="meta day-row-ship">
+                                {formatNiceDate(d.date)}
+                                {times ? `: ${times}` : ''}
+                                {dayActs ? ` · ${dayActs}` : ''}
                               </p>
                             )
                           })
@@ -3969,14 +5777,13 @@ export default function App() {
                 </div>
               )}
 
-              {group.items.filter(
-                (i) => i.type !== 'hotel' && i.type !== 'cruise',
-              ).length > 0 && (
+              {group.items.filter((i) => i.type === 'attraction').length >
+                0 && (
                 <div>
-                  <h2 className="section-title">Transport og severdigheter</h2>
+                  <h2 className="section-title">Utflukter</h2>
                   <div className="item-list">
                     {group.items
-                      .filter((i) => i.type !== 'hotel' && i.type !== 'cruise')
+                      .filter((i) => i.type === 'attraction')
                       .map((item) => (
                         <div key={item.id} className={`item-preview item-${item.type}`}>
                           <span className="chip">{itemTypeLabel(item.type)}</span>
@@ -3999,11 +5806,11 @@ export default function App() {
 
               {group.days.some((d) => (d.viaPoints?.length || 0) >= 2) && (
                 <div>
-                  <h2 className="section-title">Via-ruter samme dag</h2>
+                  <h2 className="section-title">Reise — ankomst fra annen by</h2>
                   <p className="section-sub">
-                    Dager med flere stopp i{' '}
-                    {group.city === AT_SEA_LABEL ? 'til havs' : group.city} — med
-                    transport mellom stedene.
+                    Dager du reiser inn til{' '}
+                    {group.city === AT_SEA_LABEL ? 'til havs' : group.city} med
+                    stopp underveis.
                   </p>
                   <div className="item-list">
                     {group.days
@@ -4033,7 +5840,7 @@ export default function App() {
                                 <div className="city-route-stop">
                                   <span className="city-route-index">{idx + 1}</span>
                                   <div>
-                                    <strong>{point.title || `Via ${idx + 1}`}</strong>
+                                    <strong>{point.title || `Stopp ${idx + 1}`}</strong>
                                     {point.address && (
                                       <p className="meta">{point.address}</p>
                                     )}
@@ -4112,8 +5919,14 @@ export default function App() {
                       >
                         <div>
                           <h3>{formatNiceDate(day.date)}</h3>
-                          {formatShipPortTimes(day) ? (
-                            <p className="meta">{formatShipPortTimes(day)}</p>
+                          {formatShipPortTimes(
+                            resolveShipPortTimes(day, days),
+                          ) ? (
+                            <p className="meta day-row-ship">
+                              {formatShipPortTimes(
+                                resolveShipPortTimes(day, days),
+                              )}
+                            </p>
                           ) : null}
                           <p className="meta">
                             {viaCount >= 2
@@ -4125,7 +5938,7 @@ export default function App() {
                           </p>
                         </div>
                         <span className="chip">
-                          {viaCount >= 2 ? `${viaCount} via` : 'Åpne'}
+                          {viaCount >= 2 ? `${viaCount} stopp` : 'Åpne'}
                         </span>
                       </button>
                     )
@@ -4134,6 +5947,44 @@ export default function App() {
               </div>
             </div>
           )}
+        </section>
+      </div>
+    )
+  }
+
+  if (view.name === 'expenses') {
+    const stats = tripDayCounts[view.tripId] || tripStats(days)
+    return (
+      <div className="app-shell">
+        <div className="topbar">
+          <div>
+            <h1>Utgifter</h1>
+            <p>
+              {activeTrip?.name || 'Tur'}
+              {' · '}
+              {formatDateRange(
+                activeTrip?.startDate || '',
+                activeTrip?.endDate || '',
+              )}
+              {' · '}
+              {stats.dayCount} dager
+            </p>
+          </div>
+          <div className="toolbar">
+            <button
+              className="btn btn-ghost"
+              type="button"
+              onClick={() =>
+                setView({ name: 'trip', tripId: view.tripId, tab: 'liste' })
+              }
+            >
+              Tilbake til reisen
+            </button>
+          </div>
+        </div>
+        <section className="panel">
+          {error && <p className="error">{error}</p>}
+          <ExpensesView days={days} />
         </section>
       </div>
     )
@@ -4153,6 +6004,34 @@ export default function App() {
             {' · '}
             {stats.dayCount} dager · {stats.cityCount} byer · {stats.countryCount} land
           </p>
+          {activeTrip && (
+            <div className="trip-features-bar" aria-label="Innhold på turen">
+              <label className="trip-feature-option">
+                <input
+                  type="checkbox"
+                  checked={tripHasCruise(activeTrip)}
+                  onChange={(e) =>
+                    void handleUpdateTripFeatures(activeTrip, {
+                      cruise: e.target.checked,
+                    })
+                  }
+                />
+                Cruise
+              </label>
+              <label className="trip-feature-option">
+                <input
+                  type="checkbox"
+                  checked={tripHasPackages(activeTrip)}
+                  onChange={(e) =>
+                    void handleUpdateTripFeatures(activeTrip, {
+                      packages: e.target.checked,
+                    })
+                  }
+                />
+                Pakketurer
+              </label>
+            </div>
+          )}
         </div>
         <div className="toolbar">
           <GoogleLoginButton />
@@ -4160,8 +6039,22 @@ export default function App() {
             className="btn btn-primary"
             type="button"
             onClick={() => setView({ name: 'day', tripId: view.tripId, dayId: 'new' })}
+            title={
+              latestTripDayDate(days)
+                ? `Legger til dagen etter ${formatDateNO(latestTripDayDate(days))}`
+                : 'Legg til første dag'
+            }
           >
-            Ny dag
+            Ny dag etter siste
+          </button>
+          <button
+            className="btn btn-soft"
+            type="button"
+            onClick={() =>
+              setView({ name: 'expenses', tripId: view.tripId })
+            }
+          >
+            Utgifter
           </button>
           <button
             className="btn btn-ghost"
@@ -4222,29 +6115,33 @@ export default function App() {
             {days.length === 0 && (
               <p className="empty">Ingen dager ennå. Legg inn første dag i reiseruten.</p>
             )}
-            {days.map((day) => {
-              const place = dayPlaceLabel(day)
-              const cruiseNames = [
-                ...cruisesCoveringDay(days, day.date),
-                ...cruisesDisembarkingOnDay(days, day.date),
-              ]
-                .map((s) => s.cruise.title.trim() || 'Cruise')
-                .filter((name, i, arr) => arr.indexOf(name) === i)
+            {sortTripDays(days).map((day, dayIndex, orderedDays) => {
+              const canMoveUp = dayIndex > 0
+              const canMoveDown = dayIndex < orderedDays.length - 1
+              let place = dayPlaceLabel(day)
+              // Embark/disembark without city: fall back to cruise home port.
+              if (place === 'Uten by') {
+                const home =
+                  cruisesCoveringDay(days, day.date)
+                    .map((s) => cruiseHomePort(s.cruise))
+                    .find(Boolean) ||
+                  cruisesDisembarkingOnDay(days, day.date)
+                    .map((s) => cruiseHomePort(s.cruise))
+                    .find(Boolean) ||
+                  ''
+                if (home) place = home
+              }
               const tone = dayToneClass(day.date)
               const checkouts = hotelsCheckingOutOnDay(days, day.date)
               // Overnight hotel (already checked in earlier) — not today's check-in.
               const stayingOn = hotelsStayingOnDay(days, day.date).filter(
                 (s) => s.checkInDay.id !== day.id,
               )
-              const shipTimes = formatShipPortTimes(day)
+              const lineArrive = formatShipArriveLabel(day, days)
+              const lineDepart = formatShipDepartLabel(day, days)
               const lineStay = [
-                isAtSeaDay(day) ? null : day.country.trim() || null,
-                cruiseNames.length
-                  ? cruiseNames.map((n) => `Cruise ${n}`).join(' · ')
-                  : null,
-                shipTimes || null,
-                summarizeStayingHotels(stayingOn),
                 summarizeCheckoutHotels(checkouts),
+                summarizeStayingHotels(stayingOn),
               ]
                 .filter(Boolean)
                 .join(' · ')
@@ -4255,70 +6152,169 @@ export default function App() {
                 .filter(Boolean)
                 .join(' · ')
               const lineUpcoming = summarizeCheckInHotels(day.items)
-              const lineExtra = [
-                summarizeDayItems(
-                  (day.items || []).filter(
-                    (i) =>
-                      i.type !== 'cruise' &&
-                      i.type !== 'hotel' &&
-                      !isTransportType(i.type),
+              const cruiseStaysOnDay = [
+                ...cruisesCoveringDay(days, day.date),
+                ...cruisesDisembarkingOnDay(days, day.date),
+              ].filter(
+                (s, i, arr) =>
+                  arr.findIndex((x) => x.cruise.id === s.cruise.id) === i,
+              )
+              // Whole-cruise activities apply on every day of the sailing.
+              const wholeCruiseActs = cruiseStaysOnDay
+                .map((s) => summarizeCruiseActivities(s.cruise.activities))
+                .filter(Boolean)
+                .join(' · ')
+              // Costs registered on this cruise day only.
+              const cruiseDayCosts = cruiseStaysOnDay
+                .map((s) =>
+                  summarizeCruiseCosts(
+                    costsForCruiseDay(s.cruise.dayCosts, day.date),
                   ),
-                ),
-                day.notes?.trim() || null,
+                )
+                .filter(Boolean)
+                .join(' · ')
+              const dayAttractions = (day.items || []).filter(
+                (i) =>
+                  i.type !== 'cruise' &&
+                  i.type !== 'hotel' &&
+                  !isTransportType(i.type),
+              )
+              const lineActivities = [
+                wholeCruiseActs || null,
+                cruiseDayCosts || null,
+                summarizeAttractionTitles(dayAttractions) || null,
               ]
                 .filter(Boolean)
                 .join(' · ')
+              const lineExtra = day.notes?.trim() || ''
               return (
-              <button
+              <div
                 key={day.id}
-                type="button"
                 className={['day-row', tone].filter(Boolean).join(' ')}
-                onClick={() => setView({ name: 'day', tripId: view.tripId, dayId: day.id })}
               >
-                <div className="day-row-main">
-                  <h3>
-                    {formatNiceDate(day.date)}
-                    {place !== 'Uten by' ? ` · ${place}` : ''}
-                    {tone === 'is-today' ? (
-                      <span className="day-today-badge"> I dag</span>
+                <button
+                  type="button"
+                  className="day-row-open"
+                  onClick={() =>
+                    setView({ name: 'day', tripId: view.tripId, dayId: day.id })
+                  }
+                >
+                  <div className="day-row-main">
+                    <h3>
+                      {formatNiceDate(day.date)}
+                      {place !== 'Uten by' ? ` · ${place}` : ''}
+                      {tone === 'is-today' ? (
+                        <span className="day-today-badge"> I dag</span>
+                      ) : null}
+                    </h3>
+                    {lineArrive ? (
+                      <p className="meta day-row-line day-row-ship">
+                        {lineArrive}
+                      </p>
                     ) : null}
-                  </h3>
-                  {lineStay ? (
-                    <p className="meta day-row-line">{lineStay}</p>
-                  ) : null}
-                  {lineTransport ? (
-                    <p className="meta day-row-line day-row-transport">
-                      {lineTransport}
-                    </p>
-                  ) : null}
-                  {lineUpcoming ? (
-                    <p className="meta day-row-line day-row-upcoming">
-                      {lineUpcoming}
-                    </p>
-                  ) : null}
-                  {lineExtra ? (
-                    <p className="meta day-row-line">{lineExtra}</p>
-                  ) : null}
-                  {!lineStay &&
-                    !lineTransport &&
-                    !lineUpcoming &&
-                    !lineExtra && (
-                      <p className="meta day-row-line">Trykk for detaljer</p>
+                    {lineStay ? (
+                      <p className="meta day-row-line">{lineStay}</p>
+                    ) : null}
+                    {lineActivities ? (
+                      <p className="meta day-row-line day-row-activities">
+                        {lineActivities}
+                      </p>
+                    ) : null}
+                    {lineTransport ? (
+                      <p className="meta day-row-line day-row-transport">
+                        {lineTransport}
+                      </p>
+                    ) : null}
+                    {lineUpcoming ? (
+                      <p className="meta day-row-line day-row-upcoming">
+                        {lineUpcoming}
+                      </p>
+                    ) : null}
+                    {lineExtra ? (
+                      <p className="meta day-row-line">{lineExtra}</p>
+                    ) : null}
+                    {lineDepart ? (
+                      <p className="meta day-row-line day-row-ship day-row-depart">
+                        {lineDepart}
+                      </p>
+                    ) : null}
+                    {!lineArrive &&
+                      !lineDepart &&
+                      !lineStay &&
+                      !lineActivities &&
+                      !lineTransport &&
+                      !lineUpcoming &&
+                      !lineExtra && (
+                        <p className="meta day-row-line">Trykk for detaljer</p>
+                      )}
+                  </div>
+                  <div className="day-row-aside">
+                    {!isAtSeaDay(day) && day.city && day.date && (
+                      <DayWeatherCard
+                        city={day.city}
+                        country={day.country}
+                        date={day.date}
+                        compact
+                      />
                     )}
+                  </div>
+                </button>
+                <div className="day-row-actions">
+                  <div className="day-row-reorder" role="group" aria-label="Rekkefølge">
+                    <button
+                      type="button"
+                      className="icon-btn icon-btn-sm"
+                      disabled={saving || !canMoveUp}
+                      title="Flytt tidligere"
+                      aria-label="Flytt dagen tidligere"
+                      onClick={() => void handleMoveDay(day.id, -1)}
+                    >
+                      <ChevronUpIcon />
+                    </button>
+                    <button
+                      type="button"
+                      className="icon-btn icon-btn-sm"
+                      disabled={saving || !canMoveDown}
+                      title="Flytt senere"
+                      aria-label="Flytt dagen senere"
+                      onClick={() => void handleMoveDay(day.id, 1)}
+                    >
+                      <ChevronDownIcon />
+                    </button>
+                  </div>
+                  <button
+                    type="button"
+                    className="btn btn-ghost btn-sm day-row-insert"
+                    disabled={saving}
+                    title="Sett inn en dag etter denne — senere dager flyttes én dag frem"
+                    onClick={() => void handleInsertDayAfter(day)}
+                  >
+                    + Sett inn dag
+                  </button>
                 </div>
-                <div className="day-row-aside">
-                  {!isAtSeaDay(day) && day.city && day.date && (
-                    <DayWeatherCard
-                      city={day.city}
-                      country={day.country}
-                      date={day.date}
-                      compact
-                    />
-                  )}
-                </div>
-              </button>
+              </div>
               )
             })}
+            {days.length > 0 && (
+              <div className="trip-list-footer">
+                <button
+                  type="button"
+                  className="btn btn-soft btn-sm"
+                  onClick={() =>
+                    setView({
+                      name: 'day',
+                      tripId: view.tripId,
+                      dayId: 'new',
+                    })
+                  }
+                >
+                  + Ny dag etter siste
+                  {latestTripDayDate(days)
+                    ? ` (${formatDateNO(addDaysIso(latestTripDayDate(days), 1))})`
+                    : ''}
+                </button>
+              </div>
+            )}
           </div>
         )}
 
@@ -4340,6 +6336,9 @@ export default function App() {
                 .map((s) => s.cruise.title.trim() || 'Cruise')
                 .filter((name, i, arr) => arr.indexOf(name) === i)
               const tone = dayToneClass(day.date)
+              const shipTimes = formatShipPortTimes(
+                resolveShipPortTimes(day, days),
+              )
               return (
               <button
                 key={day.id}
@@ -4355,6 +6354,9 @@ export default function App() {
                     <span className="day-today-badge"> I dag</span>
                   ) : null}
                 </h3>
+                {shipTimes ? (
+                  <p className="meta day-row-ship">{shipTimes}</p>
+                ) : null}
                 <p className="meta">
                   {[
                     isAtSeaDay(day) ? null : day.country,
@@ -4416,19 +6418,24 @@ export default function App() {
                         </span>
                       </h3>
                       <p className="meta">
-                        {group.hotels[0]?.title || 'Uten hotell'} ·{' '}
-                        {group.days.length} dag
+                        {group.hotels[0]?.title || 'Uten hotell'}
+                        {group.hotels[0] && formatHotelPrice(group.hotels[0])
+                          ? ` · ${formatHotelPrice(group.hotels[0])}`
+                          : ''}{' '}
+                        · {group.days.length} dag
                         {group.days.length === 1 ? '' : 'er'} ·{' '}
                         {group.items.length} ting
                       </p>
                       {(() => {
                         const portTimes = group.days
-                          .map((d) => formatShipPortTimes(d))
+                          .map((d) =>
+                            formatShipPortTimes(resolveShipPortTimes(d, days)),
+                          )
                           .filter(Boolean)
                         const unique = [...new Set(portTimes)]
                         if (!unique.length) return null
                         return (
-                          <p className="meta day-row-line">
+                          <p className="meta day-row-line day-row-ship">
                             Skip: {unique.join(' · ')}
                           </p>
                         )
@@ -4454,7 +6461,11 @@ export default function App() {
         )}
 
         {tab === 'kart' && (
-          <TripMap days={days} tripName={activeTrip?.name || 'Reise'} />
+          <TripMap
+            key={tripMapRouteKey(days)}
+            days={days}
+            tripName={activeTrip?.name || 'Reise'}
+          />
         )}
       </section>
     </div>
