@@ -178,3 +178,136 @@ type ReorderItem struct {
 	ID        string `json:"id"`
 	SortOrder int    `json:"sortOrder"`
 }
+
+// JourneyStay is optional lodging attached to a journey stop (a block of nights).
+type JourneyStay struct {
+	Nights       int    `json:"nights" firestore:"nights"`
+	HotelName    string `json:"hotelName,omitempty" firestore:"hotelName,omitempty"`
+	Address      string `json:"address,omitempty" firestore:"address,omitempty"`
+	URL          string `json:"url,omitempty" firestore:"url,omitempty"`
+	Price        string `json:"price,omitempty" firestore:"price,omitempty"`
+	CheckInTime  string `json:"checkInTime,omitempty" firestore:"checkInTime,omitempty"`
+	CheckOutTime string `json:"checkOutTime,omitempty" firestore:"checkOutTime,omitempty"`
+}
+
+// JourneyPackageDay is one day inside a multi-day package block.
+type JourneyPackageDay struct {
+	ID         string `json:"id" firestore:"id"`
+	Offset     int    `json:"offset" firestore:"offset"` // 0 = start day
+	AtSea      bool   `json:"atSea" firestore:"atSea"`   // free / at-sea / travel day
+	City       string `json:"city,omitempty" firestore:"city,omitempty"`
+	Country    string `json:"country,omitempty" firestore:"country,omitempty"`
+	ArriveTime string `json:"arriveTime,omitempty" firestore:"arriveTime,omitempty"`
+	LeaveTime  string `json:"leaveTime,omitempty" firestore:"leaveTime,omitempty"`
+}
+
+// JourneyPackage is a multi-day block (cruise, pakketur, charter, roadtrip, other).
+type JourneyPackage struct {
+	Nights      int                 `json:"nights" firestore:"nights"`
+	Title       string              `json:"title,omitempty" firestore:"title,omitempty"`
+	BasePlace   string              `json:"basePlace,omitempty" firestore:"basePlace,omitempty"`
+	BaseCountry string              `json:"baseCountry,omitempty" firestore:"baseCountry,omitempty"`
+	Detail      string              `json:"detail,omitempty" firestore:"detail,omitempty"`
+	Price       string              `json:"price,omitempty" firestore:"price,omitempty"`
+	Costs       []CruiseCost        `json:"costs,omitempty" firestore:"costs,omitempty"`
+	Days        []JourneyPackageDay `json:"days,omitempty" firestore:"days,omitempty"`
+}
+
+// JourneyCruiseDay is legacy alias shape (still accepted when reading old journeys).
+type JourneyCruiseDay = JourneyPackageDay
+
+// JourneyCruise is legacy cruise-only payload; prefer JourneyPackage on Pack.
+type JourneyCruise struct {
+	Nights      int                `json:"nights" firestore:"nights"`
+	ShipName    string             `json:"shipName,omitempty" firestore:"shipName,omitempty"`
+	HomePort    string             `json:"homePort,omitempty" firestore:"homePort,omitempty"`
+	HomeCountry string             `json:"homeCountry,omitempty" firestore:"homeCountry,omitempty"`
+	CabinNumber string             `json:"cabinNumber,omitempty" firestore:"cabinNumber,omitempty"`
+	Price       string             `json:"price,omitempty" firestore:"price,omitempty"`
+	Days        []JourneyCruiseDay `json:"days,omitempty" firestore:"days,omitempty"`
+}
+
+// JourneyStop is one place on the trip thread (not a single calendar day).
+type JourneyStop struct {
+	ID         string          `json:"id" firestore:"id"`
+	City       string          `json:"city" firestore:"city"`
+	Country    string          `json:"country" firestore:"country"`
+	Address    string          `json:"address,omitempty" firestore:"address,omitempty"`
+	ArriveDate string          `json:"arriveDate" firestore:"arriveDate"` // YYYY-MM-DD
+	Kind       string          `json:"kind" firestore:"kind"`             // place | home | cruise | tour | charter | roadtrip | other
+	Stay       *JourneyStay    `json:"stay,omitempty" firestore:"stay,omitempty"`
+	Pack       *JourneyPackage `json:"pack,omitempty" firestore:"pack,omitempty"`
+	Cruise     *JourneyCruise  `json:"cruise,omitempty" firestore:"cruise,omitempty"` // legacy
+	Notes      string          `json:"notes,omitempty" firestore:"notes,omitempty"`
+	Sights     []JourneySight  `json:"sights,omitempty" firestore:"sights,omitempty"`
+	SortOrder  int             `json:"sortOrder" firestore:"sortOrder"`
+}
+
+// JourneySight is an attraction or excursion at a city, via place, or city-day.
+type JourneySight struct {
+	ID         string `json:"id" firestore:"id"`
+	Title      string `json:"title" firestore:"title"`
+	Notes      string `json:"notes,omitempty" firestore:"notes,omitempty"`
+	URL        string `json:"url,omitempty" firestore:"url,omitempty"`
+	Kind       string `json:"kind,omitempty" firestore:"kind,omitempty"` // sight | excursion | other
+	DayOffset  int    `json:"dayOffset,omitempty" firestore:"dayOffset,omitempty"`
+	StartTime  string `json:"startTime,omitempty" firestore:"startTime,omitempty"`
+	EndTime    string `json:"endTime,omitempty" firestore:"endTime,omitempty"`
+	SortOrder  int    `json:"sortOrder" firestore:"sortOrder"`
+}
+
+// JourneyTransportOption is one way to travel between two places (e.g. bus OR train).
+type JourneyTransportOption struct {
+	ID         string   `json:"id" firestore:"id"`
+	Mode       string   `json:"mode,omitempty" firestore:"mode,omitempty"`
+	Title      string   `json:"title,omitempty" firestore:"title,omitempty"` // flight nr / line
+	StartTime  string   `json:"startTime,omitempty" firestore:"startTime,omitempty"`
+	EndTime    string   `json:"endTime,omitempty" firestore:"endTime,omitempty"`
+	Platform   string   `json:"platform,omitempty" firestore:"platform,omitempty"` // perong (buss/tog)
+	Gate       string   `json:"gate,omitempty" firestore:"gate,omitempty"`         // flygate
+	Minutes     string   `json:"minutes,omitempty" firestore:"minutes,omitempty"` // gåtid i minutter
+	Info        string   `json:"info,omitempty" firestore:"info,omitempty"`       // ekstra info (annet)
+	Price       string   `json:"price,omitempty" firestore:"price,omitempty"`
+	ActualPrice string   `json:"actualPrice,omitempty" firestore:"actualPrice,omitempty"`
+	Departures  []string `json:"departures,omitempty" firestore:"departures,omitempty"`
+}
+
+// JourneyVia is a city or airport point on a transport block between two stops.
+type JourneyVia struct {
+	ID         string                   `json:"id" firestore:"id"`
+	Title      string                   `json:"title" firestore:"title"` // by eller flyplass
+	Country    string                   `json:"country,omitempty" firestore:"country,omitempty"`
+	Mode       string                   `json:"mode,omitempty" firestore:"mode,omitempty"` // legacy single mode
+	StartTime  string                   `json:"startTime,omitempty" firestore:"startTime,omitempty"`
+	EndTime    string                   `json:"endTime,omitempty" firestore:"endTime,omitempty"`
+	Notes      string                   `json:"notes,omitempty" firestore:"notes,omitempty"`
+	Departures []string                 `json:"departures,omitempty" firestore:"departures,omitempty"`
+	// Options are alternative ways to arrive at this place from the previous one.
+	Options   []JourneyTransportOption `json:"options,omitempty" firestore:"options,omitempty"`
+	Sights    []JourneySight           `json:"sights,omitempty" firestore:"sights,omitempty"`
+	SortOrder int                      `json:"sortOrder" firestore:"sortOrder"`
+}
+
+// JourneyLeg is travel between two consecutive stops on the thread.
+type JourneyLeg struct {
+	ID         string       `json:"id" firestore:"id"`
+	FromStopID string       `json:"fromStopId" firestore:"fromStopId"`
+	ToStopID   string       `json:"toStopId" firestore:"toStopId"`
+	Mode       string       `json:"mode,omitempty" firestore:"mode,omitempty"` // flight|train|bus|car|boat|walk|other
+	Title      string       `json:"title,omitempty" firestore:"title,omitempty"`
+	StartTime  string       `json:"startTime,omitempty" firestore:"startTime,omitempty"`
+	EndTime    string       `json:"endTime,omitempty" firestore:"endTime,omitempty"`
+	Notes      string       `json:"notes,omitempty" firestore:"notes,omitempty"`
+	URL        string       `json:"url,omitempty" firestore:"url,omitempty"`
+	Vias       []JourneyVia `json:"vias,omitempty" firestore:"vias,omitempty"`
+}
+
+// Journey is the trip thread: ordered stops + legs between them (v2 planner).
+type Journey struct {
+	ID        string        `json:"id" firestore:"-"`
+	TripID    string        `json:"tripId" firestore:"tripId"`
+	Stops     []JourneyStop `json:"stops" firestore:"stops"`
+	Legs      []JourneyLeg  `json:"legs" firestore:"legs"`
+	CreatedAt time.Time     `json:"createdAt" firestore:"createdAt"`
+	UpdatedAt time.Time     `json:"updatedAt" firestore:"updatedAt"`
+}

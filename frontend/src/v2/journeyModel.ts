@@ -1,0 +1,1535 @@
+import type { PlannerSettings } from '../userSettings'
+import { arriveTimeSortKey, normalizeClockTime, normalizeDepartures } from '../api'
+
+export type JourneyPackageType =
+  | 'cruise'
+  | 'tour'
+  | 'charter'
+  | 'roadtrip'
+  | 'other'
+
+export type JourneyStopKind = 'place' | 'home' | JourneyPackageType
+
+export const PACKAGE_TYPES: JourneyPackageType[] = [
+  'cruise',
+  'tour',
+  'charter',
+  'roadtrip',
+  'other',
+]
+
+export function isPackageType(kind: string | undefined): kind is JourneyPackageType {
+  return PACKAGE_TYPES.includes(kind as JourneyPackageType)
+}
+
+export function isPackageStop(
+  stop: Pick<JourneyStop, 'kind'> | null | undefined,
+): boolean {
+  return isPackageType(stop?.kind)
+}
+
+export type JourneyLegMode =
+  | ''
+  | 'flight'
+  | 'train'
+  | 'tram'
+  | 'bus'
+  | 'car'
+  | 'boat'
+  | 'walk'
+  | 'other'
+
+export interface JourneyStay {
+  nights: number
+  hotelName?: string
+  address?: string
+  url?: string
+  price?: string
+  checkInTime?: string
+  checkOutTime?: string
+}
+
+/** Attraction, excursion or other item at a city / via. */
+export type JourneyActivityKind = 'sight' | 'excursion' | 'other'
+
+/** @deprecated Prefer JourneyActivity — same shape. */
+export type JourneySight = JourneyActivity
+
+export interface JourneyActivity {
+  id: string
+  title: string
+  notes?: string
+  url?: string
+  /** Default sight (severdighet). */
+  kind?: JourneyActivityKind
+  /**
+   * Day index from stop.arriveDate (0 = ankomstdag).
+   * Omitted / 0 for via places and legacy rows.
+   */
+  dayOffset?: number
+  startTime?: string
+  endTime?: string
+  sortOrder: number
+}
+
+/** One day inside a multi-day package (not a separate thread stop). */
+export interface JourneyPackageDay {
+  id: string
+  /** Day index from start (0 … nights). */
+  offset: number
+  /** No place that day (cruise: at sea, tour: free/travel day). */
+  atSea: boolean
+  city?: string
+  country?: string
+  arriveTime?: string
+  leaveTime?: string
+}
+
+/** Multi-day block on the journey thread (cruise, pakketur, charter, …). */
+export interface JourneyPackage {
+  nights: number
+  /** Ship / tour / charter / trip name. */
+  title?: string
+  /** Home port, start city or main base. */
+  basePlace?: string
+  baseCountry?: string
+  /** Cabin, booking ref, etc. */
+  detail?: string
+  price?: string
+  /** Extra costs for the whole package (spread over nights in overview). */
+  costs?: JourneyCost[]
+  days?: JourneyPackageDay[]
+}
+
+/** Extra cost line on a package (cruise extras, tips, …). */
+export interface JourneyCost {
+  id: string
+  title: string
+  price?: string
+  notes?: string
+  sortOrder: number
+}
+
+export function newJourneyCost(sortOrder = 0): JourneyCost {
+  return {
+    id: crypto.randomUUID(),
+    title: '',
+    price: '',
+    notes: '',
+    sortOrder,
+  }
+}
+
+/** @deprecated Prefer JourneyPackage / pack — kept for older cruise payloads. */
+export type JourneyCruiseDay = JourneyPackageDay
+/** @deprecated Prefer JourneyPackage / pack. */
+export type JourneyCruise = JourneyPackage & {
+  shipName?: string
+  homePort?: string
+  homeCountry?: string
+  cabinNumber?: string
+}
+
+export interface JourneyStop {
+  id: string
+  city: string
+  country: string
+  address?: string
+  arriveDate: string
+  kind: JourneyStopKind
+  stay?: JourneyStay | null
+  /** Multi-day package payload (cruise, tour, …). */
+  pack?: JourneyPackage | null
+  /** @deprecated Legacy cruise-only field; use pack. */
+  cruise?: JourneyCruise | null
+  /** Attractions / excursions in this city (optionally per dayOffset). */
+  sights?: JourneyActivity[]
+  notes?: string
+  sortOrder: number
+}
+
+/** One way to travel between two places (bus OR train, etc.). */
+export interface JourneyTransportOption {
+  id: string
+  mode?: JourneyLegMode | string
+  /** Line / flight number (optional). */
+  title?: string
+  startTime?: string
+  endTime?: string
+  /** Platform / perong — for bus and train. */
+  platform?: string
+  /** Airport gate — for flights. */
+  gate?: string
+  /** Walk duration in minutes (walk mode only). */
+  minutes?: string
+  /** Extra info — e.g. for “Annet”. */
+  info?: string
+  /** Expected price (free text). */
+  price?: string
+  /** Actual cost after travel (overrides price in expense totals). */
+  actualPrice?: string
+  /** @deprecated Multi-times are separate option rows now. */
+  departures?: string[]
+}
+
+/** City or airport point on the way to the main destination. */
+export interface JourneyVia {
+  id: string
+  /** City or airport name (e.g. Bergamo, Milano, Genova). */
+  title: string
+  country?: string
+  /** @deprecated Prefer options[] — kept for older data. */
+  mode?: JourneyLegMode | string
+  startTime?: string
+  endTime?: string
+  notes?: string
+  departures?: string[]
+  /** Alternative ways to get here from the previous place. */
+  options?: JourneyTransportOption[]
+  /** Attractions / excursions while at this via city. */
+  sights?: JourneyActivity[]
+  sortOrder: number
+}
+
+export interface JourneyLeg {
+  id: string
+  fromStopId: string
+  toStopId: string
+  mode?: JourneyLegMode | string
+  title?: string
+  startTime?: string
+  endTime?: string
+  notes?: string
+  url?: string
+  /** Ordered city/airport points (path to main destination). */
+  vias?: JourneyVia[]
+}
+
+export function newViaId(): string {
+  return crypto.randomUUID()
+}
+
+export function newOptionId(): string {
+  return crypto.randomUUID()
+}
+
+export function newTransportOption(
+  mode: JourneyLegMode | string = '',
+): JourneyTransportOption {
+  return {
+    id: newOptionId(),
+    mode,
+    title: '',
+    startTime: '',
+    endTime: '',
+    platform: '',
+    gate: '',
+    minutes: '',
+    info: '',
+    price: '',
+    actualPrice: '',
+    departures: [],
+  }
+}
+
+/** Bus / train / tram can have a platform. */
+export function modeHasPlatform(mode?: string): boolean {
+  return mode === 'train' || mode === 'bus' || mode === 'tram'
+}
+
+/** Flight uses flight number + gate. */
+export function modeIsFlight(mode?: string): boolean {
+  return mode === 'flight'
+}
+
+/** Free-text type for “Annet”. */
+export function modeIsOther(mode?: string): boolean {
+  return mode === 'other'
+}
+
+/** Walk only needs a duration in minutes. */
+export function modeIsWalk(mode?: string): boolean {
+  return mode === 'walk'
+}
+
+export function newJourneyVia(sortOrder = 0): JourneyVia {
+  return {
+    id: newViaId(),
+    title: '',
+    country: '',
+    mode: '',
+    startTime: '',
+    endTime: '',
+    notes: '',
+    departures: [],
+    options: [],
+    sortOrder,
+  }
+}
+
+/** One departure alternative — list is sorted by startTime across modes. */
+export function sortTransportOptionsByTime(
+  options: JourneyTransportOption[],
+): JourneyTransportOption[] {
+  return [...options].sort(
+    (a, b) =>
+      arriveTimeSortKey(a.startTime) - arriveTimeSortKey(b.startTime),
+  )
+}
+
+/**
+ * Expand legacy multi-departure chips into one row per time.
+ * Flight stays exclusive (alone). Does not sort (keep edit order stable).
+ */
+export function expandTransportOptions(
+  options: JourneyTransportOption[],
+): JourneyTransportOption[] {
+  const expanded: JourneyTransportOption[] = []
+  for (const o of options) {
+    const times = normalizeDepartures(o.departures)
+    if (times.length > 1) {
+      for (const t of times) {
+        expanded.push({
+          ...o,
+          id: `${o.id}-${t}`,
+          startTime: t,
+          departures: [],
+        })
+      }
+      continue
+    }
+    const start = (o.startTime || '').trim() || times[0] || ''
+    expanded.push({
+      ...o,
+      startTime: start,
+      departures: [],
+    })
+  }
+  const flight = expanded.find((o) => o.mode === 'flight')
+  if (flight) {
+    return [
+      {
+        ...flight,
+        departures: [],
+        startTime: (flight.startTime || '').trim(),
+      },
+    ]
+  }
+  return expanded
+}
+
+export function expandSortTransportOptions(
+  options: JourneyTransportOption[],
+): JourneyTransportOption[] {
+  return sortTransportOptionsByTime(expandTransportOptions(options))
+}
+
+/** Normalize legacy single-mode fields into options[]. */
+export function viaTransportOptions(via: JourneyVia): JourneyTransportOption[] {
+  if (via.options?.length) {
+    return expandTransportOptions(
+      via.options.map((o) => ({
+        ...o,
+        departures: [...(o.departures || [])],
+      })),
+    )
+  }
+  if (
+    via.mode?.trim() ||
+    via.startTime?.trim() ||
+    via.endTime?.trim() ||
+    (via.departures || []).length
+  ) {
+    return expandTransportOptions([
+      {
+        id: `${via.id}-opt0`,
+        mode: via.mode || '',
+        title: '',
+        startTime: via.startTime || '',
+        endTime: via.endTime || '',
+        departures: [...(via.departures || [])],
+      },
+    ])
+  }
+  return []
+}
+
+export function withViaOptions(
+  via: JourneyVia,
+  options: JourneyTransportOption[],
+): JourneyVia {
+  const opts = expandTransportOptions(options).map((o) => ({
+    ...o,
+    startTime: (o.startTime || '').trim(),
+    endTime: (o.endTime || '').trim(),
+    departures: [] as string[],
+  }))
+  const first = opts[0]
+  return {
+    ...via,
+    options: opts,
+    mode: first?.mode || '',
+    startTime: first?.startTime || '',
+    endTime: first?.endTime || '',
+    // Prefer first option time only — multi-times live as separate options.
+    departures: first?.startTime ? [first.startTime] : [],
+  }
+}
+
+/**
+ * Ordered places between two stops.
+ * Legacy single mode/time on the leg becomes one place.
+ */
+export function transportSegments(leg?: JourneyLeg | null): JourneyVia[] {
+  if (!leg) return []
+  const vias = [...(leg.vias || [])]
+    .sort((a, b) => a.sortOrder - b.sortOrder)
+    .map((v) =>
+      withViaOptions(
+        v,
+        sortTransportOptionsByTime(viaTransportOptions(v)),
+      ),
+    )
+  if (vias.length) return vias
+  if (leg.mode?.trim() || leg.title?.trim() || leg.startTime?.trim()) {
+    return [
+      withViaOptions(
+        {
+          id: `${leg.id}-main`,
+          title: (leg.title || '').trim(),
+          country: '',
+          notes: '',
+          sortOrder: 0,
+        },
+        [
+          {
+            id: `${leg.id}-opt0`,
+            mode: leg.mode || '',
+            title: '',
+            startTime: leg.startTime || '',
+            endTime: leg.endTime || '',
+            departures: [],
+          },
+        ],
+      ),
+    ]
+  }
+  return []
+}
+
+export function withTransportSegments(
+  leg: JourneyLeg,
+  segments: JourneyVia[],
+): JourneyLeg {
+  const vias = segments.map((v, i) => {
+    const normalized = withViaOptions(v, viaTransportOptions(v))
+    return {
+      ...normalized,
+      title: v.title || '',
+      country: v.country || '',
+      sortOrder: i,
+    }
+  })
+  const first = vias[0]
+  const firstOpt = first ? viaTransportOptions(first)[0] : undefined
+  return {
+    ...leg,
+    vias,
+    mode: firstOpt?.mode || '',
+    title: (first?.title || '').trim(),
+    startTime: firstOpt?.startTime || firstOpt?.departures?.[0] || '',
+    endTime: firstOpt?.endTime || '',
+  }
+}
+
+export function moveTransportSegment(
+  segments: JourneyVia[],
+  index: number,
+  direction: -1 | 1,
+): JourneyVia[] {
+  return reorderTransportSegments(segments, index, index + direction)
+}
+
+/** Move a city-step to a new index (drag-and-drop). */
+export function reorderTransportSegments(
+  segments: JourneyVia[],
+  fromIndex: number,
+  toIndex: number,
+): JourneyVia[] {
+  if (
+    fromIndex === toIndex ||
+    fromIndex < 0 ||
+    toIndex < 0 ||
+    fromIndex >= segments.length ||
+    toIndex >= segments.length
+  ) {
+    return segments
+  }
+  const next = [...segments]
+  const [item] = next.splice(fromIndex, 1)
+  next.splice(toIndex, 0, item)
+  return next.map((v, i) => ({ ...v, sortOrder: i }))
+}
+
+function formatOptionSummaryBit(o: JourneyTransportOption): string {
+  const mode = o.mode ? legModeLabel(o.mode) : ''
+  if (modeIsWalk(o.mode)) {
+    const m = (o.minutes || '').trim()
+    if (mode && m) return `${mode} ${m} min`
+    return mode || (m ? `${m} min` : '')
+  }
+  if (modeIsFlight(o.mode)) {
+    const nr = (o.title || '').trim()
+    const gate = (o.gate || '').trim()
+    const t = (o.startTime || '').trim()
+    const parts = [mode, nr, gate ? `gate ${gate}` : '', t].filter(Boolean)
+    return parts.join(' ')
+  }
+  if (modeIsOther(o.mode)) {
+    const type = (o.title || '').trim()
+    const info = (o.info || '').trim()
+    const t = (o.startTime || '').trim()
+    const head = [type || mode, info].filter(Boolean).join(' — ')
+    if (head && t) return `${head} ${t}`
+    return head || t
+  }
+  const t = (o.startTime || '').trim()
+  const platform = modeHasPlatform(o.mode) ? (o.platform || '').trim() : ''
+  const plat = platform ? ` p.${platform}` : ''
+  if (mode && t) return `${mode} ${t}${plat}`
+  if (mode) return `${mode}${plat}`
+  return t
+}
+
+export function summarizeTransport(leg?: JourneyLeg | null): string {
+  const segs = transportSegments(leg).filter((s) => {
+    const opts = viaTransportOptions(s)
+    return (
+      s.title.trim() ||
+      opts.some(
+        (o) =>
+          o.mode?.trim() ||
+          o.startTime?.trim() ||
+          (o.minutes || '').trim() ||
+          (o.departures || []).length > 0,
+      )
+    )
+  })
+  if (!segs.length) return 'Transport'
+  const places = segs.map((s) => {
+    const name = s.title.trim() || 'Punkt'
+    const bits = viaTransportOptions(s)
+      .map(formatOptionSummaryBit)
+      .filter(Boolean)
+    if (!bits.length) return name
+    const shown = bits.slice(0, 3).join(' · ')
+    const more = bits.length > 3 ? ` +${bits.length - 3}` : ''
+    return `${name} (${shown}${more})`
+  })
+  if (places.length === 1) return places[0]
+  const shown = places.slice(0, 3)
+  const more = places.length > 3 ? ` +${places.length - 3}` : ''
+  return shown.join(' → ') + more
+}
+
+/** Compact one-line summary for a city hop (collapsed accordion). */
+export function summarizeViaHop(
+  via: JourneyVia,
+  fromLabel: string,
+): string {
+  const to = via.title.trim() || '…'
+  const route = `${fromLabel} → ${to}`
+  const bits = viaTransportOptions(via)
+    .map(formatOptionSummaryBit)
+    .filter(Boolean)
+  if (!bits.length) return route
+  const shown = bits.slice(0, 3).join(' · ')
+  const more = bits.length > 3 ? ` +${bits.length - 3}` : ''
+  return `${route} · ${shown}${more}`
+}
+
+export interface Journey {
+  id?: string
+  tripId: string
+  stops: JourneyStop[]
+  legs: JourneyLeg[]
+  createdAt?: string
+  updatedAt?: string
+}
+
+export function emptyJourney(tripId: string): Journey {
+  return { tripId, stops: [], legs: [] }
+}
+
+export function newStopId(): string {
+  return crypto.randomUUID()
+}
+
+export function newSightId(): string {
+  return crypto.randomUUID()
+}
+
+export function activityKindLabel(kind?: JourneyActivityKind | string): string {
+  switch (kind) {
+    case 'excursion':
+      return 'Utflukt'
+    case 'other':
+      return 'Annet'
+    default:
+      return 'Severdighet'
+  }
+}
+
+export function newSight(
+  sortOrder = 0,
+  kind: JourneyActivityKind = 'sight',
+  dayOffset = 0,
+): JourneyActivity {
+  return {
+    id: newSightId(),
+    title: '',
+    notes: '',
+    url: '',
+    kind,
+    dayOffset,
+    startTime: '',
+    endTime: '',
+    sortOrder,
+  }
+}
+
+export function normalizeSights(
+  list?: JourneyActivity[] | null,
+): JourneyActivity[] {
+  return [...(list || [])]
+    .map((s, i) => {
+      const kind: JourneyActivityKind =
+        s.kind === 'excursion'
+          ? 'excursion'
+          : s.kind === 'other'
+            ? 'other'
+            : 'sight'
+      return {
+        ...s,
+        id: s.id || newSightId(),
+        title: (s.title || '').trim(),
+        notes: (s.notes || '').trim(),
+        url: (s.url || '').trim(),
+        kind,
+        dayOffset:
+          typeof s.dayOffset === 'number' && s.dayOffset >= 0
+            ? Math.floor(s.dayOffset)
+            : 0,
+        startTime: (s.startTime || '').trim(),
+        endTime: (s.endTime || '').trim(),
+        sortOrder: i,
+      }
+    })
+    .filter((s) => s.title || s.notes || s.url)
+}
+
+/**
+ * Calendar days you are “in” a place stop: arrive day through last overnight.
+ * 2 netter from 02 → days 02 and 03 (checkout morning 04 is not a full day).
+ */
+export function cityStayDays(stop: JourneyStop): {
+  offset: number
+  date: string
+  label: string
+}[] {
+  const arrive = (stop.arriveDate || '').trim()
+  if (!arrive) return []
+  const nights = stayNights(stop)
+  const count = Math.max(1, nights)
+  const city = (stop.city || '').trim() || 'byen'
+  return Array.from({ length: count }, (_, offset) => ({
+    offset,
+    date: addDaysIso(arrive, offset),
+    label: `I ${city}`,
+  }))
+}
+
+export function activitiesForDay(
+  sights: JourneyActivity[] | null | undefined,
+  dayOffset: number,
+): JourneyActivity[] {
+  return normalizeSights(sights).filter(
+    (s) => (s.dayOffset ?? 0) === dayOffset,
+  )
+}
+
+/** Replace one day’s activities inside a stop’s sights list. */
+export function replaceDayActivities(
+  sights: JourneyActivity[] | null | undefined,
+  dayOffset: number,
+  dayList: JourneyActivity[],
+): JourneyActivity[] {
+  const others = normalizeSights(sights).filter(
+    (s) => (s.dayOffset ?? 0) !== dayOffset,
+  )
+  const nextDay = normalizeSights(
+    dayList.map((s) => ({ ...s, dayOffset })),
+  )
+  return normalizeSights([...others, ...nextDay])
+}
+
+export function newLegId(): string {
+  return crypto.randomUUID()
+}
+
+export function legModeLabel(mode?: string): string {
+  switch (mode) {
+    case 'flight':
+      return 'Fly'
+    case 'train':
+      return 'Tog'
+    case 'tram':
+      return 'Bybane/trikk'
+    case 'bus':
+      return 'Buss'
+    case 'car':
+      return 'Bil'
+    case 'boat':
+      return 'Båt/ferge'
+    case 'walk':
+      return 'Til fots'
+    case 'other':
+      return 'Annet'
+    default:
+      return 'Reise'
+  }
+}
+
+export function addDaysIso(iso: string, days: number): string {
+  const d = new Date(`${iso}T12:00:00`)
+  if (Number.isNaN(d.getTime())) return iso
+  d.setDate(d.getDate() + days)
+  return d.toISOString().slice(0, 10)
+}
+
+export const CRUISE_AT_SEA = 'Til sjøs'
+
+export function packageTypeLabel(type: JourneyPackageType | string): string {
+  switch (type) {
+    case 'cruise':
+      return 'Cruise'
+    case 'tour':
+      return 'Pakketur'
+    case 'charter':
+      return 'Charter'
+    case 'roadtrip':
+      return 'Roadtrip'
+    case 'other':
+      return 'Annet'
+    default:
+      return 'Pakke'
+  }
+}
+
+export function packageFreeDayLabel(type: JourneyPackageType | string): string {
+  switch (type) {
+    case 'cruise':
+      return CRUISE_AT_SEA
+    case 'roadtrip':
+      return 'Kjøredag'
+    case 'charter':
+      return 'Fri / pool'
+    default:
+      return 'Fri dag'
+  }
+}
+
+export function packagePlaceDayLabel(type: JourneyPackageType | string): string {
+  switch (type) {
+    case 'cruise':
+      return 'Havn'
+    case 'charter':
+      return 'Destinasjon'
+    case 'roadtrip':
+      return 'Stopp'
+    default:
+      return 'Sted'
+  }
+}
+
+export function packageTitleLabel(type: JourneyPackageType | string): string {
+  switch (type) {
+    case 'cruise':
+      return 'Skip'
+    case 'tour':
+      return 'Tur / operatør'
+    case 'charter':
+      return 'Charter / destinasjon'
+    case 'roadtrip':
+      return 'Rute / navn'
+    default:
+      return 'Navn'
+  }
+}
+
+export function packageBaseLabel(type: JourneyPackageType | string): string {
+  switch (type) {
+    case 'cruise':
+      return 'Hjemhavn'
+    case 'charter':
+      return 'Hovedsted'
+    case 'roadtrip':
+      return 'Startsted'
+    default:
+      return 'Base / start'
+  }
+}
+
+export function packageDetailLabel(type: JourneyPackageType | string): string {
+  switch (type) {
+    case 'cruise':
+      return 'Lugar'
+    case 'tour':
+      return 'Booking / ref'
+    case 'charter':
+      return 'Hotell / ref'
+    case 'roadtrip':
+      return 'Kjøretøy / ref'
+    default:
+      return 'Ref'
+  }
+}
+
+export function packageStartRoleLabel(type: JourneyPackageType | string): string {
+  return type === 'cruise' ? 'hjemhavn · ombord' : 'start'
+}
+
+export function packageEndRoleLabel(type: JourneyPackageType | string): string {
+  return type === 'cruise' ? 'iland' : 'slutt'
+}
+
+/** Minutes between two clock times; leave before arrive → overnight (+24h). */
+export function packagePortMinutes(
+  arriveTime?: string,
+  leaveTime?: string,
+): number | null {
+  const a = arriveTimeSortKey(arriveTime)
+  const b = arriveTimeSortKey(leaveTime)
+  if (
+    a === Number.POSITIVE_INFINITY ||
+    b === Number.POSITIVE_INFINITY
+  ) {
+    return null
+  }
+  let diff = Math.round((b - a) / 60)
+  if (diff < 0) diff += 24 * 60
+  if (diff <= 0) return null
+  return diff
+}
+
+export function formatPackagePortHours(minutes: number): string {
+  const h = Math.floor(minutes / 60)
+  const m = minutes % 60
+  if (h > 0 && m > 0) return `${h} t ${m} min`
+  if (h > 0) return `${h} t`
+  return `${m} min`
+}
+
+/** Columns for the borderless cruise/package day table. */
+export function packageDayTableRow(
+  day: JourneyPackageDay,
+  opts: {
+    type: JourneyPackageType | string
+    nights: number
+    basePlace?: string
+    freeLabel: string
+    placeFallback: string
+  },
+): {
+  place: string
+  arrive: string
+  leave: string
+  portHours: string
+  atSea: boolean
+} {
+  if (day.atSea) {
+    return {
+      place: opts.freeLabel,
+      arrive: '',
+      leave: '',
+      portHours: '',
+      atSea: true,
+    }
+  }
+  const place =
+    day.city?.trim() ||
+    (opts.type === 'cruise' && day.offset === 0
+      ? opts.basePlace?.trim() || 'Hjemhavn'
+      : opts.placeFallback)
+  const isStart = day.offset === 0
+  const isLast = day.offset === opts.nights
+  const arriveRaw =
+    opts.type === 'cruise' && isStart
+      ? ''
+      : (day.arriveTime || '').trim()
+  const leaveRaw =
+    opts.type === 'cruise' && isLast
+      ? ''
+      : (day.leaveTime || '').trim()
+  const arrive = arriveRaw ? normalizeClockTime(arriveRaw) || arriveRaw : ''
+  const leave = leaveRaw ? normalizeClockTime(leaveRaw) || leaveRaw : ''
+  const mins =
+    arrive && leave ? packagePortMinutes(arrive, leave) : null
+  return {
+    place,
+    arrive,
+    leave,
+    portHours: mins != null ? formatPackagePortHours(mins) : '',
+    atSea: false,
+  }
+}
+
+/** @deprecated Prefer packageDayTableRow for the day table. */
+export function formatPackageDayListLine(
+  day: JourneyPackageDay,
+  opts: {
+    type: JourneyPackageType | string
+    nights: number
+    basePlace?: string
+    freeLabel: string
+    placeFallback: string
+  },
+): string {
+  const row = packageDayTableRow(day, opts)
+  if (row.atSea) return row.place
+  const parts: string[] = [row.place]
+  if (row.arrive && row.leave) {
+    parts.push(`${row.arrive}–${row.leave}`)
+    if (row.portHours) {
+      parts.push(
+        opts.type === 'cruise' ? `${row.portHours} i havn` : row.portHours,
+      )
+    }
+  } else if (row.arrive) {
+    parts.push(`Ank. ${row.arrive}`)
+  } else if (row.leave) {
+    parts.push(`Avg. ${row.leave}`)
+  }
+  return parts.join(' · ')
+}
+
+export function newPackageDayId(): string {
+  return crypto.randomUUID()
+}
+
+/** @deprecated use newPackageDayId */
+export function newCruiseDayId(): string {
+  return newPackageDayId()
+}
+
+/** Normalize legacy cruise field shape into JourneyPackage. */
+export function packageOf(
+  stop: Pick<JourneyStop, 'pack' | 'cruise' | 'city' | 'country'> | null | undefined,
+): JourneyPackage | null {
+  if (stop?.pack) {
+    return {
+      nights: stop.pack.nights,
+      title: stop.pack.title || '',
+      // City on the stop is the package base / hjemhavn when pack.basePlace is missing.
+      basePlace: stop.pack.basePlace || stop.city || '',
+      baseCountry: stop.pack.baseCountry || stop.country || '',
+      detail: stop.pack.detail || '',
+      price: stop.pack.price || '',
+      costs: [...(stop.pack.costs || [])],
+      days: [...(stop.pack.days || [])],
+    }
+  }
+  const c = stop?.cruise
+  if (!c) return null
+  return {
+    nights: c.nights,
+    title: c.title || c.shipName || '',
+    basePlace: c.basePlace || c.homePort || stop.city || '',
+    baseCountry: c.baseCountry || c.homeCountry || stop.country || '',
+    detail: c.detail || c.cabinNumber || '',
+    price: c.price || '',
+    costs: [...(c.costs || [])],
+    days: [...(c.days || [])],
+  }
+}
+
+export function packageNightsOf(pack?: JourneyPackage | null): number {
+  const n = Math.floor(pack?.nights || 0)
+  return Math.max(1, Math.min(30, n || 1))
+}
+
+/** @deprecated use packageNightsOf */
+export function cruiseNightsOf(cruise?: JourneyCruise | null): number {
+  return packageNightsOf(cruise)
+}
+
+/** Build / resize package day list when nights or base place change. */
+export function syncPackageDays(
+  pack: JourneyPackage,
+  type: JourneyPackageType = 'other',
+): JourneyPackage {
+  const nights = packageNightsOf(pack)
+  const baseRaw = pack.basePlace ?? ''
+  const baseCountryRaw = pack.baseCountry ?? ''
+  const base = baseRaw.trim()
+  const baseCountry = baseCountryRaw.trim()
+  const freeLabel = packageFreeDayLabel(type)
+  const prev = [...(pack.days || [])].sort((a, b) => a.offset - b.offset)
+  const byOffset = new Map(prev.map((d) => [d.offset, d]))
+  const days: JourneyPackageDay[] = []
+  for (let offset = 0; offset <= nights; offset++) {
+    const existing = byOffset.get(offset)
+    const isStart = offset === 0
+    const isLast = offset === nights
+    /** Embark / start day always uses hjemhavn (base). */
+    const lockBase = isStart
+    const fillBase = isStart || isLast
+    if (existing) {
+      const atSea = lockBase ? false : !!existing.atSea
+      const useBase = lockBase || (!(existing.city || '').trim() && fillBase)
+      const city = atSea
+        ? freeLabel
+        : useBase
+          ? base
+          : (existing.city || '').trim()
+      const atHomePort =
+        type === 'cruise' &&
+        !atSea &&
+        !!base &&
+        city.toLowerCase() === base.toLowerCase()
+      /** Embark / hjemhavn-dager (ikke iland-dag): no ship arrival. */
+      const noArrive = atHomePort && !isLast
+      /** Iland-dag: no ship departure. */
+      const noLeave = type === 'cruise' && isLast
+      days.push({
+        ...existing,
+        offset,
+        atSea,
+        city,
+        country: atSea
+          ? ''
+          : useBase
+            ? baseCountry
+            : (existing.country || '').trim(),
+        arriveTime: atSea || noArrive ? '' : (existing.arriveTime || '').trim(),
+        leaveTime: atSea || noLeave ? '' : (existing.leaveTime || '').trim(),
+      })
+      continue
+    }
+    days.push({
+      id: newPackageDayId(),
+      offset,
+      atSea: false,
+      city: fillBase ? base : '',
+      country: fillBase ? baseCountry : '',
+      arriveTime: '',
+      leaveTime: '',
+    })
+  }
+  return {
+    ...pack,
+    nights,
+    basePlace: baseRaw,
+    baseCountry: baseCountryRaw,
+    title: pack.title ?? '',
+    detail: pack.detail ?? '',
+    price: pack.price ?? '',
+    costs: [...(pack.costs || [])],
+    days,
+  }
+}
+
+/** @deprecated use syncPackageDays */
+export function syncCruiseDays(cruise: JourneyCruise): JourneyCruise {
+  const synced = syncPackageDays(
+    {
+      nights: cruise.nights,
+      title: cruise.title || cruise.shipName || '',
+      basePlace: cruise.basePlace || cruise.homePort || '',
+      baseCountry: cruise.baseCountry || cruise.homeCountry || '',
+      detail: cruise.detail || cruise.cabinNumber || '',
+      price: cruise.price || '',
+      days: cruise.days || [],
+    },
+    'cruise',
+  )
+  return {
+    ...synced,
+    shipName: synced.title,
+    homePort: synced.basePlace,
+    homeCountry: synced.baseCountry,
+    cabinNumber: synced.detail,
+  }
+}
+
+export function emptyPackage(
+  type: JourneyPackageType,
+  nights = 7,
+): JourneyPackage {
+  return syncPackageDays(
+    {
+      nights,
+      title: '',
+      basePlace: '',
+      baseCountry: '',
+      detail: '',
+      price: '',
+      costs: [],
+      days: [],
+    },
+    type,
+  )
+}
+
+/** @deprecated use emptyPackage('cruise') */
+export function emptyCruise(nights = 7): JourneyCruise {
+  return syncCruiseDays({
+    nights,
+    shipName: '',
+    homePort: '',
+    homeCountry: '',
+    cabinNumber: '',
+    price: '',
+    days: [],
+  })
+}
+
+export function stayNights(stop: JourneyStop): number {
+  if (isPackageStop(stop)) return packageNightsOf(packageOf(stop))
+  const n = stop.stay?.nights
+  if (typeof n === 'number' && n >= 1) return Math.min(60, Math.floor(n))
+  return 0
+}
+
+/** Checkout morning date (arrive + nights), or arrive date if no stay. */
+export function stopDepartDate(stop: JourneyStop): string {
+  const nights = stayNights(stop)
+  if (!stop.arriveDate) return ''
+  return nights > 0 ? addDaysIso(stop.arriveDate, nights) : stop.arriveDate
+}
+
+/**
+ * Calendar days from end of `from` (checkout morning) to start of `to`.
+ * 0 = leave and arrive same day (or overlapping) — contiguous.
+ * 1+ = at least one night/day without a planned stop (e.g. checkout 04, next arrive 05).
+ */
+export function freeDaysBetweenStops(
+  from: JourneyStop,
+  to: JourneyStop,
+): number {
+  const end = (stopDepartDate(from) || from.arriveDate || '').trim()
+  const start = (to.arriveDate || '').trim()
+  if (!end || !start) return 0
+  const a = new Date(`${end}T12:00:00`)
+  const b = new Date(`${start}T12:00:00`)
+  if (Number.isNaN(a.getTime()) || Number.isNaN(b.getTime())) return 0
+  return Math.max(
+    0,
+    Math.round((b.getTime() - a.getTime()) / (24 * 60 * 60 * 1000)),
+  )
+}
+
+/** True when checkout and next arrive leave at least one calendar day uncovered. */
+export function hasPlanGapBetween(
+  from: JourneyStop,
+  to: JourneyStop,
+): boolean {
+  return freeDaysBetweenStops(from, to) >= 1
+}
+
+/**
+ * Prefill for a place stop that fills the calendar gap before `to`
+ * (e.g. stay in cruise home port until embarkation).
+ */
+export function gapFillPrefill(
+  from: JourneyStop,
+  to: JourneyStop,
+): {
+  arriveDate: string
+  nights: number
+  city: string
+  country: string
+  hint: string
+} {
+  const days = freeDaysBetweenStops(from, to)
+  const arriveDate =
+    stopDepartDate(from) || from.arriveDate || to.arriveDate || ''
+  const nights = Math.max(1, days)
+  const pack = isPackageStop(to) ? packageOf(to) : null
+  const city = (pack?.basePlace || '').trim() || (to.city || '').trim()
+  const country =
+    (pack?.baseCountry || '').trim() || (to.country || '').trim()
+  const typeLabel = isPackageType(to.kind)
+    ? packageTypeLabel(to.kind).toLowerCase()
+    : 'neste stopp'
+  return {
+    arriveDate,
+    nights,
+    city,
+    country,
+    hint: city
+      ? `Siste dager i ${city} før ${typeLabel}`
+      : `Fyll ${days} dager før neste stopp`,
+  }
+}
+
+/**
+ * «Reise videre herfra» on a stop: at the end of the thread, before home,
+ * or when there is a real date gap between this stop and the next.
+ * Contiguous city/package pairs hide the action.
+ */
+export function showOnwardFromHere(
+  stop: JourneyStop,
+  nextStop?: JourneyStop | null,
+): boolean {
+  if (stop.kind === 'home') return false
+  if (!nextStop) return true
+  if (nextStop.kind === 'home') return true
+  return hasPlanGapBetween(stop, nextStop)
+}
+
+export function formatDateNO(iso: string): string {
+  if (!iso || iso.length < 10) return iso || ''
+  const [y, m, d] = iso.slice(0, 10).split('-')
+  return `${d}.${m}.${y}`
+}
+
+export function legForGap(
+  journey: Journey,
+  fromStopId: string,
+  toStopId: string,
+): JourneyLeg | undefined {
+  return journey.legs.find(
+    (l) => l.fromStopId === fromStopId && l.toStopId === toStopId,
+  )
+}
+
+export function isTransportOptionFilled(
+  o?: JourneyTransportOption | null,
+): boolean {
+  if (!o) return false
+  if (modeIsWalk(o.mode)) return !!(o.minutes || '').trim()
+  return !!(
+    o.mode?.trim() ||
+    o.title?.trim() ||
+    o.startTime?.trim() ||
+    (o.minutes || '').trim() ||
+    o.info?.trim() ||
+    (o.departures || []).length > 0
+  )
+}
+
+/** One via place has at least one usable departure/mode. */
+export function isViaHopFilled(via?: JourneyVia | null): boolean {
+  if (!via) return false
+  return viaTransportOptions(via).some(isTransportOptionFilled)
+}
+
+export type TransportGapKind =
+  | 'empty'
+  | 'missing_place'
+  | 'missing_ride'
+  | 'missing_goal'
+
+export interface TransportGap {
+  kind: TransportGapKind
+  /** 0-based via index when relevant. */
+  index?: number
+  label?: string
+}
+
+/**
+ * Check that the via-path is registered from start through to the destination.
+ * Place names (and optionally transport modes) must cover the route to the goal.
+ */
+export function legTransportGaps(
+  leg: JourneyLeg | null | undefined,
+  to?: Pick<JourneyStop, 'city'> | null,
+  options?: { requireTransportMode?: boolean },
+): TransportGap[] {
+  const requireMode = options?.requireTransportMode !== false
+  const segs = transportSegments(leg)
+  if (!segs.length) return [{ kind: 'empty' }]
+
+  const gaps: TransportGap[] = []
+  for (let i = 0; i < segs.length; i++) {
+    const s = segs[i]
+    const label = s.title.trim() || `Sted ${i + 1}`
+    if (!s.title.trim()) {
+      gaps.push({ kind: 'missing_place', index: i, label })
+    }
+    if (requireMode && !isViaHopFilled(s)) {
+      gaps.push({ kind: 'missing_ride', index: i, label })
+    }
+  }
+
+  const goal = (to?.city || '').trim().toLowerCase()
+  if (goal) {
+    const reachesGoal = segs.some(
+      (s) => s.title.trim().toLowerCase() === goal,
+    )
+    if (!reachesGoal) {
+      gaps.push({
+        kind: 'missing_goal',
+        label: to?.city?.trim() || 'mål',
+      })
+    }
+  }
+
+  return gaps
+}
+
+export function isLegFilled(
+  leg?: JourneyLeg | null,
+  to?: Pick<JourneyStop, 'city'> | null,
+  options?: { requireTransportMode?: boolean },
+): boolean {
+  if (!leg) return false
+  if (to) return legTransportGaps(leg, to, options).length === 0
+  const segs = transportSegments(leg)
+  if (!segs.length) return false
+  if (options?.requireTransportMode === false) {
+    return segs.some((v) => !!v.title.trim())
+  }
+  return segs.some((v) => isViaHopFilled(v))
+}
+
+export function summarizeTransportGaps(gaps: TransportGap[]): string {
+  if (!gaps.length) return ''
+  if (gaps.some((g) => g.kind === 'empty')) {
+    return 'Mangler transport fra start til mål'
+  }
+  const parts: string[] = []
+  const places = gaps.filter((g) => g.kind === 'missing_place')
+  const rides = gaps.filter((g) => g.kind === 'missing_ride')
+  const goal = gaps.find((g) => g.kind === 'missing_goal')
+  if (places.length) {
+    parts.push(
+      places.length === 1
+        ? 'sted uten navn'
+        : `${places.length} steder uten navn`,
+    )
+  }
+  if (rides.length) {
+    parts.push(
+      rides.length === 1
+        ? `mangler reise til ${rides[0].label}`
+        : `mangler reise på ${rides.length} hopp`,
+    )
+  }
+  if (goal) parts.push(`stien når ikke ${goal.label}`)
+  return parts.join(' · ')
+}
+
+export type StopWarning = 'place' | 'date' | 'stay' | 'travel'
+
+export function warningsForStop(
+  journey: Journey,
+  stopIndex: number,
+  settings: PlannerSettings,
+): StopWarning[] {
+  const stop = journey.stops[stopIndex]
+  if (!stop) return []
+  // Multi-day packages = title + nights + day list; no hotel or city-transport on the block.
+  if (isPackageStop(stop)) return []
+  const warnings: StopWarning[] = []
+  if (stop.kind !== 'home' && !(stop.city || '').trim()) {
+    warnings.push('place')
+  }
+  if (!(stop.arriveDate || '').trim()) {
+    warnings.push('date')
+  }
+  if (
+    settings.warnMissingStay &&
+    stop.kind !== 'home' &&
+    stayNights(stop) < 1
+  ) {
+    warnings.push('stay')
+  }
+  if (settings.warnMissingTravel && stopIndex > 0) {
+    const prev = journey.stops[stopIndex - 1]
+    // Inbound travel to packages is edited from the previous place, not here.
+    const leg = legForGap(journey, prev.id, stop.id)
+    if (
+      !isLegFilled(leg, stop, {
+        requireTransportMode: settings.requireTransportMode,
+      })
+    ) {
+      warnings.push('travel')
+    }
+  }
+  return warnings
+}
+
+export function stopWarningLabel(w: StopWarning): string {
+  switch (w) {
+    case 'place':
+      return 'Mangler by'
+    case 'date':
+      return 'Mangler dato'
+    case 'stay':
+      return 'Mangler hotell'
+    case 'travel':
+      return 'Mangler reise'
+  }
+}
+
+export function syncJourneyLegs(journey: Journey): Journey {
+  const byPair = new Map<string, JourneyLeg>()
+  for (const l of journey.legs) {
+    byPair.set(`${l.fromStopId}->${l.toStopId}`, l)
+  }
+  const stops = journey.stops.map((s, i) => ({ ...s, sortOrder: i }))
+  const legs: JourneyLeg[] = []
+  for (let i = 0; i + 1 < stops.length; i++) {
+    const key = `${stops[i].id}->${stops[i + 1].id}`
+    const existing = byPair.get(key)
+    legs.push(
+      existing
+        ? {
+            ...existing,
+            fromStopId: stops[i].id,
+            toStopId: stops[i + 1].id,
+            vias: (existing.vias || []).map((v, vi) => ({
+              ...v,
+              sortOrder: vi,
+            })),
+          }
+        : {
+            id: newLegId(),
+            fromStopId: stops[i].id,
+            toStopId: stops[i + 1].id,
+            mode: '',
+            vias: [],
+          },
+    )
+  }
+  return { ...journey, stops, legs }
+}
+
+export function moveStop(
+  journey: Journey,
+  stopId: string,
+  direction: -1 | 1,
+): Journey {
+  const idx = journey.stops.findIndex((s) => s.id === stopId)
+  const swap = idx + direction
+  if (idx < 0 || swap < 0 || swap >= journey.stops.length) return journey
+  const stops = [...journey.stops]
+  ;[stops[idx], stops[swap]] = [stops[swap], stops[idx]]
+  return syncJourneyLegs({ ...journey, stops })
+}
+
+export function insertStopBefore(
+  journey: Journey,
+  stop: JourneyStop,
+  beforeStopId: string,
+): Journey {
+  const idx = journey.stops.findIndex((s) => s.id === beforeStopId)
+  if (idx < 0) {
+    return upsertStop(journey, stop, null)
+  }
+  const stops = [...journey.stops]
+  stops.splice(idx, 0, { ...stop, sortOrder: idx })
+  return syncJourneyLegs({ ...journey, stops })
+}
+
+export function upsertStop(
+  journey: Journey,
+  stop: JourneyStop,
+  inboundLeg?: Partial<JourneyLeg> | null,
+): Journey {
+  const normalized: JourneyStop = isPackageStop(stop)
+    ? {
+        ...stop,
+        stay: null,
+        pack:
+          packageOf(stop) ||
+          emptyPackage(isPackageType(stop.kind) ? stop.kind : 'other'),
+        cruise: null,
+      }
+    : stop
+  const existingIdx = journey.stops.findIndex((s) => s.id === normalized.id)
+  let stops: JourneyStop[]
+  if (existingIdx >= 0) {
+    stops = journey.stops.map((s) =>
+      s.id === normalized.id ? normalized : s,
+    )
+  } else {
+    stops = [
+      ...journey.stops,
+      { ...normalized, sortOrder: journey.stops.length },
+    ]
+  }
+  let next = syncJourneyLegs({ ...journey, stops })
+  // Packages have no hotel and no inbound city-transport in their wizard.
+  if (isPackageStop(normalized)) {
+    return next
+  }
+  if (inboundLeg && existingIdx < 0 && next.stops.length >= 2) {
+    const to = next.stops[next.stops.length - 1]
+    const from = next.stops[next.stops.length - 2]
+    next = {
+      ...next,
+      legs: next.legs.map((leg) =>
+        leg.fromStopId === from.id && leg.toStopId === to.id
+          ? {
+              ...leg,
+              ...inboundLeg,
+              id: leg.id,
+              fromStopId: from.id,
+              toStopId: to.id,
+            }
+          : leg,
+      ),
+    }
+  } else if (inboundLeg && existingIdx > 0) {
+    const to = next.stops[existingIdx]
+    const from = next.stops[existingIdx - 1]
+    next = {
+      ...next,
+      legs: next.legs.map((leg) =>
+        leg.fromStopId === from.id && leg.toStopId === to.id
+          ? {
+              ...leg,
+              ...inboundLeg,
+              id: leg.id,
+              fromStopId: from.id,
+              toStopId: to.id,
+            }
+          : leg,
+      ),
+    }
+  }
+  return next
+}
+
+export function removeStop(journey: Journey, stopId: string): Journey {
+  return syncJourneyLegs({
+    ...journey,
+    stops: journey.stops.filter((s) => s.id !== stopId),
+  })
+}
+
+/** Suggested arrive date for the next stop (day after previous block). */
+export function suggestNextArriveDate(
+  journey: Journey,
+  tripStartDate = '',
+): string {
+  const fallback =
+    tripStartDate.trim() || new Date().toISOString().slice(0, 10)
+  if (!journey.stops.length) {
+    return fallback
+  }
+  const last = journey.stops[journey.stops.length - 1]
+  if (!last.arriveDate?.trim()) return fallback
+
+  const nights = stayNights(last)
+  if (nights >= 1) {
+    // Day after last overnight = checkout / package end (natural travel day).
+    return stopDepartDate(last) || addDaysIso(last.arriveDate, nights)
+  }
+  // Home start: often leave the same day. Other stops without stay: next calendar day.
+  if (last.kind === 'home') return last.arriveDate
+  return addDaysIso(last.arriveDate, 1)
+}

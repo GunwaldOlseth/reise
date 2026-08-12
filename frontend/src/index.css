@@ -93,6 +93,15 @@ a:hover {
   line-height: 1.45;
 }
 
+.hero-home-line {
+  margin: 0.75rem 0 0;
+  color: rgba(232, 244, 242, 0.72);
+}
+
+.travel-actions {
+  align-items: center;
+}
+
 .hero-actions,
 .toolbar {
   display: flex;

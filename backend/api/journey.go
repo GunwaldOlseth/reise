@@ -1,0 +1,280 @@
+package main
+
+import (
+	"context"
+	"fmt"
+	"log"
+	"net/http"
+	"sort"
+	"strings"
+	"time"
+
+	"google.golang.org/api/iterator"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+)
+
+const journeysCollection = "trip_journeys"
+
+func emptyJourney(tripID string) Journey {
+	now := time.Now().UTC()
+	return Journey{
+		TripID:    tripID,
+		Stops:     []JourneyStop{},
+		Legs:      []JourneyLeg{},
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+}
+
+func newJourneyID(prefix string) string {
+	return fmt.Sprintf("%s_%d", prefix, time.Now().UnixNano())
+}
+
+func isPackageKind(kind string) bool {
+	switch kind {
+	case "cruise", "tour", "charter", "roadtrip", "other":
+		return true
+	default:
+		return false
+	}
+}
+
+// normalizePackageStop trims pack fields and migrates legacy cruise → pack.
+func normalizePackageStop(stop *JourneyStop) {
+	if stop == nil || !isPackageKind(stop.Kind) {
+		return
+	}
+	stop.Stay = nil
+	if stop.Pack == nil && stop.Cruise != nil {
+		c := stop.Cruise
+		stop.Pack = &JourneyPackage{
+			Nights:      c.Nights,
+			Title:       strings.TrimSpace(c.ShipName),
+			BasePlace:   strings.TrimSpace(c.HomePort),
+			BaseCountry: strings.TrimSpace(c.HomeCountry),
+			Detail:      strings.TrimSpace(c.CabinNumber),
+			Price:       strings.TrimSpace(c.Price),
+			Days:        c.Days,
+		}
+	}
+	if stop.Pack == nil {
+		return
+	}
+	p := stop.Pack
+	p.Title = strings.TrimSpace(p.Title)
+	p.BasePlace = strings.TrimSpace(p.BasePlace)
+	p.BaseCountry = strings.TrimSpace(p.BaseCountry)
+	p.Detail = strings.TrimSpace(p.Detail)
+	p.Price = strings.TrimSpace(p.Price)
+	if p.BasePlace == "" {
+		p.BasePlace = stop.City
+	}
+	if p.BaseCountry == "" {
+		p.BaseCountry = stop.Country
+	}
+	if stop.City == "" && p.BasePlace != "" {
+		stop.City = p.BasePlace
+	}
+	if stop.Country == "" && p.BaseCountry != "" {
+		stop.Country = p.BaseCountry
+	}
+	if p.Nights < 1 {
+		p.Nights = 1
+	}
+	if p.Nights > 30 {
+		p.Nights = 30
+	}
+	if p.Days == nil {
+		p.Days = []JourneyPackageDay{}
+	}
+	// Prefer pack going forward; drop legacy cruise payload once migrated.
+	stop.Cruise = nil
+}
+
+func normalizeJourney(j *Journey) {
+	if j.Stops == nil {
+		j.Stops = []JourneyStop{}
+	}
+	if j.Legs == nil {
+		j.Legs = []JourneyLeg{}
+	}
+	sort.SliceStable(j.Stops, func(i, k int) bool {
+		if j.Stops[i].SortOrder != j.Stops[k].SortOrder {
+			return j.Stops[i].SortOrder < j.Stops[k].SortOrder
+		}
+		return j.Stops[i].ArriveDate < j.Stops[k].ArriveDate
+	})
+	for i := range j.Stops {
+		j.Stops[i].SortOrder = i
+		if j.Stops[i].ID == "" {
+			j.Stops[i].ID = newJourneyID("stop")
+		}
+		j.Stops[i].City = strings.TrimSpace(j.Stops[i].City)
+		j.Stops[i].Country = strings.TrimSpace(j.Stops[i].Country)
+		j.Stops[i].Address = strings.TrimSpace(j.Stops[i].Address)
+		j.Stops[i].ArriveDate = strings.TrimSpace(j.Stops[i].ArriveDate)
+		j.Stops[i].Notes = strings.TrimSpace(j.Stops[i].Notes)
+		if j.Stops[i].Kind == "" {
+			j.Stops[i].Kind = "place"
+		}
+		if j.Stops[i].Stay != nil {
+			if j.Stops[i].Stay.Nights < 1 {
+				j.Stops[i].Stay.Nights = 1
+			}
+			if j.Stops[i].Stay.Nights > 60 {
+				j.Stops[i].Stay.Nights = 60
+			}
+		}
+		normalizePackageStop(&j.Stops[i])
+	}
+	byPair := map[string]JourneyLeg{}
+	for _, leg := range j.Legs {
+		byPair[leg.FromStopID+"->"+leg.ToStopID] = leg
+	}
+	synced := make([]JourneyLeg, 0, max(0, len(j.Stops)-1))
+	for i := 0; i+1 < len(j.Stops); i++ {
+		fromID := j.Stops[i].ID
+		toID := j.Stops[i+1].ID
+		key := fromID + "->" + toID
+		if existing, ok := byPair[key]; ok {
+			existing.FromStopID = fromID
+			existing.ToStopID = toID
+			if existing.ID == "" {
+				existing.ID = newJourneyID("leg")
+			}
+			if existing.Vias == nil {
+				existing.Vias = []JourneyVia{}
+			}
+			for vi := range existing.Vias {
+				existing.Vias[vi].SortOrder = vi
+				if existing.Vias[vi].ID == "" {
+					existing.Vias[vi].ID = newJourneyID("via")
+				}
+			}
+			synced = append(synced, existing)
+			continue
+		}
+		synced = append(synced, JourneyLeg{
+			ID:         newJourneyID("leg"),
+			FromStopID: fromID,
+			ToStopID:   toID,
+			Vias:       []JourneyVia{},
+		})
+	}
+	j.Legs = synced
+}
+
+func getJourneyDoc(ctx context.Context, tripID string) (Journey, bool, error) {
+	iter := db.Collection(journeysCollection).Where("tripId", "==", tripID).Limit(1).Documents(ctx)
+	doc, err := iter.Next()
+	if err == iterator.Done {
+		return emptyJourney(tripID), false, nil
+	}
+	if err != nil {
+		return Journey{}, false, err
+	}
+	var j Journey
+	if err := doc.DataTo(&j); err != nil {
+		return Journey{}, false, err
+	}
+	j.ID = doc.Ref.ID
+	normalizeJourney(&j)
+	return j, true, nil
+}
+
+func getJourney(w http.ResponseWriter, r *http.Request) {
+	ctx := context.Background()
+	tripID := r.PathValue("id")
+	if tripID == "" {
+		respondWithError(w, http.StatusBadRequest, "Missing trip ID")
+		return
+	}
+	if _, err := db.Collection(tripsCollection).Doc(tripID).Get(ctx); err != nil {
+		if status.Code(err) == codes.NotFound {
+			respondWithError(w, http.StatusNotFound, "Trip not found")
+			return
+		}
+		respondWithError(w, http.StatusInternalServerError, "Failed to get trip")
+		return
+	}
+	j, found, err := getJourneyDoc(ctx, tripID)
+	if err != nil {
+		log.Printf("Error loading journey for %s: %v", tripID, err)
+		respondWithError(w, http.StatusInternalServerError, "Failed to load journey")
+		return
+	}
+	if !found {
+		j = emptyJourney(tripID)
+	}
+	respondWithJSON(w, http.StatusOK, j)
+}
+
+func putJourney(w http.ResponseWriter, r *http.Request) {
+	ctx := context.Background()
+	tripID := r.PathValue("id")
+	if tripID == "" {
+		respondWithError(w, http.StatusBadRequest, "Missing trip ID")
+		return
+	}
+	if _, err := db.Collection(tripsCollection).Doc(tripID).Get(ctx); err != nil {
+		if status.Code(err) == codes.NotFound {
+			respondWithError(w, http.StatusNotFound, "Trip not found")
+			return
+		}
+		respondWithError(w, http.StatusInternalServerError, "Failed to get trip")
+		return
+	}
+
+	var incoming Journey
+	if err := decodeJSON(r, &incoming); err != nil {
+		respondWithError(w, http.StatusBadRequest, "Invalid JSON")
+		return
+	}
+	incoming.TripID = tripID
+	normalizeJourney(&incoming)
+
+	existing, found, err := getJourneyDoc(ctx, tripID)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Failed to load journey")
+		return
+	}
+	now := time.Now().UTC()
+	if found {
+		incoming.ID = existing.ID
+		incoming.CreatedAt = existing.CreatedAt
+		incoming.UpdatedAt = now
+		if _, err := db.Collection(journeysCollection).Doc(existing.ID).Set(ctx, incoming); err != nil {
+			log.Printf("Error updating journey %s: %v", existing.ID, err)
+			respondWithError(w, http.StatusInternalServerError, "Failed to save journey")
+			return
+		}
+	} else {
+		incoming.CreatedAt = now
+		incoming.UpdatedAt = now
+		ref, _, err := db.Collection(journeysCollection).Add(ctx, incoming)
+		if err != nil {
+			log.Printf("Error creating journey: %v", err)
+			respondWithError(w, http.StatusInternalServerError, "Failed to save journey")
+			return
+		}
+		incoming.ID = ref.ID
+	}
+	respondWithJSON(w, http.StatusOK, incoming)
+}
+
+func deleteJourneyForTrip(ctx context.Context, tripID string) error {
+	iter := db.Collection(journeysCollection).Where("tripId", "==", tripID).Documents(ctx)
+	for {
+		doc, err := iter.Next()
+		if err == iterator.Done {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		if _, err := doc.Ref.Delete(ctx); err != nil {
+			return err
+		}
+	}
+}

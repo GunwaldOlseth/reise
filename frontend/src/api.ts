@@ -1475,6 +1475,20 @@ export const api = {
       method: 'PUT',
       body: JSON.stringify({ items }),
     }),
+
+  /** V2 trip thread (stops + legs). */
+  getJourney: (tripId: string) =>
+    request<import('./v2/journeyModel').Journey>(
+      `/trips/${encodeURIComponent(tripId)}/journey`,
+    ),
+  saveJourney: (
+    tripId: string,
+    journey: import('./v2/journeyModel').Journey,
+  ) =>
+    request<import('./v2/journeyModel').Journey>(
+      `/trips/${encodeURIComponent(tripId)}/journey`,
+      { method: 'PUT', body: JSON.stringify(journey) },
+    ),
 };
 
 export function emptyDay(tripId: string, date = '', sortOrder = 0): TripDayInput {
@@ -1499,6 +1513,42 @@ export function emptyDay(tripId: string, date = '', sortOrder = 0): TripDayInput
     viaPoints: [],
     legs: [],
   };
+}
+
+/** How a new day is created from the trip list. */
+export type TravelIntent = 'onward' | 'home';
+
+/**
+ * Draft for «Reise videre» / «Reise hjem»: next calendar day with a from→to
+ * leg prefilled from the previous place (and home place when intent is home).
+ */
+export function buildTravelDayDraft(
+  tripId: string,
+  date: string,
+  sortOrder: number,
+  days: TripDay[],
+  intent: TravelIntent,
+  home?: { city: string; country: string; address?: string } | null,
+): TripDayInput {
+  const day = emptyDay(tripId, date, sortOrder);
+  const dep = departurePlaceForDay(days, date);
+  if (intent === 'home' && home?.city?.trim()) {
+    day.city = home.city.trim();
+    day.country = (home.country || '').trim();
+  }
+  const fromCity = dep?.city?.trim() || '';
+  const toCity = day.city.trim();
+  if (fromCity || toCity) {
+    const from = { ...newViaPoint(0), title: fromCity };
+    const to = {
+      ...newViaPoint(1),
+      title: toCity,
+      address: intent === 'home' ? (home?.address || '').trim() : '',
+    };
+    day.viaPoints = [from, to];
+    day.legs = syncRouteLegs(day.viaPoints, []);
+  }
+  return day;
 }
 
 function shiftDatedList<T extends { date: string }>(

@@ -246,13 +246,26 @@ function userLocationIcon() {
 
 export function TripMap({
   days,
+  stops: stopsProp,
+  routeKey: routeKeyProp,
   tripName = 'Reise',
 }: {
-  days: TripDay[]
+  days?: TripDay[]
+  /** Prefer explicit stops (v2 journey). Falls back to days. */
+  stops?: TripMapStop[]
+  routeKey?: string
   tripName?: string
 }) {
-  const routeKey = useMemo(() => tripMapRouteKey(days), [days])
-  const stops = useMemo(() => tripMapStopsInOrder(days), [days, routeKey])
+  const routeKey = useMemo(
+    () =>
+      routeKeyProp ||
+      (days ? tripMapRouteKey(days) : (stopsProp || []).map((s) => s.key).join('|')),
+    [routeKeyProp, days, stopsProp],
+  )
+  const stops = useMemo(
+    () => stopsProp || (days ? tripMapStopsInOrder(days) : []),
+    [stopsProp, days, routeKey],
+  )
   const mapEl = useRef<HTMLDivElement | null>(null)
   const mapRef = useRef<L.Map | null>(null)
   const layerRef = useRef<L.LayerGroup | null>(null)

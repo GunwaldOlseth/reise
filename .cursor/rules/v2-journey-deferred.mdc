@@ -1,0 +1,27 @@
+---
+description: Deferred UX for the v2 journey planner (Ny planlegger)
+globs: frontend/src/v2/**/*
+alwaysApply: false
+---
+
+# V2 journey planner — deferred work
+
+When adopting or polishing the new journey planner template (`frontend/src/v2/`), remember:
+
+## Collapsed transport summary
+
+When the transport definition is **closed**, show a compact **list** of what the user entered (places + alternatives with times/modes), not only a one-line summary.
+
+- Default view first: e.g. `Bergamo → Milano (Buss 10:00 · Tog 10:40) → Genoa (Tog 14:20)`.
+- Later (optional): let **Innstillinger** (`PlannerSettings` in `userSettings.ts`) control which fields appear in that collapsed list (time, line nr, arrival, places only, …).
+- Current settings only control wizard steps and missing-stay/travel warnings — do not invent display toggles until implementing this.
+
+## Related context
+
+- Transport hops: one row per departure; sorted by time; bus/train can mix; **flight is exclusive**.
+- Multi-day packages via «Reise videre»: By/sted, Cruise, Pakketur, Charter, Roadtrip, Annet.
+- Package stops share one model (`pack`): nights + day list. No hotel and no city-transport UI on the package itself.
+- Travel *after* a package (→ next place) uses the normal transport block / wizard travel step.
+- Embark travel to the package base can be set from the previous place via «Reise videre herfra».
+- Legacy `kind: cruise` + `cruise` field is still read via `packageOf()`.
+- Classic day planner still has the older cruise DayItem flow.

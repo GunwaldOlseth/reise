@@ -1,15 +1,17 @@
-import {
+﻿import {
   useEffect,
   useMemo,
   useRef,
   useState,
   type InputHTMLAttributes,
 } from 'react'
+import { TransportModeIcon } from './TransportModeIcon'
 import {
   api,
   ApiError,
   AT_SEA_LABEL,
   atSeaPlaceFields,
+  buildTravelDayDraft,
   emptyDay,
   groupDaysByCity,
   isAtSeaDay,
@@ -35,6 +37,7 @@ import {
   cruisesDisembarkingOnDay,
   dayPlaceLabel,
   departurePlaceForDay,
+  type TravelIntent,
   ensureCruiseDays,
   ensureHotelStayDays,
   formatDeparturesLabel,
@@ -103,6 +106,20 @@ import { useGoogleAuth } from './googleAuth'
 import { googleMapsPlaceUrl } from './googleMaps'
 import { CitySuggestFields } from './CitySuggest'
 import { TripMap } from './TripMap'
+import {
+  defaultPlannerSettings,
+  formatHomePlace,
+  hasHomePlace,
+  loadHomePlace,
+  loadPlannerSettings,
+  saveHomePlace,
+  savePlannerSettings,
+  type HomePlace,
+  type PlannerSettings,
+} from './userSettings'
+import { HomePage } from './v2/HomePage'
+import { TripHub } from './v2/TripHub'
+import { emptyJourney, newStopId } from './v2/journeyModel'
 
 function GoogleLoginButton() {
   const { user, ready, configured, login, logout } = useGoogleAuth()
@@ -110,7 +127,7 @@ function GoogleLoginButton() {
   if (!ready) {
     return (
       <button type="button" className="btn btn-ghost btn-sm" disabled>
-        Google…
+        Googleâ€¦
       </button>
     )
   }
@@ -120,7 +137,7 @@ function GoogleLoginButton() {
         type="button"
         className="btn btn-ghost btn-sm google-user-btn"
         onClick={logout}
-        title={`${user.email} — klikk for å logge ut (innlogging huskes til du logger ut)`}
+        title={`${user.email} â€” klikk for Ã¥ logge ut (innlogging huskes til du logger ut)`}
       >
         {user.picture ? (
           <img src={user.picture} alt="" className="google-user-avatar" />
@@ -134,7 +151,7 @@ function GoogleLoginButton() {
       type="button"
       className="btn btn-soft btn-sm"
       onClick={login}
-      title="Logg inn med Google — innloggingen huskes i denne nettleseren"
+      title="Logg inn med Google â€” innloggingen huskes i denne nettleseren"
     >
       Logg inn med Google
     </button>
@@ -143,8 +160,21 @@ function GoogleLoginButton() {
 
 type View =
   | { name: 'home' }
+  | { name: 'settings'; returnTo?: View }
   | { name: 'trip'; tripId: string; tab: TripTab }
-  | { name: 'day'; tripId: string; dayId: string | 'new' }
+  | {
+      name: 'v2'
+      tripId: string
+      autoOnward?: boolean
+      tab?: 'plan' | 'map' | 'weather' | 'expenses'
+    }
+  | {
+      name: 'day'
+      tripId: string
+      dayId: string | 'new'
+      /** Only for dayId === 'new': onward travel vs home. */
+      travelIntent?: TravelIntent
+    }
   | { name: 'city'; tripId: string; cityKey: string }
   | { name: 'expenses'; tripId: string }
 
@@ -224,115 +254,6 @@ function ChevronDownIcon() {
   )
 }
 
-function TransportModeIcon({
-  mode,
-  size = 18,
-}: {
-  mode: string
-  size?: number
-}) {
-  const props = {
-    width: size,
-    height: size,
-    viewBox: '0 0 24 24',
-    fill: 'none',
-    stroke: 'currentColor',
-    strokeWidth: 1.75,
-    strokeLinecap: 'round' as const,
-    strokeLinejoin: 'round' as const,
-    'aria-hidden': true as const,
-  }
-
-  switch (mode) {
-    case 'walk':
-      return (
-        <svg {...props}>
-          <circle cx="12" cy="4.5" r="1.6" fill="currentColor" stroke="none" />
-          <path d="M12 7v4.5" />
-          <path d="M9.2 21l2-7.5 2.2 3.2L15.5 21" />
-          <path d="M8.5 12.5 12 11.5l3.2 1.8" />
-          <path d="M10.2 9.2 8 11.2" />
-        </svg>
-      )
-    case 'taxi':
-      return (
-        <svg {...props}>
-          <path d="M4.5 11.5h15l-1.2-3.2a2 2 0 0 0-1.9-1.3H7.6a2 2 0 0 0-1.9 1.3L4.5 11.5Z" />
-          <path d="M3.5 11.5h17v5.2a1.3 1.3 0 0 1-1.3 1.3H4.8a1.3 1.3 0 0 1-1.3-1.3v-5.2Z" />
-          <circle cx="7.2" cy="16.8" r="1.15" fill="currentColor" stroke="none" />
-          <circle cx="16.8" cy="16.8" r="1.15" fill="currentColor" stroke="none" />
-          <path d="M9.2 8.2h5.6" />
-          <path d="M10.5 5.8h3" />
-        </svg>
-      )
-    case 'bus':
-      return (
-        <svg {...props}>
-          <rect x="5" y="3.5" width="14" height="14.5" rx="2.2" />
-          <path d="M5 12.5h14" />
-          <path d="M8 17.9v1.8" />
-          <path d="M16 17.9v1.8" />
-          <path d="M8 6.2h3.2v3.2H8z" />
-          <path d="M12.8 6.2H16v3.2h-3.2z" />
-          <circle cx="8.2" cy="15.2" r="0.9" fill="currentColor" stroke="none" />
-          <circle cx="15.8" cy="15.2" r="0.9" fill="currentColor" stroke="none" />
-        </svg>
-      )
-    case 'tram':
-      return (
-        <svg {...props}>
-          <path d="M8 3.5h8" />
-          <path d="M12 3.5v2" />
-          <rect x="5.5" y="5.5" width="13" height="11" rx="2" />
-          <path d="M5.5 12h13" />
-          <path d="M8 8h3v2.5H8z" />
-          <path d="M13 8h3v2.5h-3z" />
-          <circle cx="8.5" cy="14.2" r="0.85" fill="currentColor" stroke="none" />
-          <circle cx="15.5" cy="14.2" r="0.85" fill="currentColor" stroke="none" />
-          <path d="M8 16.5 6.5 20" />
-          <path d="M16 16.5 17.5 20" />
-          <path d="M5 20.2h14" />
-        </svg>
-      )
-    case 'train':
-      return (
-        <svg {...props}>
-          <rect x="6" y="3.5" width="12" height="13" rx="2.4" />
-          <path d="M6 11h12" />
-          <path d="M9.2 6.2h5.6v3.2H9.2z" />
-          <circle cx="9" cy="13.8" r="1" fill="currentColor" stroke="none" />
-          <circle cx="15" cy="13.8" r="1" fill="currentColor" stroke="none" />
-          <path d="M9 16.5 7.2 20.2" />
-          <path d="M15 16.5l1.8 3.7" />
-          <path d="M8.5 20.2h7" />
-        </svg>
-      )
-    case 'flight':
-      return (
-        <svg {...props}>
-          <path d="M3.5 13.2 20.5 8.4a1.2 1.2 0 0 1 1.1 2.1L12.8 15.2l-1.4 5.1-2.1-.7 1-4.2-4.8 1.1-1.5 2.4-1.7-.5 1.1-2.8-1.9-1.4Z" />
-        </svg>
-      )
-    case 'boat':
-      return (
-        <svg {...props}>
-          <path d="M4 14.5 12 8.5l8 6" />
-          <path d="M3.5 16.2h17l-1.4 2.6a2 2 0 0 1-1.7 1H6.6a2 2 0 0 1-1.7-1L3.5 16.2Z" />
-          <path d="M12 8.5V5.8" />
-          <path d="M12 5.8h4.2l-1.2 2.2" />
-        </svg>
-      )
-    default:
-      return (
-        <svg {...props}>
-          <circle cx="12" cy="12" r="8.2" />
-          <path d="M8.5 12h7" />
-          <path d="M12 8.5v7" />
-        </svg>
-      )
-  }
-}
-
 /** Local clock tick so “neste avgang”-forslag oppdateres uten refresh. */
 function useNowTick(intervalMs = 30000) {
   const [now, setNow] = useState(() => new Date())
@@ -369,7 +290,7 @@ function ClockTimeInput({
         const raw = e.target.value
         onChange(raw)
         // Only auto-format complete 4-digit times while typing.
-        // Formatting at 3 digits turned "1100" into "01:10" + "0" → "01:100".
+        // Formatting at 3 digits turned "1100" into "01:10" + "0" â†’ "01:100".
         if (/^\d{4}$/.test(raw.trim())) {
           commit(raw)
         }
@@ -379,9 +300,69 @@ function ClockTimeInput({
   )
 }
 
+/** Hotel/cruise nights: allow clearing while typing (mobile), clamp on blur. */
+function NightsInput({
+  value,
+  onChange,
+  min = 1,
+  max = 60,
+  ...rest
+}: {
+  value: number
+  onChange: (value: number) => void
+  min?: number
+  max?: number
+} & Omit<
+  InputHTMLAttributes<HTMLInputElement>,
+  'value' | 'onChange' | 'type' | 'min' | 'max' | 'inputMode'
+>) {
+  const [draft, setDraft] = useState<string | null>(null)
+  const display = draft ?? String(value)
+
+  useEffect(() => {
+    if (draft === null) return
+    if (draft !== '' && Number(draft) === value) setDraft(null)
+  }, [value, draft])
+
+  function clamp(raw: string): number {
+    const parsed = Number(raw.trim())
+    if (!Number.isFinite(parsed)) return min
+    return Math.max(min, Math.min(max, Math.floor(parsed)))
+  }
+
+  return (
+    <input
+      {...rest}
+      type="text"
+      inputMode="numeric"
+      pattern="[0-9]*"
+      autoComplete="off"
+      value={display}
+      onFocus={(e) => {
+        e.target.select()
+        rest.onFocus?.(e)
+      }}
+      onChange={(e) => {
+        const raw = e.target.value
+        if (raw !== '' && !/^\d+$/.test(raw)) return
+        setDraft(raw)
+        if (raw === '') return
+        const parsed = Number(raw)
+        if (Number.isFinite(parsed) && parsed >= min && parsed <= max) {
+          onChange(Math.floor(parsed))
+        }
+      }}
+      onBlur={() => {
+        onChange(clamp(draft ?? String(value)))
+        setDraft(null)
+      }}
+    />
+  )
+}
+
 /**
  * Timetable for bus/tram/train: first = preferred, rest = fallbacks.
- * Fallbacks are suggestions only — accepting one sets planned startTime.
+ * Fallbacks are suggestions only â€” accepting one sets planned startTime.
  */
 function LegDeparturesField({
   times,
@@ -412,7 +393,7 @@ function LegDeparturesField({
         Avganger
         <span className="meta">
           {' '}
-          · første er planen, resten om den går forbi
+          Â· fÃ¸rste er planen, resten om den gÃ¥r forbi
         </span>
         <div className="leg-departures">
           {list.map((t, i) => (
@@ -422,20 +403,20 @@ function LegDeparturesField({
               className={`leg-departure-chip${i === 0 ? ' is-preferred' : ''}${
                 suggestion?.suggested === t ? ' is-suggested' : ''
               }`}
-              title={i === 0 ? 'Planlagt avgang (fjern)' : `Reserve — fjern ${t}`}
+              title={i === 0 ? 'Planlagt avgang (fjern)' : `Reserve â€” fjern ${t}`}
               aria-label={
                 i === 0 ? `Fjern planlagt avgang ${t}` : `Fjern reserve ${t}`
               }
               onClick={() => onChange(list.filter((x) => x !== t))}
             >
-              {i === 0 ? `${t} ★` : t}
-              <span aria-hidden="true">×</span>
+              {i === 0 ? `${t} â˜…` : t}
+              <span aria-hidden="true">Ã—</span>
             </button>
           ))}
           <input
             className="leg-departures-input"
             value={draft}
-            placeholder="14:05 14:50 …"
+            placeholder="14:05 14:50 â€¦"
             autoComplete="off"
             onChange={(e) => setDraft(e.target.value)}
             onKeyDown={(e) => {
@@ -453,7 +434,7 @@ function LegDeparturesField({
       {suggestion && (
         <div className="leg-departure-suggest">
           <span>
-            {suggestion.preferred} er passert — neste:{' '}
+            {suggestion.preferred} er passert â€” neste:{' '}
             <strong>{suggestion.suggested}</strong>
           </span>
           <button
@@ -483,7 +464,7 @@ function TransportBadge({
       <TransportModeIcon mode={mode || 'other'} size={16} />
       <span>
         {label || legModeLabel(mode)}
-        {detail ? ` · ${detail}` : ''}
+        {detail ? ` Â· ${detail}` : ''}
       </span>
     </span>
   )
@@ -504,14 +485,17 @@ function LegTransportSummary({
     schedule && onAcceptSuggested
       ? nextScheduledDeparture(dayDate, leg.departures, now)
       : null
-  const reserves = normalizeDepartures(leg.departures).slice(1)
+  // Flere avganger kun for buss/tog/bane â€” ikke fly.
+  const reserves = schedule
+    ? normalizeDepartures(leg.departures).slice(1)
+    : []
   const detail = [
     leg.title?.trim(),
-    [leg.startTime, leg.endTime].filter(Boolean).join('–'),
-    reserves.length ? `reserve ${reserves.join(' · ')}` : '',
+    [leg.startTime, leg.endTime].filter(Boolean).join('â€“'),
+    reserves.length ? `reserve ${reserves.join(' Â· ')}` : '',
   ]
     .filter(Boolean)
-    .join(' · ')
+    .join(' Â· ')
 
   return (
     <div className="leg-transport-summary">
@@ -634,7 +618,7 @@ function CompactActivityFields({
         <input
           value={title}
           onChange={(e) => onChange({ title: e.target.value })}
-          placeholder={titlePlaceholder || 'Utflukt, show, middag…'}
+          placeholder={titlePlaceholder || 'Utflukt, show, middagâ€¦'}
         />
       </label>
       <label>
@@ -659,7 +643,7 @@ function CompactActivityFields({
         <input
           value={notes}
           onChange={(e) => onChange({ notes: e.target.value })}
-          placeholder="Billett, møtested…"
+          placeholder="Billett, mÃ¸testedâ€¦"
         />
       </label>
       <button
@@ -695,7 +679,7 @@ function CompactCostFields({
         <input
           value={title}
           onChange={(e) => onChange({ title: e.target.value })}
-          placeholder={titlePlaceholder || 'Drikkepakke, tips, wifi…'}
+          placeholder={titlePlaceholder || 'Drikkepakke, tips, wifiâ€¦'}
         />
       </label>
       <label>
@@ -964,13 +948,7 @@ function CruiseItemEditor({
           </div>
           <label className="cruise-nights-field">
             Netter
-            <input
-              type="number"
-              min={1}
-              max={60}
-              value={nights}
-              onChange={(e) => setNights(Number(e.target.value) || 1)}
-            />
+            <NightsInput value={nights} onChange={setNights} />
           </label>
         </div>
         <div className="cruise-timing-row full">
@@ -1011,7 +989,7 @@ function CruiseItemEditor({
         </div>
         {embarkDate && disembarkDate && (
           <p className="meta full cruise-date-range">
-            {formatDateNO(embarkDate)} → {formatDateNO(disembarkDate)} (
+            {formatDateNO(embarkDate)} â†’ {formatDateNO(disembarkDate)} (
             {nights} {nights === 1 ? 'natt' : 'netter'})
           </p>
         )}
@@ -1108,9 +1086,9 @@ function CruiseItemEditor({
                 <div className="cruise-itinerary-head">
                   <span className="cruise-itinerary-date">
                     {formatDateNO(row.date) || `Dag ${idx + 1}`}
-                    {idx === 0 ? ' · Embark' : ''}
+                    {idx === 0 ? ' Â· Embark' : ''}
                     {idx === itinerary.length - 1 && itinerary.length > 1
-                      ? ' · Disembark'
+                      ? ' Â· Disembark'
                       : ''}
                   </span>
                   <label className="cruise-at-sea-toggle">
@@ -1128,7 +1106,7 @@ function CruiseItemEditor({
                         })
                       }
                     />
-                    Er hele dagen til sjøs
+                    Er hele dagen til sjÃ¸s
                   </label>
                 </div>
                 {!row.atSea && (
@@ -1155,7 +1133,7 @@ function CruiseItemEditor({
                         <ClockTimeInput
                           value={row.arriveTime || ''}
                           onChange={(v) => updateRow(idx, { arriveTime: v })}
-                          placeholder={idx === 0 ? '—' : '08:00'}
+                          placeholder={idx === 0 ? 'â€”' : '08:00'}
                           disabled={idx === 0}
                           title={
                             idx === 0
@@ -1170,7 +1148,7 @@ function CruiseItemEditor({
                           value={row.leaveTime || ''}
                           onChange={(v) => updateRow(idx, { leaveTime: v })}
                           placeholder={
-                            idx === itinerary.length - 1 ? '—' : '18:00'
+                            idx === itinerary.length - 1 ? 'â€”' : '18:00'
                           }
                           disabled={idx === itinerary.length - 1}
                           title={
@@ -1208,8 +1186,8 @@ function CruiseItemEditor({
                           notes={act.notes || ''}
                           titlePlaceholder={
                             row.atSea
-                              ? 'Show, spa, middag…'
-                              : 'Utflukt, byvandring…'
+                              ? 'Show, spa, middagâ€¦'
+                              : 'Utflukt, byvandringâ€¦'
                           }
                           onChange={(patch) =>
                             updateDayActivity(row.date, act.id, patch)
@@ -1242,8 +1220,8 @@ function CruiseItemEditor({
                           notes={cost.notes || ''}
                           titlePlaceholder={
                             row.atSea
-                              ? 'Wifi, drikkepakke…'
-                              : 'Utflukt, taxi i havn…'
+                              ? 'Wifi, drikkepakkeâ€¦'
+                              : 'Utflukt, taxi i havnâ€¦'
                           }
                           onChange={(patch) =>
                             updateDayCost(row.date, cost.id, patch)
@@ -1267,7 +1245,7 @@ function CruiseItemEditor({
             className="btn btn-ghost cruise-remove-trigger"
             onClick={() => setConfirmRemove(true)}
           >
-            Fjern cruise…
+            Fjern cruiseâ€¦
           </button>
         ) : (
           <div className="cruise-remove-confirm">
@@ -1314,7 +1292,7 @@ function formatDateNO(iso: string) {
 
 function formatDateRange(start: string, end: string) {
   if (!start && !end) return 'Uten datoer'
-  if (start && end) return `${formatDateNO(start)} – ${formatDateNO(end)}`
+  if (start && end) return `${formatDateNO(start)} â€“ ${formatDateNO(end)}`
   return formatDateNO(start || end)
 }
 
@@ -1327,13 +1305,13 @@ function formatNiceDate(iso: string) {
 }
 
 /** Weekday labels with Monday as first day of the week (Norwegian). */
-const WEEKDAYS_MON_FIRST = ['Ma', 'Ti', 'On', 'To', 'Fr', 'Lø', 'Sø'] as const
+const WEEKDAYS_MON_FIRST = ['Ma', 'Ti', 'On', 'To', 'Fr', 'LÃ¸', 'SÃ¸'] as const
 
 function daysInMonth(year: number, month: number) {
   return new Date(year, month + 1, 0).getDate()
 }
 
-/** JS getDay(): Sun=0 … Sat=6 → offset where Monday is column 0. */
+/** JS getDay(): Sun=0 â€¦ Sat=6 â†’ offset where Monday is column 0. */
 function mondayFirstOffset(year: number, month: number) {
   const sundayBased = new Date(year, month, 1).getDay()
   return (sundayBased + 6) % 7
@@ -1359,15 +1337,19 @@ function DatePickerField({
   onChange,
   required = false,
   id,
+  /** When value is empty, open the calendar on this date's month (e.g. start â†’ end). */
+  monthHint,
 }: {
   value: string
   onChange: (value: string) => void
   required?: boolean
   id?: string
+  monthHint?: string
 }) {
   const [open, setOpen] = useState(false)
   const rootRef = useRef<HTMLDivElement>(null)
-  const parsed = value ? new Date(`${value}T12:00:00`) : new Date()
+  const anchor = value || monthHint || ''
+  const parsed = anchor ? new Date(`${anchor}T12:00:00`) : new Date()
   const initialYear = Number.isNaN(parsed.getTime())
     ? new Date().getFullYear()
     : parsed.getFullYear()
@@ -1379,12 +1361,13 @@ function DatePickerField({
 
   useEffect(() => {
     if (!open) return
-    const d = value ? new Date(`${value}T12:00:00`) : new Date()
+    const source = value || monthHint || ''
+    const d = source ? new Date(`${source}T12:00:00`) : new Date()
     if (!Number.isNaN(d.getTime())) {
       setViewYear(d.getFullYear())
       setViewMonth(d.getMonth())
     }
-  }, [open, value])
+  }, [open, value, monthHint])
 
   useEffect(() => {
     if (!open) return
@@ -1479,7 +1462,7 @@ function DatePickerField({
   )
 }
 
-function ExpensesView({ days }: { days: TripDay[] }) {
+export function ExpensesView({ days }: { days: TripDay[] }) {
   const summary = useMemo(() => tripExpenseSummary(days), [days])
 
   function CategoryBlock({
@@ -1514,18 +1497,18 @@ function ExpensesView({ days }: { days: TripDay[] }) {
                 <span className="expense-line-title">
                   {line.title}
                   {line.date ? (
-                    <span className="meta"> · {formatDateNO(line.date)}</span>
+                    <span className="meta"> Â· {formatDateNO(line.date)}</span>
                   ) : null}
                   {line.isActual ? (
                     <span className="meta">
                       {' '}
-                      · faktisk
+                      Â· faktisk
                       {line.expectedRaw
                         ? ` (forv. ${line.expectedRaw})`
                         : ''}
                     </span>
                   ) : line.expectedRaw === undefined && title === 'Transport' ? (
-                    <span className="meta"> · forventet</span>
+                    <span className="meta"> Â· forventet</span>
                   ) : null}
                 </span>
                 <span className="expense-line-amount">
@@ -1548,9 +1531,9 @@ function ExpensesView({ days }: { days: TripDay[] }) {
         </p>
         <p className="meta expense-total-breakdown">
           Cruise {formatExpenseAmount(summary.cruise.total)}
-          {' · '}
+          {' Â· '}
           Hotell {formatExpenseAmount(summary.hotel.total)}
-          {' · '}
+          {' Â· '}
           Transport {formatExpenseAmount(summary.transport.total)}
         </p>
       </div>
@@ -1560,7 +1543,7 @@ function ExpensesView({ days }: { days: TripDay[] }) {
         <strong>
           {summary.cruise.days > 0
             ? formatExpenseAmount(summary.cruise.avgPerDay)
-            : '—'}
+            : 'â€”'}
         </strong>
         {summary.cruise.days > 0 ? (
           <span className="meta">
@@ -1570,7 +1553,7 @@ function ExpensesView({ days }: { days: TripDay[] }) {
             bord)
           </span>
         ) : (
-          <span className="meta">Ingen cruisepris ennå</span>
+          <span className="meta">Ingen cruisepris ennÃ¥</span>
         )}
       </div>
 
@@ -1594,11 +1577,11 @@ function ExpensesView({ days }: { days: TripDay[] }) {
         <h3 className="expense-by-day-title">Per dag</h3>
         <p className="meta expense-by-day-hint">
           Generelt for cruise (billett og kostnader for hele cruiset) og hotell
-          fordeles jevnt over nettene. Kostnader registrert på en cruisedag, og
+          fordeles jevnt over nettene. Kostnader registrert pÃ¥ en cruisedag, og
           transport, vises bare den dagen.
         </p>
         {summary.byDay.length === 0 ? (
-          <p className="meta expense-empty">Ingen dagsutgifter ennå</p>
+          <p className="meta expense-empty">Ingen dagsutgifter ennÃ¥</p>
         ) : (
           <ul className="expense-day-list">
             {summary.byDay.map((day) => {
@@ -1620,7 +1603,7 @@ function ExpensesView({ days }: { days: TripDay[] }) {
                       <span className="expense-day-date">
                         {formatNiceDate(day.date)}
                         {day.place && day.place !== 'Uten by'
-                          ? ` · ${day.place}`
+                          ? ` Â· ${day.place}`
                           : ''}
                       </span>
                       <strong className="expense-day-total">
@@ -1628,7 +1611,7 @@ function ExpensesView({ days }: { days: TripDay[] }) {
                       </strong>
                     </div>
                     {parts.length > 0 ? (
-                      <span className="meta">{parts.join(' · ')}</span>
+                      <span className="meta">{parts.join(' Â· ')}</span>
                     ) : null}
                     {day.lines.length > 0 ? (
                       <ul className="expense-day-lines">
@@ -1651,8 +1634,8 @@ function ExpensesView({ days }: { days: TripDay[] }) {
       </div>
 
       <p className="meta expense-footnote">
-        Summerer tall fra prisfeltene (f.eks. «12000 kr»). For transport brukes
-        faktisk kostnad når den er fylt inn, ellers forventet pris. Blandede
+        Summerer tall fra prisfeltene (f.eks. Â«12000 krÂ»). For transport brukes
+        faktisk kostnad nÃ¥r den er fylt inn, ellers forventet pris. Blandede
         valutaer summeres som tall uten omregning.
         {summary.unparsedCount > 0
           ? ` ${summary.unparsedCount} pris${
@@ -1879,7 +1862,7 @@ function DayWeatherCard({
 }: {
   city: string
   country: string
-  /** Arrival / trip day — weather is always for this date when available. */
+  /** Arrival / trip day â€” weather is always for this date when available. */
   date?: string
   compact?: boolean
   /** When geocoding fails, user can pick a suggested place. */
@@ -1925,7 +1908,7 @@ function DayWeatherCard({
             setError(err.message)
             setSuggestions(err.suggestions)
           } else {
-            setError(err instanceof Error ? err.message : 'Kunne ikke hente vær')
+            setError(err instanceof Error ? err.message : 'Kunne ikke hente vÃ¦r')
             setSuggestions([])
           }
         })
@@ -1941,7 +1924,7 @@ function DayWeatherCard({
     if (compact) return null
     return (
       <div className="weather-card weather-side weather-empty">
-        <p className="meta">Oppgi by for vær.</p>
+        <p className="meta">Oppgi by for vÃ¦r.</p>
       </div>
     )
   }
@@ -1949,7 +1932,7 @@ function DayWeatherCard({
   if (status === 'loading') {
     return (
       <div className={`weather-card ${compact ? 'weather-compact' : 'weather-side'}`}>
-        <p className="meta">Henter vær…</p>
+        <p className="meta">Henter vÃ¦râ€¦</p>
       </div>
     )
   }
@@ -1958,7 +1941,7 @@ function DayWeatherCard({
     if (compact) return null
     return (
       <div className="weather-card weather-side weather-empty">
-        <p className="meta">Vær: {error || 'Fant ikke sted'}</p>
+        <p className="meta">VÃ¦r: {error || 'Fant ikke sted'}</p>
         {suggestions.length > 0 && (
           <div className="weather-suggestions">
             <p className="meta" style={{ margin: 0 }}>
@@ -2002,7 +1985,7 @@ function DayWeatherCard({
       (showingTodayFallback || arrivalIsToday || (!date.trim() && displayDay?.isToday)),
   )
   const kindLabel = showingNow
-    ? 'Nå'
+    ? 'NÃ¥'
     : arrivalDay
       ? `Ankomst ${formatDateNO(arrivalDay.date)}`
       : displayDay
@@ -2018,22 +2001,22 @@ function DayWeatherCard({
         className={`weather-pill${showingNow ? ' is-now' : ' is-arrival'}`}
         title={
           showingTodayFallback
-            ? `Nå i ${weather.city}: ${displayDay.summary}` +
+            ? `NÃ¥ i ${weather.city}: ${displayDay.summary}` +
               (date.trim()
-                ? ` — ankomst ${formatDateNO(date)}: prognose ikke klar ennå`
+                ? ` â€” ankomst ${formatDateNO(date)}: prognose ikke klar ennÃ¥`
                 : '')
             : showingNow
-              ? `Nå i ${weather.city}: ${displayDay.summary}`
+              ? `NÃ¥ i ${weather.city}: ${displayDay.summary}`
               : `Ankomst ${formatDateNO(displayDay.date)} i ${weather.city}: ${displayDay.summary}`
         }
       >
         <span className="weather-pill-kind" aria-hidden="true">
-          {showingNow ? 'Nå' : 'Ank.'}
+          {showingNow ? 'NÃ¥' : 'Ank.'}
         </span>
         <WeatherIcon icon={displayDay.icon} size={14} />
         {nowTemp !== null
-          ? `${nowTemp}°`
-          : `${Math.round(displayDay.tempMin)}–${Math.round(displayDay.tempMax)}°`}
+          ? `${nowTemp}Â°`
+          : `${Math.round(displayDay.tempMin)}â€“${Math.round(displayDay.tempMax)}Â°`}
       </span>
     )
   }
@@ -2043,8 +2026,8 @@ function DayWeatherCard({
       <div className="weather-card weather-side weather-empty">
         <p className="meta">
           {date.trim()
-            ? `Ankomst ${formatDateNO(date)}: værprognose er ikke tilgjengelig ennå.`
-            : 'Velg dato for vær.'}
+            ? `Ankomst ${formatDateNO(date)}: vÃ¦rprognose er ikke tilgjengelig ennÃ¥.`
+            : 'Velg dato for vÃ¦r.'}
         </p>
         <p className="weather-source">
           Kilde:{' '}
@@ -2071,8 +2054,8 @@ function DayWeatherCard({
         )}
         {arrivalIsToday && weather.current && (
           <span className="meta weather-kind-note">
-            Ankomst i dag · {Math.round(displayDay.tempMin)}–
-            {Math.round(displayDay.tempMax)}°
+            Ankomst i dag Â· {Math.round(displayDay.tempMin)}â€“
+            {Math.round(displayDay.tempMax)}Â°
           </span>
         )}
       </div>
@@ -2082,19 +2065,19 @@ function DayWeatherCard({
         </span>
         <div className="weather-side-temps">
           {showingNow ? (
-            <strong>{Math.round(weather.current!.temperature)}°</strong>
+            <strong>{Math.round(weather.current!.temperature)}Â°</strong>
           ) : (
             <strong>
-              {Math.round(displayDay.tempMin)}–{Math.round(displayDay.tempMax)}°
+              {Math.round(displayDay.tempMin)}â€“{Math.round(displayDay.tempMax)}Â°
             </strong>
           )}
           <span className="weather-side-summary">{displayDay.summary}</span>
           <span className="meta">
             {weather.city}
             {showingNow && !arrivalIsToday
-              ? ` · dag ${Math.round(displayDay.tempMin)}–${Math.round(displayDay.tempMax)}°`
+              ? ` Â· dag ${Math.round(displayDay.tempMin)}â€“${Math.round(displayDay.tempMax)}Â°`
               : ''}
-            {` · ${displayDay.precipitation.toFixed(0)} mm`}
+            {` Â· ${displayDay.precipitation.toFixed(0)} mm`}
           </span>
         </div>
       </div>
@@ -2112,11 +2095,11 @@ function DayWeatherCard({
 function itemSummary(item: DayItem): string {
   const bits: string[] = []
   if (isTransportType(item.type) && (item.from || item.to)) {
-    bits.push([item.from, item.to].filter(Boolean).join(' → '))
+    bits.push([item.from, item.to].filter(Boolean).join(' â†’ '))
   }
   if (item.address) bits.push(item.address)
   if (item.startTime || item.endTime) {
-    bits.push([item.startTime, item.endTime].filter(Boolean).join('–'))
+    bits.push([item.startTime, item.endTime].filter(Boolean).join('â€“'))
   }
   if (item.type === 'attraction' && item.notes?.trim()) {
     bits.push(item.notes.trim())
@@ -2128,7 +2111,7 @@ function itemSummary(item: DayItem): string {
     const price = formatItemPrice(item)
     if (price) bits.push(price)
   }
-  return bits.filter(Boolean).join(' · ')
+  return bits.filter(Boolean).join(' Â· ')
 }
 
 function AttractionIcon({ size = 18 }: { size?: number }) {
@@ -2216,7 +2199,7 @@ function DayItemEditor({
           {hotel
             ? 'Hotellnavn'
             : packageTour
-              ? 'Pakketur / arrangør'
+              ? 'Pakketur / arrangÃ¸r'
               : transport
                 ? 'Navn / rute'
                 : 'Navn'}
@@ -2231,7 +2214,7 @@ function DayItemEditor({
                   ? 'Vin-tur Toscana'
                   : transport
                     ? 'RY 123 / Intercity'
-                    : 'Byvandring, museum, utsiktspunkt…'
+                    : 'Byvandring, museum, utsiktspunktâ€¦'
             }
           />
         </label>
@@ -2283,14 +2266,9 @@ function DayItemEditor({
         {(hotel || packageTour) && (
           <label>
             Overnattinger
-            <input
-              type="number"
-              min={1}
-              max={60}
+            <NightsInput
               value={nights}
-              onChange={(e) =>
-                set('nights', Math.max(1, Number(e.target.value) || 1))
-              }
+              onChange={(n) => set('nights', n)}
             />
           </label>
         )}
@@ -2300,7 +2278,7 @@ function DayItemEditor({
             <input
               value={item.price || ''}
               onChange={(e) => set('price', e.target.value)}
-              placeholder={hotel ? '4500 kr' : '15 €'}
+              placeholder={hotel ? '4500 kr' : '15 â‚¬'}
               inputMode="decimal"
             />
           </label>
@@ -2312,7 +2290,7 @@ function DayItemEditor({
               <input
                 value={item.price || ''}
                 onChange={(e) => set('price', e.target.value)}
-                placeholder="45 €"
+                placeholder="45 â‚¬"
                 inputMode="decimal"
               />
             </label>
@@ -2321,7 +2299,7 @@ function DayItemEditor({
               <input
                 value={item.actualPrice || ''}
                 onChange={(e) => set('actualPrice', e.target.value)}
-                placeholder="Fyll inn etterpå"
+                placeholder="Fyll inn etterpÃ¥"
                 inputMode="decimal"
               />
             </label>
@@ -2331,15 +2309,15 @@ function DayItemEditor({
           <p className="meta full hotel-stay-span" style={{ margin: 0 }}>
             <strong>Opphold:</strong> {staySpan}
             <br />
-            Innsjekk-dato {formatDateNO(dayDate)} · Utsjekk-dato{' '}
+            Innsjekk-dato {formatDateNO(dayDate)} Â· Utsjekk-dato{' '}
             {formatDateNO(checkoutDate)}
             {nights > 0 ? (
               <>
                 {' '}
-                · overnatter{' '}
+                Â· overnatter{' '}
                 {nights === 1
                   ? formatDateNO(dayDate)
-                  : `${formatDateNO(dayDate)}–${formatDateNO(
+                  : `${formatDateNO(dayDate)}â€“${formatDateNO(
                       addDaysIso(dayDate, nights - 1),
                     )}`}
               </>
@@ -2362,9 +2340,9 @@ function DayItemEditor({
                 type="button"
                 className="btn btn-soft btn-sm"
                 onClick={() => set('url', hotelsComUrl)}
-                title="Fyll inn søkelenke med hotell, by og datoer"
+                title="Fyll inn sÃ¸kelenke med hotell, by og datoer"
               >
-                Fyll Hotels.com-søk
+                Fyll Hotels.com-sÃ¸k
               </button>
               <a
                 className="btn btn-soft btn-sm"
@@ -2372,7 +2350,7 @@ function DayItemEditor({
                 target="_blank"
                 rel="noreferrer"
               >
-                Åpne Hotels.com
+                Ã…pne Hotels.com
               </a>
             </div>
           </div>
@@ -2410,6 +2388,8 @@ function DayForm({
   initial,
   tripDays,
   tripFeatures,
+  travelIntent,
+  tripStartDate = '',
   onSave,
   onSaveHotelStay,
   onRemoveHotelStay,
@@ -2424,6 +2404,10 @@ function DayForm({
   tripDays: TripDay[]
   /** Trip-level modules (cruise / packages). */
   tripFeatures?: TripFeatures
+  /** New-day flow: Reise videre / Reise hjem. */
+  travelIntent?: TravelIntent
+  /** Trip start â€” date picker opens in this month when day date is empty. */
+  tripStartDate?: string
   onSave: (
     day: TripDayInput,
     cruisePatches?: CruiseDayPatch[],
@@ -2445,6 +2429,7 @@ function DayForm({
   onInsertDayAfter?: () => void
   saving: boolean
 }) {
+  const isNewTravel = !initial.id && !!travelIntent
   const [form, setForm] = useState<TripDayInput>(initial)
   const [items, setItems] = useState<DayItem[]>(initial.items || [])
   const [viaPoints, setViaPoints] = useState<ViaPoint[]>(() =>
@@ -2455,7 +2440,9 @@ function DayForm({
     return syncRouteLegs(points, initial.legs || [])
   })
   /** Compact list by default; pencil opens editor for a leg index, or 'point' for single stop. */
-  const [editingVia, setEditingVia] = useState<number | 'point' | null>(null)
+  const [editingVia, setEditingVia] = useState<number | 'point' | null>(() =>
+    isNewTravel && (initial.viaPoints?.length || 0) >= 2 ? 0 : null,
+  )
   const [editingHotelId, setEditingHotelId] = useState<string | null>(null)
   const [editingCruiseId, setEditingCruiseId] = useState<string | null>(null)
   const [editingDayItemId, setEditingDayItemId] = useState<string | null>(null)
@@ -2480,7 +2467,7 @@ function DayForm({
   const hotels = items.filter((i) => i.type === 'hotel')
   const cruises = items.filter((i) => i.type === 'cruise')
   const packageItems = items.filter((i) => i.type === 'package')
-  /** Excursions / sights — not city-to-city travel (that belongs in Via). */
+  /** Excursions / sights â€” not city-to-city travel (that belongs in Via). */
   const excursionItems = items.filter((i) => i.type === 'attraction')
   /** Older transport day-items; new travel should use Via. */
   const legacyTransportItems = items.filter((i) => isTransportType(i.type))
@@ -2513,14 +2500,14 @@ function DayForm({
     cruises.length > 0 ||
     stayCruises.length > 0 ||
     disembarkCruises.length > 0
-  /** Day already belongs to a cruise — do not offer adding another. */
+  /** Day already belongs to a cruise â€” do not offer adding another. */
   const dayAlreadyOnCruise =
     cruises.length > 0 ||
     stayCruises.length > 0 ||
     disembarkCruises.length > 0
   const canAddCruise = cruiseModuleOn && !dayAlreadyOnCruise
   const canSave = dirty || !initial.id
-  /** «Til sjøs» applies only on cruise days (embark / om bord / disembark). */
+  /** Â«Til sjÃ¸sÂ» applies only on cruise days (embark / om bord / disembark). */
   const showAtSeaToggle = showCruiseSection
   const departure = useMemo(
     () => departurePlaceForDay(tripDays, form.date),
@@ -2529,7 +2516,7 @@ function DayForm({
   const isCheckoutTravel = checkoutHotels.length > 0
   /**
    * City must be set before transport / save. On checkout mornings the day's
-   * city is the arrival city — must differ from the hotel (departure) city.
+   * city is the arrival city â€” must differ from the hotel (departure) city.
    */
   const cityReady = (() => {
     if (isAtSeaDay(form)) return true
@@ -2551,7 +2538,9 @@ function DayForm({
     const points = sortViaPointsByArriveTime(initial.viaPoints || [])
     setViaPoints(points)
     setLegs(syncRouteLegs(points, initial.legs || []))
-    setEditingVia(null)
+    setEditingVia(
+      !initial.id && travelIntent && points.length >= 2 ? 0 : null,
+    )
     setEditingHotelId(null)
     setEditingCruiseId(null)
     setEditingDayItemId(null)
@@ -2559,7 +2548,22 @@ function DayForm({
     setLinkedCruiseDrafts({})
     setCruiseItineraries({})
     setDirty(!initial.id)
-  }, [initial])
+  }, [initial, travelIntent])
+
+  /** Keep the arrival via-stop in sync with the day's destination city. */
+  useEffect(() => {
+    if (!isNewTravel || viaPoints.length < 2) return
+    const toTitle = form.city.trim()
+    const last = viaPoints[viaPoints.length - 1]
+    if ((last.title || '').trim() === toTitle) return
+    setViaPoints((prev) => {
+      if (prev.length < 2) return prev
+      const next = [...prev]
+      const i = next.length - 1
+      next[i] = { ...next[i], title: toTitle }
+      return next
+    })
+  }, [form.city, isNewTravel, viaPoints.length])
 
   function markDirty() {
     setDirty(true)
@@ -2947,7 +2951,7 @@ function DayForm({
     const nightsChanged =
       !!prevCruise && cruiseNights(next) !== cruiseNights(prevCruise)
     setItems((prev) => prev.map((item) => (item.id === id ? next : item)))
-    // Only rebuild itinerary when nights change — remarging on every
+    // Only rebuild itinerary when nights change â€” remarging on every
     // keystroke was wiping unsaved ankomst/avgang.
     if (!nightsChanged) return
     setCruiseItineraries((prev) => ({
@@ -3008,7 +3012,7 @@ function DayForm({
   function addViaPoint() {
     if (!cityReady) return
     markDirty()
-    // First etappe: create fra + til at once so reisemåte is available immediately.
+    // First etappe: create fra + til at once so reisemÃ¥te is available immediately.
     if (viaPoints.length === 0) {
       const fromCity =
         departure?.city?.trim() ||
@@ -3060,7 +3064,7 @@ function DayForm({
       next[idx] = leg
       return next
     })
-    // Avgang → fra-by avreise, ankomst → til-by ankomst (not the other way around).
+    // Avgang â†’ fra-by avreise, ankomst â†’ til-by ankomst (not the other way around).
     setViaPoints((prev) => {
       if (idx < 0 || idx + 1 >= prev.length) return prev
       return prev.map((p, i) => {
@@ -3223,12 +3227,14 @@ function DayForm({
           viaPoints: keptPoints,
           legs: syncRouteLegs(keptPoints, legs).map((leg) => ({
             ...leg,
-            departures: normalizeDepartures(leg.departures),
+            departures: modeHasDepartureSchedule(leg.mode)
+              ? normalizeDepartures(leg.departures)
+              : [],
           })),
           links: form.links || [],
         }
         void (async () => {
-          // Flush linked cruise edits (port times) before day save — otherwise
+          // Flush linked cruise edits (port times) before day save â€” otherwise
           // "Lagre" on a middle port day would drop ankomst/avgang.
           const linkedStays = [...stayCruises, ...disembarkCruises]
           for (const stay of linkedStays) {
@@ -3301,11 +3307,12 @@ function DayForm({
             <DatePickerField
               required
               value={form.date}
+              monthHint={tripStartDate}
               onChange={(date) => update('date', date)}
             />
           </label>
           <label>
-            Rekkefølge
+            RekkefÃ¸lge
             <input
               type="number"
               value={form.sortOrder}
@@ -3321,20 +3328,22 @@ function DayForm({
                   checked={isAtSeaDay(form)}
                   onChange={(e) => setAtSea(e.target.checked)}
                 />
-                Hele dagen til sjøs (ikke i land)
+                Hele dagen til sjÃ¸s (ikke i land)
               </span>
             </label>
           )}
           {!(showAtSeaToggle && isAtSeaDay(form)) && (
             <>
-              {isCheckoutTravel && departure && (
+              {(isNewTravel || isCheckoutTravel) && departure && (
                 <div className="day-departure-context">
                   <span className="meta">Fra</span>
                   <strong>
                     {departure.city}
                     {departure.country ? `, ${departure.country}` : ''}
                   </strong>
-                  <span className="meta"> · utsjekk</span>
+                  {departure.kind === 'checkout' && (
+                    <span className="meta"> Â· utsjekk</span>
+                  )}
                 </div>
               )}
               <CitySuggestFields
@@ -3355,9 +3364,13 @@ function DayForm({
                     : form.country
                 }
                 cityLabel={
-                  isCheckoutTravel ? 'Til / ankomstby' : 'By / havn'
+                  travelIntent === 'home'
+                    ? 'Hjem / ankomst'
+                    : isNewTravel || isCheckoutTravel
+                      ? 'Til / ankomstby'
+                      : 'By / havn'
                 }
-                autoFocus={!cityReady}
+                autoFocus={!cityReady && travelIntent !== 'home'}
                 onCityChange={(city) => update('city', city)}
                 onCountryChange={(country) => update('country', country)}
                 onSelectPlace={(city, nextCountry) => {
@@ -3373,8 +3386,10 @@ function DayForm({
               {!cityReady && (
                 <p className="meta day-city-required-hint">
                   {isCheckoutTravel && departure
-                    ? `Velg ankomstby først — du sjekker ut fra ${departure.city}.`
-                    : 'Velg by først før du legger til transport eller lagrer.'}
+                    ? `Velg ankomstby fÃ¸rst â€” du sjekker ut fra ${departure.city}.`
+                    : isNewTravel
+                      ? 'Velg hvor du reiser â€” deretter reisemÃ¥te under.'
+                      : 'Velg by fÃ¸rst fÃ¸r du legger til transport eller lagrer.'}
                 </p>
               )}
             </>
@@ -3398,28 +3413,29 @@ function DayForm({
         )}
       </div>
 
-      <label className="day-notes-field">
-        Kommentarer / tips for dagen
-        <textarea
-          value={form.notes}
-          onChange={(e) => update('notes', e.target.value)}
-        />
-      </label>
-
       <div className="stack">
         <h3 className="section-title" style={{ fontSize: '1.2rem' }}>
-          Reise
+          {travelIntent === 'home'
+            ? 'Reise hjem'
+            : isNewTravel
+              ? 'Reise videre'
+              : 'Reise'}
         </h3>
         <p className="section-sub">
-          Når du kommer fra en annen by — etapper og reisemåte underveis
-          {form.city.trim() ? ` til ${form.city.trim()}` : ''}.
+          {travelIntent === 'home'
+            ? `Etapper hjem${form.city.trim() ? ` til ${form.city.trim()}` : ''}. Velg reisemÃ¥te og tider.`
+            : isNewTravel
+              ? `Etapper videre${form.city.trim() ? ` til ${form.city.trim()}` : ''}. Velg reisemÃ¥te og tider.`
+              : `NÃ¥r du kommer fra en annen by â€” etapper og reisemÃ¥te underveis${
+                  form.city.trim() ? ` til ${form.city.trim()}` : ''
+                }.`}
         </p>
 
         {viaPoints.length === 0 &&
           editingVia === null &&
           legacyTransportItems.length === 0 && (
           <p className="empty">
-            Ingen reiseetapper ennå. Legg inn fra-by, til-by og reisemåte.
+            Ingen reiseetapper ennÃ¥. Legg inn fra-by, til-by og reisemÃ¥te.
           </p>
         )}
 
@@ -3531,7 +3547,7 @@ function DayForm({
                               className="btn btn-primary"
                               onClick={addViaPoint}
                             >
-                              Neste by + reisemåte
+                              Neste by + reisemÃ¥te
                             </button>
                             <button
                               type="button"
@@ -3582,7 +3598,7 @@ function DayForm({
                     <div className="item-card item-via via-inline-editor">
                       <div className="item-card-head">
                         <span className="chip">
-                          Etappe {idx + 1}: {point.title || 'Fra'} →{' '}
+                          Etappe {idx + 1}: {point.title || 'Fra'} â†’{' '}
                           {next.title || 'Til'}
                         </span>
                       </div>
@@ -3687,9 +3703,24 @@ function DayForm({
                                     className={`transport-mode-option ${
                                       leg.mode === mode ? 'is-selected' : ''
                                     }`}
-                                    onClick={() =>
-                                      updateLeg(idx, { ...leg, mode })
-                                    }
+                                    onClick={() => {
+                                      const next = modeHasDepartureSchedule(
+                                        mode,
+                                      )
+                                      updateLeg(idx, {
+                                        ...leg,
+                                        mode,
+                                        departures: next
+                                          ? normalizeDepartures(
+                                              leg.departures?.length
+                                                ? leg.departures
+                                                : leg.startTime
+                                                  ? [leg.startTime]
+                                                  : [],
+                                            )
+                                          : [],
+                                      })
+                                    }}
                                     title={label}
                                     aria-label={label}
                                     aria-pressed={leg.mode === mode}
@@ -3758,7 +3789,7 @@ function DayForm({
                                   updateLeg(idx, {
                                     ...leg,
                                     departures: next,
-                                    // First time = what we bet on → planned avgang
+                                    // First time = what we bet on â†’ planned avgang
                                     startTime: next[0] || '',
                                   })
                                 }}
@@ -3883,17 +3914,17 @@ function DayForm({
           className="btn btn-soft btn-sm"
           onClick={addViaPoint}
           disabled={!cityReady}
-          title={!cityReady ? 'Velg by først' : undefined}
+          title={!cityReady ? 'Velg by fÃ¸rst' : undefined}
         >
           {viaPoints.length === 0
-            ? '+ Legg til reise (fra-by → hit)'
+            ? '+ Legg til reise (fra-by â†’ hit)'
             : '+ Legg til neste by'}
         </button>
 
         {legacyTransportItems.length > 0 && (
           <div className="via-summary-list" style={{ marginTop: '0.75rem' }}>
             <p className="meta">
-              Eldre transport lagret som dags-element — bruk Reise for ny
+              Eldre transport lagret som dags-element â€” bruk Reise for ny
               reise mellom byer.
             </p>
             {legacyTransportItems.map((item) => {
@@ -3902,7 +3933,7 @@ function DayForm({
               const to = (item.to || '').trim()
               const timeLabel = [item.startTime, item.endTime]
                 .filter(Boolean)
-                .join('–')
+                .join('â€“')
               return (
                 <div key={item.id}>
                   <div
@@ -3929,7 +3960,7 @@ function DayForm({
                               formatTransportPriceLabel(item),
                             ]
                               .filter(Boolean)
-                              .join(' · ') || undefined
+                              .join(' Â· ') || undefined
                           }
                         />
                         <button
@@ -3972,6 +4003,14 @@ function DayForm({
         )}
       </div>
 
+      <label className="day-notes-field">
+        Kommentarer / tips for dagen
+        <textarea
+          value={form.notes}
+          onChange={(e) => update('notes', e.target.value)}
+        />
+      </label>
+
       <div className="stack">
         <h3 className="section-title" style={{ fontSize: '1.2rem' }}>
           Hotell
@@ -4003,7 +4042,7 @@ function DayForm({
                       disabled={savingLinkedHotel}
                       onClick={() => void persistLinkedHotel(stay)}
                     >
-                      {savingLinkedHotel ? 'Lagrer…' : 'Lagre hotell'}
+                      {savingLinkedHotel ? 'Lagrerâ€¦' : 'Lagre hotell'}
                     </button>
                     <button
                       type="button"
@@ -4036,7 +4075,7 @@ function DayForm({
                         stay.checkInDay.city?.trim()
                           ? `Fra ${stay.checkInDay.city.trim()}`
                           : '',
-                        `Innsjekk ${formatDateNO(stay.checkInDate)} · Utsjekk-dato ${formatDateNO(stay.checkoutDate)}`,
+                        `Innsjekk ${formatDateNO(stay.checkInDate)} Â· Utsjekk-dato ${formatDateNO(stay.checkoutDate)}`,
                         hotel.endTime?.trim()
                           ? `Utsjekk kl. ${hotel.endTime}`
                           : 'Utsjekk i dag',
@@ -4044,7 +4083,7 @@ function DayForm({
                         formatHotelPrice(hotel),
                       ]
                         .filter(Boolean)
-                        .join(' · ')}
+                        .join(' Â· ')}
                     </span>
                     {hotel.url?.trim() && (
                       <a
@@ -4056,7 +4095,7 @@ function DayForm({
                       >
                         {isHotelsComUrl(hotel.url)
                           ? 'Hotels.com'
-                          : 'Åpne lenke'}
+                          : 'Ã…pne lenke'}
                       </a>
                     )}
                   </div>
@@ -4101,7 +4140,7 @@ function DayForm({
                       disabled={savingLinkedHotel}
                       onClick={() => void persistLinkedHotel(stay)}
                     >
-                      {savingLinkedHotel ? 'Lagrer…' : 'Lagre hotell'}
+                      {savingLinkedHotel ? 'Lagrerâ€¦' : 'Lagre hotell'}
                     </button>
                     <button
                       type="button"
@@ -4139,11 +4178,11 @@ function DayForm({
                         `Innsjekk ${formatDateNO(stay.checkInDate)}`,
                         `Utsjekk ${formatDateNO(stay.checkoutDate)}`,
                         hotel.startTime || hotel.endTime
-                          ? `${hotel.startTime || '—'}–${hotel.endTime || '—'}`
+                          ? `${hotel.startTime || 'â€”'}â€“${hotel.endTime || 'â€”'}`
                           : '',
                       ]
                         .filter(Boolean)
-                        .join(' · ')}
+                        .join(' Â· ')}
                     </span>
                     {hotel.url?.trim() && (
                       <a
@@ -4155,7 +4194,7 @@ function DayForm({
                       >
                         {isHotelsComUrl(hotel.url)
                           ? 'Hotels.com'
-                          : 'Åpne lenke'}
+                          : 'Ã…pne lenke'}
                       </a>
                     )}
                   </div>
@@ -4222,11 +4261,11 @@ function DayForm({
                                 : '',
                             formatHotelPrice(hotel),
                             hotel.startTime || hotel.endTime
-                              ? `Kl. innsjekk ${hotel.startTime || '—'} · utsjekk ${hotel.endTime || '—'}`
+                              ? `Kl. innsjekk ${hotel.startTime || 'â€”'} Â· utsjekk ${hotel.endTime || 'â€”'}`
                               : '',
                           ]
                             .filter(Boolean)
-                            .join(' · ')}
+                            .join(' Â· ')}
                         </span>
                       )}
                       {hotel.url && (
@@ -4239,7 +4278,7 @@ function DayForm({
                         >
                           {isHotelsComUrl(hotel.url)
                             ? 'Hotels.com'
-                            : 'Åpne lenke'}
+                            : 'Ã…pne lenke'}
                         </a>
                       )}
                     </div>
@@ -4341,7 +4380,7 @@ function DayForm({
                       disabled={savingLinkedCruise}
                       onClick={() => void persistLinkedCruise(stay)}
                     >
-                      {savingLinkedCruise ? 'Lagrer…' : 'Lagre cruise'}
+                      {savingLinkedCruise ? 'Lagrerâ€¦' : 'Lagre cruise'}
                     </button>
                     <button
                       type="button"
@@ -4377,7 +4416,7 @@ function DayForm({
                         cruiseHomePort(cruise),
                       ]
                         .filter(Boolean)
-                        .join(' · ')}
+                        .join(' Â· ')}
                     </span>
                   </div>
                   <button
@@ -4482,7 +4521,7 @@ function DayForm({
                       disabled={savingLinkedCruise}
                       onClick={() => void persistLinkedCruise(stay)}
                     >
-                      {savingLinkedCruise ? 'Lagrer…' : 'Lagre cruise'}
+                      {savingLinkedCruise ? 'Lagrerâ€¦' : 'Lagre cruise'}
                     </button>
                     <button
                       type="button"
@@ -4524,7 +4563,7 @@ function DayForm({
                         formatItemPrice(cruise),
                       ]
                         .filter(Boolean)
-                        .join(' · ')}
+                        .join(' Â· ')}
                     </span>
                   </div>
                   <button
@@ -4604,10 +4643,10 @@ function DayForm({
                           home,
                           `${nights} ${nights === 1 ? 'natt' : 'netter'}`,
                           form.date && disembarkDate
-                            ? `${formatDateNO(form.date)} → ${formatDateNO(disembarkDate)}`
+                            ? `${formatDateNO(form.date)} â†’ ${formatDateNO(disembarkDate)}`
                             : '',
                           cruise.startTime || cruise.endTime
-                            ? `Embark ${cruise.startTime || '—'} · Disembark ${cruise.endTime || '—'}`
+                            ? `Embark ${cruise.startTime || 'â€”'} Â· Disembark ${cruise.endTime || 'â€”'}`
                             : '',
                           cruise.cabinNumber?.trim()
                             ? `Lugar ${cruise.cabinNumber.trim()}`
@@ -4616,7 +4655,7 @@ function DayForm({
                           summarizeCruiseActivities(cruise.activities),
                         ]
                           .filter(Boolean)
-                          .join(' · ')}
+                          .join(' Â· ')}
                       </span>
                       {!editing && cruise.url && (
                         <a
@@ -4626,7 +4665,7 @@ function DayForm({
                           className="meta"
                           onClick={(e) => e.stopPropagation()}
                         >
-                          Åpne lenke
+                          Ã…pne lenke
                         </a>
                       )}
                     </div>
@@ -4708,7 +4747,7 @@ function DayForm({
                           onClick={() => void persistLocalCruise(cruise.id)}
                         >
                           {savingLinkedCruise
-                            ? 'Lagrer…'
+                            ? 'Lagrerâ€¦'
                             : 'Lagre cruise (ankomst/avgang)'}
                         </button>
                         <button
@@ -4745,11 +4784,11 @@ function DayForm({
           Pakketurer
         </h3>
         <p className="section-sub">
-          Organiserte turer og lignende — ikke vanlig hotell/via.
+          Organiserte turer og lignende â€” ikke vanlig hotell/via.
         </p>
 
         {packageItems.length === 0 && editingDayItemId === null && (
-          <p className="empty">Ingen pakketurer ennå.</p>
+          <p className="empty">Ingen pakketurer ennÃ¥.</p>
         )}
 
         {packageItems.length > 0 && (
@@ -4788,7 +4827,7 @@ function DayForm({
                           className="meta"
                           onClick={(e) => e.stopPropagation()}
                         >
-                          Åpne lenke
+                          Ã…pne lenke
                         </a>
                       )}
                     </div>
@@ -4841,12 +4880,12 @@ function DayForm({
           Utflukter
         </h3>
         <p className="section-sub">
-          Ting å gjøre i byen — ikke reise videre til neste sted (bruk Reise).
+          Ting Ã¥ gjÃ¸re i byen â€” ikke reise videre til neste sted (bruk Reise).
         </p>
 
         {excursionItems.length === 0 &&
           editingDayItemId === null && (
-          <p className="empty">Ingen utflukter ennå.</p>
+          <p className="empty">Ingen utflukter ennÃ¥.</p>
         )}
 
         {excursionItems.length > 0 && (
@@ -4885,7 +4924,7 @@ function DayForm({
                           className="meta"
                           onClick={(e) => e.stopPropagation()}
                         >
-                          Åpne lenke
+                          Ã…pne lenke
                         </a>
                       )}
                     </div>
@@ -4935,9 +4974,9 @@ function DayForm({
           className="btn btn-primary"
           type="submit"
           disabled={saving || !canSave || !cityReady}
-          title={!cityReady ? 'Velg by først' : undefined}
+          title={!cityReady ? 'Velg by fÃ¸rst' : undefined}
         >
-          {saving ? 'Lagrer…' : 'Lagre'}
+          {saving ? 'Lagrerâ€¦' : 'Lagre'}
         </button>
         <button className="btn btn-soft" type="button" onClick={onCancel}>
           Avbryt
@@ -4949,8 +4988,8 @@ function DayForm({
             disabled={saving || dirty}
             title={
               dirty
-                ? 'Lagre dagen først'
-                : 'Sett inn en dag etter denne — senere dager flyttes én dag frem'
+                ? 'Lagre dagen fÃ¸rst'
+                : 'Sett inn en dag etter denne â€” senere dager flyttes Ã©n dag frem'
             }
             onClick={() => onInsertDayAfter()}
           >
@@ -4972,10 +5011,167 @@ function DayForm({
   )
 }
 
+function SettingsPage({
+  initialHome,
+  initialPlanner,
+  error,
+  onBack,
+  onSave,
+}: {
+  initialHome: HomePlace
+  initialPlanner: PlannerSettings
+  error?: string
+  onBack: () => void
+  onSave: (home: HomePlace, planner: PlannerSettings) => void
+}) {
+  const [draft, setDraft] = useState<HomePlace>(initialHome)
+  const [planner, setPlanner] = useState<PlannerSettings>(initialPlanner)
+
+  function togglePlanner<K extends keyof PlannerSettings>(key: K) {
+    setPlanner((p) => ({ ...p, [key]: !p[key] }))
+  }
+
+  return (
+    <div className="app-shell">
+      <div className="topbar">
+        <div>
+          <h1>Innstillinger</h1>
+          <p>Hjem, wizard-steg og varsler for ny planlegger.</p>
+        </div>
+        <button className="btn btn-ghost" type="button" onClick={onBack}>
+          Tilbake
+        </button>
+      </div>
+      <section className="panel">
+        {error && <p className="error">{error}</p>}
+        <h2 className="section-title">Hjem</h2>
+        <p className="section-sub">
+          Brukes av Â«Reise hjemÂ». Lagres i denne nettleseren.
+        </p>
+        <div className="form-grid">
+          <div className="full">
+            <CitySuggestFields
+              city={draft.city}
+              country={draft.country}
+              cityLabel="Hjemby"
+              cityPlaceholder="Oslo"
+              countryPlaceholder="Norge"
+              autoFocus
+              onCityChange={(city) => setDraft((p) => ({ ...p, city }))}
+              onCountryChange={(country) =>
+                setDraft((p) => ({ ...p, country }))
+              }
+              onSelectPlace={(city, country) =>
+                setDraft((p) => ({
+                  ...p,
+                  city,
+                  country: country || p.country,
+                }))
+              }
+            />
+          </div>
+          <label className="full">
+            Adresse
+            <input
+              value={draft.address}
+              onChange={(e) =>
+                setDraft((p) => ({ ...p, address: e.target.value }))
+              }
+              placeholder="Gateadresse (valgfritt)"
+            />
+          </label>
+        </div>
+      </section>
+
+      <section className="panel">
+        <h2 className="section-title">Ny planlegger â€” steg</h2>
+        <p className="section-sub">
+          Velg hva wizard spÃ¸r om nÃ¥r du legger til et stopp. Hotell og reise
+          kan alltid hoppes over.
+        </p>
+        <div className="trip-features-options">
+          <label className="trip-feature-option">
+            <input
+              type="checkbox"
+              checked={planner.askStay}
+              onChange={() => togglePlanner('askStay')}
+            />
+            Spør om hotell / overnatting
+          </label>
+          <label className="trip-feature-option">
+            <input
+              type="checkbox"
+              checked={planner.askNotes}
+              onChange={() => togglePlanner('askNotes')}
+            />
+            Spør om notater
+          </label>
+        </div>
+      </section>
+
+      <section className="panel">
+        <h2 className="section-title">Varsler (!)</h2>
+        <p className="section-sub">
+          Vis utropstegn på stopp som mangler kobling.
+        </p>
+        <div className="trip-features-options">
+          <label className="trip-feature-option">
+            <input
+              type="checkbox"
+              checked={planner.warnMissingStay}
+              onChange={() => togglePlanner('warnMissingStay')}
+            />
+            Varsle når stopp mangler hotell
+          </label>
+          <label className="trip-feature-option">
+            <input
+              type="checkbox"
+              checked={planner.warnMissingTravel}
+              onChange={() => togglePlanner('warnMissingTravel')}
+            />
+            Varsle når transport fra start til mål mangler
+          </label>
+          <label className="trip-feature-option">
+            <input
+              type="checkbox"
+              checked={planner.requireTransportMode}
+              onChange={() => togglePlanner('requireTransportMode')}
+            />
+            Krev transportmiddel på hvert via-sted
+          </label>
+        </div>
+        <div className="toolbar" style={{ marginTop: '1rem' }}>
+          <button
+            className="btn btn-primary"
+            type="button"
+            onClick={() => onSave(draft, planner)}
+          >
+            Lagre
+          </button>
+          <button className="btn btn-soft" type="button" onClick={onBack}>
+            Avbryt
+          </button>
+          <button
+            className="btn btn-ghost"
+            type="button"
+            onClick={() => setPlanner(defaultPlannerSettings())}
+          >
+            Tilbakestill steg
+          </button>
+        </div>
+      </section>
+    </div>
+  )
+}
+
 export default function App() {
   const [view, setView] = useState<View>({ name: 'home' })
   const [trips, setTrips] = useState<Trip[]>([])
   const [days, setDays] = useState<TripDay[]>([])
+  const [homePlace, setHomePlace] = useState<HomePlace>(() => loadHomePlace())
+  const [plannerSettings, setPlannerSettings] = useState<PlannerSettings>(() =>
+    loadPlannerSettings(),
+  )
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
@@ -4987,6 +5183,10 @@ export default function App() {
     features: emptyTripFeatures(),
   })
   const [showNewTrip, setShowNewTrip] = useState(false)
+  /** Asked when creating a trip â€” seeds journey/day from home place. */
+  const [startsFromHome, setStartsFromHome] = useState(() =>
+    hasHomePlace(loadHomePlace()),
+  )
   const [tripDayCounts, setTripDayCounts] = useState<
     Record<string, { dayCount: number; countryCount: number; cityCount: number }>
   >({})
@@ -5049,10 +5249,19 @@ export default function App() {
     ) {
       void loadDays(view.tripId)
     }
-  }, [view.name === 'home' ? 'home' : view.tripId])
+  }, [
+    view.name === 'trip' ||
+    view.name === 'day' ||
+    view.name === 'city' ||
+    view.name === 'expenses'
+      ? view.tripId
+      : view.name,
+  ])
 
   const activeTrip = useMemo(() => {
-    if (view.name === 'home') return null
+    if (view.name === 'home' || view.name === 'settings') {
+      return null
+    }
     return trips.find((t) => t.id === view.tripId) || null
   }, [trips, view])
 
@@ -5060,6 +5269,11 @@ export default function App() {
 
   async function handleCreateTrip() {
     if (!newTrip.name.trim()) return
+    if (startsFromHome && !hasHomePlace(homePlace)) {
+      setError('Sett hjemmeadresse under Innstillinger fÃ¸rst.')
+      setView({ name: 'settings', returnTo: { name: 'home' } })
+      return
+    }
     setSaving(true)
     setError('')
     try {
@@ -5072,7 +5286,38 @@ export default function App() {
           packages: !!newTrip.features?.packages,
         },
       })
+      const start =
+        created.startDate?.trim() ||
+        new Date().toISOString().slice(0, 10)
+
+      if (startsFromHome && hasHomePlace(homePlace)) {
+        const homeStop = {
+          id: newStopId(),
+          city: homePlace.city,
+          country: homePlace.country,
+          address: homePlace.address,
+          arriveDate: start,
+          kind: 'home' as const,
+          stay: null,
+          notes: '',
+          sortOrder: 0,
+        }
+        await api.saveJourney(created.id, {
+          ...emptyJourney(created.id),
+          stops: [homeStop],
+          legs: [],
+        })
+        await api.createDay({
+          ...emptyDay(created.id, start, 0),
+          city: homePlace.city,
+          country: homePlace.country,
+          address: homePlace.address,
+          notes: 'Start hjemmefra',
+        })
+      }
+
       setShowNewTrip(false)
+      setStartsFromHome(hasHomePlace(homePlace))
       setNewTrip({
         name: '',
         startDate: '',
@@ -5081,7 +5326,11 @@ export default function App() {
         features: emptyTripFeatures(),
       })
       await loadTrips()
-      setView({ name: 'trip', tripId: created.id, tab: 'liste' })
+      setView({
+        name: 'v2',
+        tripId: created.id,
+        autoOnward: startsFromHome,
+      })
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Kunne ikke opprette tur')
     } finally {
@@ -5128,12 +5377,30 @@ export default function App() {
     }
   }
 
+  function openTravelDay(tripId: string, intent: TravelIntent) {
+    setError('')
+    if (intent === 'home' && !hasHomePlace(homePlace)) {
+      setError('Legg inn hjemmeadresse under Innstillinger fÃ¸rst.')
+      setView({
+        name: 'settings',
+        returnTo: { name: 'trip', tripId, tab: 'liste' },
+      })
+      return
+    }
+    setView({
+      name: 'day',
+      tripId,
+      dayId: 'new',
+      travelIntent: intent,
+    })
+  }
+
   async function handleInsertDayAfter(afterDay: TripDay) {
     const insertDate = addDaysIso(afterDay.date, 1)
     const laterCount = days.filter((d) => d.date >= insertDate).length
     const ok = confirm(
       laterCount > 0
-        ? `Sett inn en dag etter ${formatDateNO(afterDay.date)}?\n\n${laterCount} senere dag${laterCount === 1 ? '' : 'er'} flyttes én dag frem i tid.`
+        ? `Sett inn en dag etter ${formatDateNO(afterDay.date)}?\n\n${laterCount} senere dag${laterCount === 1 ? '' : 'er'} flyttes Ã©n dag frem i tid.`
         : `Sett inn en dag etter ${formatDateNO(afterDay.date)}?`,
     )
     if (!ok) return
@@ -5193,7 +5460,7 @@ export default function App() {
       await loadDays(ordered[idx].tripId)
     } catch (err) {
       setError(
-        err instanceof Error ? err.message : 'Kunne ikke bytte rekkefølge',
+        err instanceof Error ? err.message : 'Kunne ikke bytte rekkefÃ¸lge',
       )
       await loadDays(ordered[idx].tripId)
     } finally {
@@ -5201,158 +5468,91 @@ export default function App() {
     }
   }
 
+  if (view.name === 'settings') {
+    const returnTo = view.returnTo || { name: 'home' as const }
+    return (
+      <SettingsPage
+        initialHome={homePlace}
+        initialPlanner={plannerSettings}
+        error={error}
+        onBack={() => {
+          setError('')
+          setView(returnTo)
+        }}
+        onSave={(home, planner) => {
+          setHomePlace(saveHomePlace(home))
+          setPlannerSettings(savePlannerSettings(planner))
+          setError('')
+          setView(returnTo)
+        }}
+      />
+    )
+  }
+
+  if (view.name === 'v2') {
+    const trip = trips.find((t) => t.id === view.tripId)
+    return (
+      <TripHub
+        tripId={view.tripId}
+        tripName={trip?.name || 'Tur'}
+        tripStartDate={trip?.startDate || ''}
+        homePlace={homePlace}
+        settings={plannerSettings}
+        autoOnward={!!view.autoOnward}
+        initialTab={view.tab || 'plan'}
+        onBack={() => setView({ name: 'home' })}
+        onOpenSettings={() =>
+          setView({
+            name: 'settings',
+            returnTo: {
+              name: 'v2',
+              tripId: view.tripId,
+              tab: view.tab || 'plan',
+            },
+          })
+        }
+        onOpenClassic={() =>
+          setView({ name: 'trip', tripId: view.tripId, tab: 'liste' })
+        }
+      />
+    )
+  }
+
   if (view.name === 'home') {
     return (
-      <div className="app-shell">
-        <header className="hero">
-          <h1 className="brand">Reise</h1>
-          <p className="hero-lead">
-            Planlegg turen dag for dag — byer, hotell og lenker samlet på ett sted.
-          </p>
-          <div className="hero-actions">
-            <button
-              className="btn btn-primary"
-              type="button"
-              onClick={() => setShowNewTrip(true)}
-            >
-              Ny tur
-            </button>
-            <GoogleLoginButton />
-            <button className="btn btn-ghost" type="button" onClick={() => void loadTrips()}>
-              Oppdater
-            </button>
-          </div>
-        </header>
-
-        <section className="panel">
-          <h2 className="section-title">Dine turer</h2>
-          <p className="section-sub">Velg en tur for dag-for-dag-plan, kalender og tidslinje.</p>
-          {error && <p className="error">{error}</p>}
-          {loading && <p className="empty">Henter turer…</p>}
-          {!loading && trips.length === 0 && (
-            <p className="empty">Ingen turer ennå. Opprett den første.</p>
-          )}
-          <div className="trip-list">
-            {trips.map((trip) => {
-              const stats = tripDayCounts[trip.id]
-              return (
-                <button
-                  key={trip.id}
-                  type="button"
-                  className="trip-row"
-                  onClick={() => setView({ name: 'trip', tripId: trip.id, tab: 'liste' })}
-                >
-                  <div>
-                    <h3>{trip.name}</h3>
-                    <p className="meta">{formatDateRange(trip.startDate, trip.endDate)}</p>
-                  </div>
-                  <span className="chip">
-                    {stats
-                      ? `${stats.dayCount} dager · ${stats.cityCount} byer · ${stats.countryCount} land`
-                      : '…'}
-                  </span>
-                </button>
-              )
-            })}
-          </div>
-        </section>
-
-        {showNewTrip && (
-          <section className="panel">
-            <h2 className="section-title">Ny tur</h2>
-            <div className="form-grid">
-              <label className="full">
-                Navn
-                <input
-                  autoFocus
-                  value={newTrip.name}
-                  onChange={(e) => setNewTrip({ ...newTrip, name: e.target.value })}
-                  placeholder="Italia våren 2026"
-                />
-              </label>
-              <label>
-                Startdato
-                <DatePickerField
-                  value={newTrip.startDate}
-                  onChange={(startDate) => setNewTrip({ ...newTrip, startDate })}
-                />
-              </label>
-              <label>
-                Sluttdato
-                <DatePickerField
-                  value={newTrip.endDate}
-                  onChange={(endDate) => setNewTrip({ ...newTrip, endDate })}
-                />
-              </label>
-              <fieldset className="full trip-features-fieldset">
-                <legend>Innhold på turen</legend>
-                <p className="section-sub" style={{ marginTop: 0 }}>
-                  Velg moduler du trenger. Uten cruise holder dagskjemaet seg
-                  kompakt.
-                </p>
-                <div className="trip-features-options">
-                  <label className="trip-feature-option">
-                    <input
-                      type="checkbox"
-                      checked={!!newTrip.features?.cruise}
-                      onChange={(e) =>
-                        setNewTrip({
-                          ...newTrip,
-                          features: {
-                            ...emptyTripFeatures(),
-                            ...newTrip.features,
-                            cruise: e.target.checked,
-                          },
-                        })
-                      }
-                    />
-                    Cruise
-                  </label>
-                  <label className="trip-feature-option">
-                    <input
-                      type="checkbox"
-                      checked={!!newTrip.features?.packages}
-                      onChange={(e) =>
-                        setNewTrip({
-                          ...newTrip,
-                          features: {
-                            ...emptyTripFeatures(),
-                            ...newTrip.features,
-                            packages: e.target.checked,
-                          },
-                        })
-                      }
-                    />
-                    Pakketurer
-                  </label>
-                </div>
-              </fieldset>
-            </div>
-            <div className="toolbar" style={{ marginTop: '1rem' }}>
-              <button
-                className="btn btn-primary"
-                type="button"
-                disabled={saving || !newTrip.name.trim()}
-                onClick={() => void handleCreateTrip()}
-              >
-                Opprett
-              </button>
-              <button
-                className="btn btn-soft"
-                type="button"
-                onClick={() => setShowNewTrip(false)}
-              >
-                Avbryt
-              </button>
-            </div>
-          </section>
-        )}
-      </div>
+      <HomePage
+        trips={trips}
+        tripDayCounts={tripDayCounts}
+        loading={loading}
+        error={error}
+        saving={saving}
+        homePlace={homePlace}
+        showNewTrip={showNewTrip}
+        newTrip={newTrip}
+        startsFromHome={startsFromHome}
+        googleSlot={<GoogleLoginButton />}
+        onRefresh={() => void loadTrips()}
+        onOpenSettings={() => {
+          setError('')
+          setView({ name: 'settings', returnTo: { name: 'home' } })
+        }}
+        onOpenTrip={(tripId) => setView({ name: 'v2', tripId })}
+        onShowNewTrip={() => {
+          setStartsFromHome(hasHomePlace(homePlace))
+          setShowNewTrip(true)
+        }}
+        onHideNewTrip={() => setShowNewTrip(false)}
+        onNewTripChange={setNewTrip}
+        onStartsFromHomeChange={setStartsFromHome}
+        onCreateTrip={() => void handleCreateTrip()}
+      />
     )
   }
 
   if (view.name === 'day') {
     const existing = view.dayId === 'new' ? null : days.find((d) => d.id === view.dayId)
+    const travelIntent =
+      view.dayId === 'new' ? view.travelIntent || 'onward' : undefined
     const nextDate = (() => {
       if (days.length === 0) {
         return (
@@ -5366,14 +5566,33 @@ export default function App() {
       return addDaysIso(latest.date, 1)
     })()
     const initial: TripDayInput & { id?: string } =
-      existing || emptyDay(view.tripId, nextDate, days.length)
+      existing ||
+      (travelIntent
+        ? buildTravelDayDraft(
+            view.tripId,
+            nextDate,
+            days.length,
+            days,
+            travelIntent,
+            homePlace,
+          )
+        : emptyDay(view.tripId, nextDate, days.length))
+    const newDayTitle =
+      travelIntent === 'home'
+        ? 'Reise hjem'
+        : travelIntent === 'onward'
+          ? 'Reise videre'
+          : 'Ny dag'
 
     return (
       <div className="app-shell">
         <div className="topbar">
           <div>
-            <h1>{existing ? formatNiceDate(existing.date) : 'Ny dag'}</h1>
-            <p>{activeTrip?.name || 'Tur'}</p>
+            <h1>{existing ? formatNiceDate(existing.date) : newDayTitle}</h1>
+            <p>
+              {activeTrip?.name || 'Tur'}
+              {!existing && nextDate ? ` Â· ${formatNiceDate(nextDate)}` : ''}
+            </p>
           </div>
           <button
             className="btn btn-ghost"
@@ -5389,6 +5608,8 @@ export default function App() {
             initial={initial}
             tripDays={days}
             tripFeatures={activeTrip?.features}
+            travelIntent={travelIntent}
+            tripStartDate={activeTrip?.startDate || ''}
             saving={saving}
             onCancel={() => setView({ name: 'trip', tripId: view.tripId, tab: 'liste' })}
             onInsertDayAfter={
@@ -5533,7 +5754,7 @@ export default function App() {
                 if (existing) {
                   await api.updateDay(existing.id, day)
                 } else {
-                  // One calendar day per date — merge into an existing row if any.
+                  // One calendar day per date â€” merge into an existing row if any.
                   const before = await api.listDays(view.tripId)
                   const clash = before.find((d) => d.date === day.date)
                   if (clash) {
@@ -5638,7 +5859,7 @@ export default function App() {
           <div>
             <h1>{group?.city || 'By'}</h1>
             <p>
-              {group?.country || ''} · {activeTrip?.name || 'Tur'}
+              {group?.country || ''} Â· {activeTrip?.name || 'Tur'}
             </p>
           </div>
           <div className="toolbar">
@@ -5680,16 +5901,16 @@ export default function App() {
                         <strong>{hotel.title || 'Hotell'}</strong>
                         {hotel.url ? (
                           <>
-                            {' · '}
+                            {' Â· '}
                             <a href={hotel.url} target="_blank" rel="noreferrer">
                               {isHotelsComUrl(hotel.url)
                                 ? 'Hotels.com'
-                                : 'Åpne lenke'}
+                                : 'Ã…pne lenke'}
                             </a>
                           </>
                         ) : (
                           <>
-                            {' · '}
+                            {' Â· '}
                             <a
                               href={hotelsComSearchUrl({
                                 hotelName: hotel.title,
@@ -5699,7 +5920,7 @@ export default function App() {
                               target="_blank"
                               rel="noreferrer"
                             >
-                              Søk Hotels.com
+                              SÃ¸k Hotels.com
                             </a>
                           </>
                         )}
@@ -5707,10 +5928,10 @@ export default function App() {
                     </div>
                     {hotel.address && <p className="meta">{hotel.address}</p>}
                     <p className="meta">
-                      Innsjekk: {hotel.startTime || '—'} · Utsjekk:{' '}
-                      {hotel.endTime || '—'}
+                      Innsjekk: {hotel.startTime || 'â€”'} Â· Utsjekk:{' '}
+                      {hotel.endTime || 'â€”'}
                       {formatHotelPrice(hotel)
-                        ? ` · Pris: ${formatHotelPrice(hotel)}`
+                        ? ` Â· Pris: ${formatHotelPrice(hotel)}`
                         : ''}
                     </p>
                   </div>
@@ -5730,16 +5951,16 @@ export default function App() {
                           <p className="meta" style={{ margin: 0 }}>
                             <strong>{cruise.title || 'Cruise'}</strong>
                             {cruiseHomePort(cruise)
-                              ? ` · ${cruiseHomePort(cruise)}`
+                              ? ` Â· ${cruiseHomePort(cruise)}`
                               : ''}
-                            {` · ${cruiseNights(cruise)} ${
+                            {` Â· ${cruiseNights(cruise)} ${
                               cruiseNights(cruise) === 1 ? 'natt' : 'netter'
                             }`}
                             {cruise.cabinNumber?.trim()
-                              ? ` · Lugar ${cruise.cabinNumber.trim()}`
+                              ? ` Â· Lugar ${cruise.cabinNumber.trim()}`
                               : ''}
                             {formatItemPrice(cruise)
-                              ? ` · ${formatItemPrice(cruise)}`
+                              ? ` Â· ${formatItemPrice(cruise)}`
                               : ''}
                           </p>
                         </div>
@@ -5767,7 +5988,7 @@ export default function App() {
                               <p key={d.id} className="meta day-row-ship">
                                 {formatNiceDate(d.date)}
                                 {times ? `: ${times}` : ''}
-                                {dayActs ? ` · ${dayActs}` : ''}
+                                {dayActs ? ` Â· ${dayActs}` : ''}
                               </p>
                             )
                           })
@@ -5789,12 +6010,12 @@ export default function App() {
                           <span className="chip">{itemTypeLabel(item.type)}</span>
                           <p className="meta">
                             <strong>{item.title || itemTypeLabel(item.type)}</strong>
-                            {itemSummary(item) ? ` · ${itemSummary(item)}` : ''}
+                            {itemSummary(item) ? ` Â· ${itemSummary(item)}` : ''}
                           </p>
                           {item.url && (
                             <p className="meta">
                               <a href={item.url} target="_blank" rel="noreferrer">
-                                Åpne lenke
+                                Ã…pne lenke
                               </a>
                             </p>
                           )}
@@ -5806,7 +6027,7 @@ export default function App() {
 
               {group.days.some((d) => (d.viaPoints?.length || 0) >= 2) && (
                 <div>
-                  <h2 className="section-title">Reise — ankomst fra annen by</h2>
+                  <h2 className="section-title">Reise â€” ankomst fra annen by</h2>
                   <p className="section-sub">
                     Dager du reiser inn til{' '}
                     {group.city === AT_SEA_LABEL ? 'til havs' : group.city} med
@@ -5855,7 +6076,7 @@ export default function App() {
                                             : '',
                                         ]
                                           .filter(Boolean)
-                                          .join(' · ')}
+                                          .join(' Â· ')}
                                       </p>
                                     )}
                                   </div>
@@ -5872,7 +6093,7 @@ export default function App() {
                                             day.legs[idx].endTime,
                                           ]
                                             .filter(Boolean)
-                                            .join('–'),
+                                            .join('â€“'),
                                           formatDeparturesLabel(
                                             day.legs[idx].departures,
                                           )
@@ -5882,7 +6103,7 @@ export default function App() {
                                             : '',
                                         ]
                                           .filter(Boolean)
-                                          .join(' · ') || undefined
+                                          .join(' Â· ') || undefined
                                       }
                                     />
                                   </div>
@@ -5938,7 +6159,7 @@ export default function App() {
                           </p>
                         </div>
                         <span className="chip">
-                          {viaCount >= 2 ? `${viaCount} stopp` : 'Åpne'}
+                          {viaCount >= 2 ? `${viaCount} stopp` : 'Ã…pne'}
                         </span>
                       </button>
                     )
@@ -5953,40 +6174,30 @@ export default function App() {
   }
 
   if (view.name === 'expenses') {
-    const stats = tripDayCounts[view.tripId] || tripStats(days)
+    const trip = trips.find((t) => t.id === view.tripId)
     return (
-      <div className="app-shell">
-        <div className="topbar">
-          <div>
-            <h1>Utgifter</h1>
-            <p>
-              {activeTrip?.name || 'Tur'}
-              {' · '}
-              {formatDateRange(
-                activeTrip?.startDate || '',
-                activeTrip?.endDate || '',
-              )}
-              {' · '}
-              {stats.dayCount} dager
-            </p>
-          </div>
-          <div className="toolbar">
-            <button
-              className="btn btn-ghost"
-              type="button"
-              onClick={() =>
-                setView({ name: 'trip', tripId: view.tripId, tab: 'liste' })
-              }
-            >
-              Tilbake til reisen
-            </button>
-          </div>
-        </div>
-        <section className="panel">
-          {error && <p className="error">{error}</p>}
-          <ExpensesView days={days} />
-        </section>
-      </div>
+      <TripHub
+        tripId={view.tripId}
+        tripName={trip?.name || 'Tur'}
+        tripStartDate={trip?.startDate || ''}
+        homePlace={homePlace}
+        settings={plannerSettings}
+        initialTab="expenses"
+        onBack={() => setView({ name: 'home' })}
+        onOpenSettings={() =>
+          setView({
+            name: 'settings',
+            returnTo: {
+              name: 'v2',
+              tripId: view.tripId,
+              tab: 'expenses',
+            },
+          })
+        }
+        onOpenClassic={() =>
+          setView({ name: 'trip', tripId: view.tripId, tab: 'liste' })
+        }
+      />
     )
   }
 
@@ -6001,11 +6212,11 @@ export default function App() {
           <h1>{activeTrip?.name || 'Tur'}</h1>
           <p>
             {formatDateRange(activeTrip?.startDate || '', activeTrip?.endDate || '')}
-            {' · '}
-            {stats.dayCount} dager · {stats.cityCount} byer · {stats.countryCount} land
+            {' Â· '}
+            {stats.dayCount} dager Â· {stats.cityCount} byer Â· {stats.countryCount} land
           </p>
           {activeTrip && (
-            <div className="trip-features-bar" aria-label="Innhold på turen">
+            <div className="trip-features-bar" aria-label="Innhold pÃ¥ turen">
               <label className="trip-feature-option">
                 <input
                   type="checkbox"
@@ -6038,20 +6249,44 @@ export default function App() {
           <button
             className="btn btn-primary"
             type="button"
-            onClick={() => setView({ name: 'day', tripId: view.tripId, dayId: 'new' })}
+            onClick={() => setView({ name: 'v2', tripId: view.tripId })}
+            title="Tilbake til planleggeren"
+          >
+            Til plan
+          </button>
+          <button
+            className="btn btn-soft"
+            type="button"
+            onClick={() => openTravelDay(view.tripId, 'onward')}
             title={
               latestTripDayDate(days)
-                ? `Legger til dagen etter ${formatDateNO(latestTripDayDate(days))}`
-                : 'Legg til første dag'
+                ? `Klassisk: reise videre fra ${formatDateNO(latestTripDayDate(days))}`
+                : 'Klassisk dagskjema'
             }
           >
-            Ny dag etter siste
+            Reise videre
+          </button>
+          <button
+            className="btn btn-soft"
+            type="button"
+            onClick={() => openTravelDay(view.tripId, 'home')}
+            title={
+              hasHomePlace(homePlace)
+                ? `Klassisk: reise hjem til ${formatHomePlace(homePlace)}`
+                : 'Sett hjemmeadresse under Innstillinger først'
+            }
+          >
+            Reise hjem
           </button>
           <button
             className="btn btn-soft"
             type="button"
             onClick={() =>
-              setView({ name: 'expenses', tripId: view.tripId })
+              setView({
+                name: 'v2',
+                tripId: view.tripId,
+                tab: 'expenses',
+              })
             }
           >
             Utgifter
@@ -6067,6 +6302,19 @@ export default function App() {
             }}
           >
             Eksporter kalender
+          </button>
+          <button
+            className="btn btn-ghost"
+            type="button"
+            onClick={() => {
+              setError('')
+              setView({
+                name: 'settings',
+                returnTo: { name: 'trip', tripId: view.tripId, tab: 'liste' },
+              })
+            }}
+          >
+            Innstillinger
           </button>
           <button
             className="btn btn-ghost"
@@ -6113,7 +6361,9 @@ export default function App() {
         {tab === 'liste' && (
           <div className="trip-list">
             {days.length === 0 && (
-              <p className="empty">Ingen dager ennå. Legg inn første dag i reiseruten.</p>
+              <p className="empty">
+                Ingen dager ennÃ¥. Velg Â«Reise videreÂ» for fÃ¸rste etappe.
+              </p>
             )}
             {sortTripDays(days).map((day, dayIndex, orderedDays) => {
               const canMoveUp = dayIndex > 0
@@ -6133,7 +6383,7 @@ export default function App() {
               }
               const tone = dayToneClass(day.date)
               const checkouts = hotelsCheckingOutOnDay(days, day.date)
-              // Overnight hotel (already checked in earlier) — not today's check-in.
+              // Overnight hotel (already checked in earlier) â€” not today's check-in.
               const stayingOn = hotelsStayingOnDay(days, day.date).filter(
                 (s) => s.checkInDay.id !== day.id,
               )
@@ -6144,13 +6394,13 @@ export default function App() {
                 summarizeStayingHotels(stayingOn),
               ]
                 .filter(Boolean)
-                .join(' · ')
+                .join(' Â· ')
               const lineTransport = [
                 summarizeViaRoute(day.viaPoints),
                 summarizeTransportItems(day.items),
               ]
                 .filter(Boolean)
-                .join(' · ')
+                .join(' Â· ')
               const lineUpcoming = summarizeCheckInHotels(day.items)
               const cruiseStaysOnDay = [
                 ...cruisesCoveringDay(days, day.date),
@@ -6163,7 +6413,7 @@ export default function App() {
               const wholeCruiseActs = cruiseStaysOnDay
                 .map((s) => summarizeCruiseActivities(s.cruise.activities))
                 .filter(Boolean)
-                .join(' · ')
+                .join(' Â· ')
               // Costs registered on this cruise day only.
               const cruiseDayCosts = cruiseStaysOnDay
                 .map((s) =>
@@ -6172,7 +6422,7 @@ export default function App() {
                   ),
                 )
                 .filter(Boolean)
-                .join(' · ')
+                .join(' Â· ')
               const dayAttractions = (day.items || []).filter(
                 (i) =>
                   i.type !== 'cruise' &&
@@ -6185,7 +6435,7 @@ export default function App() {
                 summarizeAttractionTitles(dayAttractions) || null,
               ]
                 .filter(Boolean)
-                .join(' · ')
+                .join(' Â· ')
               const lineExtra = day.notes?.trim() || ''
               return (
               <div
@@ -6202,7 +6452,7 @@ export default function App() {
                   <div className="day-row-main">
                     <h3>
                       {formatNiceDate(day.date)}
-                      {place !== 'Uten by' ? ` · ${place}` : ''}
+                      {place !== 'Uten by' ? ` Â· ${place}` : ''}
                       {tone === 'is-today' ? (
                         <span className="day-today-badge"> I dag</span>
                       ) : null}
@@ -6260,7 +6510,7 @@ export default function App() {
                   </div>
                 </button>
                 <div className="day-row-actions">
-                  <div className="day-row-reorder" role="group" aria-label="Rekkefølge">
+                  <div className="day-row-reorder" role="group" aria-label="RekkefÃ¸lge">
                     <button
                       type="button"
                       className="icon-btn icon-btn-sm"
@@ -6286,7 +6536,7 @@ export default function App() {
                     type="button"
                     className="btn btn-ghost btn-sm day-row-insert"
                     disabled={saving}
-                    title="Sett inn en dag etter denne — senere dager flyttes én dag frem"
+                    title="Sett inn en dag etter denne â€” senere dager flyttes Ã©n dag frem"
                     onClick={() => void handleInsertDayAfter(day)}
                   >
                     + Sett inn dag
@@ -6296,22 +6546,23 @@ export default function App() {
               )
             })}
             {days.length > 0 && (
-              <div className="trip-list-footer">
+              <div className="trip-list-footer travel-actions">
                 <button
                   type="button"
-                  className="btn btn-soft btn-sm"
-                  onClick={() =>
-                    setView({
-                      name: 'day',
-                      tripId: view.tripId,
-                      dayId: 'new',
-                    })
-                  }
+                  className="btn btn-primary btn-sm"
+                  onClick={() => openTravelDay(view.tripId, 'onward')}
                 >
-                  + Ny dag etter siste
+                  + Reise videre
                   {latestTripDayDate(days)
                     ? ` (${formatDateNO(addDaysIso(latestTripDayDate(days), 1))})`
                     : ''}
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-soft btn-sm"
+                  onClick={() => openTravelDay(view.tripId, 'home')}
+                >
+                  + Reise hjem
                 </button>
               </div>
             )}
@@ -6327,7 +6578,7 @@ export default function App() {
 
         {tab === 'tidslinje' && (
           <div className="timeline">
-            {days.length === 0 && <p className="empty">Ingen dager å vise.</p>}
+            {days.length === 0 && <p className="empty">Ingen dager Ã¥ vise.</p>}
             {days.map((day) => {
               const cruiseNames = [
                 ...cruisesCoveringDay(days, day.date),
@@ -6349,7 +6600,7 @@ export default function App() {
                 onClick={() => setView({ name: 'day', tripId: view.tripId, dayId: day.id })}
               >
                 <h3>
-                  {formatNiceDate(day.date)} — {dayPlaceLabel(day)}
+                  {formatNiceDate(day.date)} â€” {dayPlaceLabel(day)}
                   {tone === 'is-today' ? (
                     <span className="day-today-badge"> I dag</span>
                   ) : null}
@@ -6361,7 +6612,7 @@ export default function App() {
                   {[
                     isAtSeaDay(day) ? null : day.country,
                     cruiseNames.length
-                      ? cruiseNames.map((n) => `Cruise ${n}`).join(' · ')
+                      ? cruiseNames.map((n) => `Cruise ${n}`).join(' Â· ')
                       : null,
                     summarizeCheckoutHotels(hotelsCheckingOutOnDay(days, day.date)),
                     summarizeViaRoute(day.viaPoints),
@@ -6374,7 +6625,7 @@ export default function App() {
                     ),
                   ]
                     .filter(Boolean)
-                    .join(' · ')}
+                    .join(' Â· ')}
                 </p>
               </button>
               )
@@ -6384,7 +6635,7 @@ export default function App() {
 
         {tab === 'byer' && (
           <div className="trip-list">
-            {cityGroups.length === 0 && <p className="empty">Ingen byer ennå.</p>}
+            {cityGroups.length === 0 && <p className="empty">Ingen byer ennÃ¥.</p>}
             {cityGroups.map((group) => {
               const atSea =
                 group.city === AT_SEA_LABEL ||
@@ -6414,16 +6665,16 @@ export default function App() {
                         {group.city}
                         <span style={{ color: 'var(--muted)', fontWeight: 500 }}>
                           {' '}
-                          · {group.country}
+                          Â· {group.country}
                         </span>
                       </h3>
                       <p className="meta">
                         {group.hotels[0]?.title || 'Uten hotell'}
                         {group.hotels[0] && formatHotelPrice(group.hotels[0])
-                          ? ` · ${formatHotelPrice(group.hotels[0])}`
+                          ? ` Â· ${formatHotelPrice(group.hotels[0])}`
                           : ''}{' '}
-                        · {group.days.length} dag
-                        {group.days.length === 1 ? '' : 'er'} ·{' '}
+                        Â· {group.days.length} dag
+                        {group.days.length === 1 ? '' : 'er'} Â·{' '}
                         {group.items.length} ting
                       </p>
                       {(() => {
@@ -6436,12 +6687,12 @@ export default function App() {
                         if (!unique.length) return null
                         return (
                           <p className="meta day-row-line day-row-ship">
-                            Skip: {unique.join(' · ')}
+                            Skip: {unique.join(' Â· ')}
                           </p>
                         )
                       })()}
                     </div>
-                    <span className="chip">Åpne</span>
+                    <span className="chip">Ã…pne</span>
                   </button>
                   {mapsUrl && (
                     <a
@@ -6449,7 +6700,7 @@ export default function App() {
                       href={mapsUrl}
                       target="_blank"
                       rel="noreferrer"
-                      title={`Åpne ${group.city} i Google Maps`}
+                      title={`Ã…pne ${group.city} i Google Maps`}
                     >
                       Maps
                     </a>

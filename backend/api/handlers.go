@@ -373,6 +373,11 @@ func deleteTrip(w http.ResponseWriter, r *http.Request) {
 		respondWithError(w, http.StatusInternalServerError, "Failed to delete trip days")
 		return
 	}
+	if err := deleteJourneyForTrip(ctx, id); err != nil {
+		log.Printf("Error deleting journey for trip %s: %v", id, err)
+		respondWithError(w, http.StatusInternalServerError, "Failed to delete trip journey")
+		return
+	}
 
 	if _, err := db.Collection(tripsCollection).Doc(id).Delete(ctx); err != nil {
 		log.Printf("Error deleting trip %s: %v", id, err)

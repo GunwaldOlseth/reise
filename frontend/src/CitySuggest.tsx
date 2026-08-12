@@ -42,8 +42,10 @@ export function CitySuggestFields({
   const listId = useId()
   const rootRef = useRef<HTMLDivElement | null>(null)
   const cityFocusedRef = useRef(false)
+  const editedSinceFocusRef = useRef(false)
   const [suggestions, setSuggestions] = useState<PlaceSuggestion[]>([])
   const [cityFocused, setCityFocused] = useState(false)
+  const [editedSinceFocus, setEditedSinceFocus] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [active, setActive] = useState(0)
@@ -57,9 +59,9 @@ export function CitySuggestFields({
       return
     }
 
-    // Only fetch while the city field is focused — avoids popups when
-    // country changes or when the value is set programmatically.
-    if (!cityFocusedRef.current) {
+    // Only fetch after the user edits the field — not on open/focus with
+    // an existing city (e.g. «Rediger by»).
+    if (!cityFocusedRef.current || !editedSinceFocusRef.current) {
       setSuggestions([])
       setLoading(false)
       setError('')
@@ -97,16 +99,20 @@ export function CitySuggestFields({
       cancelled = true
       window.clearTimeout(timer)
     }
-  }, [city, country, cityFocused])
+  }, [city, country, cityFocused, editedSinceFocus])
 
   function pick(place: PlaceSuggestion) {
     onSelectPlace(place.name, place.country || country)
     setCityFocused(false)
     cityFocusedRef.current = false
+    editedSinceFocusRef.current = false
+    setEditedSinceFocus(false)
     setSuggestions([])
   }
 
   function handleCityChange(value: string) {
+    editedSinceFocusRef.current = true
+    setEditedSinceFocus(true)
     onCityChange(value)
     // Drop stale country when the city text is edited by hand.
     if (showCountry && country.trim()) {
@@ -116,6 +122,7 @@ export function CitySuggestFields({
 
   const showList =
     cityFocused &&
+    editedSinceFocus &&
     city.trim().length >= 2 &&
     (loading || suggestions.length > 0 || Boolean(error))
 
@@ -142,13 +149,17 @@ export function CitySuggestFields({
             onChange={(e) => handleCityChange(e.target.value)}
             onFocus={() => {
               cityFocusedRef.current = true
+              editedSinceFocusRef.current = false
               setCityFocused(true)
+              setEditedSinceFocus(false)
             }}
             onBlur={() => {
               // Delay so click on suggestion registers.
               window.setTimeout(() => {
                 cityFocusedRef.current = false
+                editedSinceFocusRef.current = false
                 setCityFocused(false)
+                setEditedSinceFocus(false)
                 setSuggestions([])
                 setError('')
               }, 180)
