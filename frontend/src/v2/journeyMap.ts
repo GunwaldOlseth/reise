@@ -1,6 +1,7 @@
 import { arriveTimeSortKey, AT_SEA_LABEL, type TripMapStop } from '../api'
 import {
   addDaysIso,
+  geoCoordsOf,
   isPackageStop,
   packageFreeDayLabel,
   packageOf,
@@ -34,6 +35,7 @@ export function journeyMapStopsInOrder(journey: Journey): TripMapStop[] {
         const opt = (via.options || [])[0]
         const timeRaw = opt?.startTime || via.startTime || via.endTime || ''
         const timeKey = arriveTimeSortKey(timeRaw)
+        const coords = geoCoordsOf(via.latitude, via.longitude)
         out.push({
           kind: 'via',
           city: title,
@@ -43,6 +45,8 @@ export function journeyMapStopsInOrder(journey: Journey): TripMapStop[] {
           key: `via|${leg?.id || prev.id}|${via.id}`,
           timeKey:
             timeKey === Number.POSITIVE_INFINITY ? undefined : timeKey,
+          latitude: coords?.latitude,
+          longitude: coords?.longitude,
         })
       }
     }
@@ -53,14 +57,19 @@ export function journeyMapStopsInOrder(journey: Journey): TripMapStop[] {
     }
 
     const city = stop.city?.trim()
-    if (!city) continue
-    // Skip pure home start if identical to nothing useful — still show as port.
+    const address = stop.address?.trim()
+    if (!city && !address) continue
+    const label = stop.kind === 'home' && address ? address : city || address || ''
+    const coords = geoCoordsOf(stop.latitude, stop.longitude)
     out.push({
       kind: 'port',
-      city,
+      city: label,
       country: stop.country || '',
       date: stop.arriveDate || '',
       key: `port|${stop.id}`,
+      contextCity: stop.kind === 'home' && address ? city : undefined,
+      latitude: coords?.latitude,
+      longitude: coords?.longitude,
     })
   }
 
@@ -72,12 +81,15 @@ function pushPackageMapStops(out: TripMapStop[], stop: JourneyStop) {
   if (!pack) {
     const city = stop.city?.trim()
     if (city) {
+      const coords = geoCoordsOf(stop.latitude, stop.longitude)
       out.push({
         kind: 'port',
         city,
         country: stop.country || '',
         date: stop.arriveDate || '',
         key: `port|${stop.id}`,
+        latitude: coords?.latitude,
+        longitude: coords?.longitude,
       })
     }
     return
@@ -86,6 +98,7 @@ function pushPackageMapStops(out: TripMapStop[], stop: JourneyStop) {
   const nights = Math.max(1, Math.floor(pack.nights || 1))
   const days = [...(pack.days || [])].sort((a, b) => a.offset - b.offset)
   const byOffset = new Map(days.map((d) => [d.offset, d]))
+  const baseCoords = geoCoordsOf(pack.baseLatitude, pack.baseLongitude)
   for (let offset = 0; offset <= nights; offset++) {
     const day = byOffset.get(offset)
     const date = stop.arriveDate
@@ -120,6 +133,12 @@ function pushPackageMapStops(out: TripMapStop[], stop: JourneyStop) {
       continue
     }
     const arriveKey = arriveTimeSortKey(day?.arriveTime)
+    const dayCoords =
+      geoCoordsOf(day?.latitude, day?.longitude) ||
+      ((offset === 0 || offset === nights) &&
+      city.toLowerCase() === (pack.basePlace || '').trim().toLowerCase()
+        ? baseCoords || geoCoordsOf(stop.latitude, stop.longitude)
+        : undefined)
     out.push({
       kind: 'port',
       city,
@@ -128,12 +147,17 @@ function pushPackageMapStops(out: TripMapStop[], stop: JourneyStop) {
       key: `port|${stop.id}|${day?.id || offset}`,
       timeKey:
         arriveKey === Number.POSITIVE_INFINITY ? undefined : arriveKey,
+      latitude: dayCoords?.latitude,
+      longitude: dayCoords?.longitude,
     })
   }
 }
 
 export function journeyMapRouteKey(journey: Journey): string {
   return journeyMapStopsInOrder(journey)
-    .map((s) => `${s.key}:${s.date}:${s.city}`)
+    .map(
+      (s) =>
+        `${s.key}:${s.date}:${s.city}:${s.latitude ?? ''}:${s.longitude ?? ''}`,
+    )
     .join('|')
 }

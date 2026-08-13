@@ -40,6 +40,12 @@ func main() {
 	mux.HandleFunc("GET /api/weather", getWeather)
 	mux.HandleFunc("GET /api/places", getPlaces)
 
+	mux.HandleFunc("POST /api/internal/backup", runScheduledBackup)
+	mux.HandleFunc("POST /api/admin/login", adminLogin)
+	mux.HandleFunc("GET /api/admin/backups", adminListBackups)
+	mux.HandleFunc("POST /api/admin/backups", adminCreateBackup)
+	mux.HandleFunc("POST /api/admin/backups/restore", adminRestoreBackup)
+
 	handler := corsMiddleware(mux)
 
 	port := os.Getenv("PORT")

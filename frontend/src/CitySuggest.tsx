@@ -1,8 +1,15 @@
 import { useEffect, useId, useRef, useState } from 'react'
 import { api, type PlaceSuggestion } from './api'
+import { localizeCity, localizeCountry } from './placeNames'
 
 function placeLabel(place: PlaceSuggestion): string {
-  return [place.name, place.admin1, place.country].filter(Boolean).join(', ')
+  return [
+    localizeCity(place.name),
+    localizeCity(place.admin1),
+    localizeCountry(place.country),
+  ]
+    .filter(Boolean)
+    .join(', ')
 }
 
 /**
@@ -21,6 +28,8 @@ export function CitySuggestFields({
   cityLabel = 'By / havn',
   showCountry = true,
   hideHint = false,
+  hideLabel = false,
+  disabled = false,
   autoFocus = false,
   className = '',
 }: {
@@ -28,7 +37,11 @@ export function CitySuggestFields({
   country: string
   onCityChange: (city: string) => void
   onCountryChange: (country: string) => void
-  onSelectPlace: (city: string, country: string) => void
+  onSelectPlace: (
+    city: string,
+    country: string,
+    place?: PlaceSuggestion,
+  ) => void
   cityPlaceholder?: string
   countryPlaceholder?: string
   cityLabel?: string
@@ -36,6 +49,9 @@ export function CitySuggestFields({
   showCountry?: boolean
   /** Hide the helper line under the fields (e.g. cruise itinerary rows). */
   hideHint?: boolean
+  /** Input only — use cityLabel as accessible name. */
+  hideLabel?: boolean
+  disabled?: boolean
   autoFocus?: boolean
   className?: string
 }) {
@@ -102,7 +118,16 @@ export function CitySuggestFields({
   }, [city, country, cityFocused, editedSinceFocus])
 
   function pick(place: PlaceSuggestion) {
-    onSelectPlace(place.name, place.country || country)
+    onSelectPlace(
+      localizeCity(place.name) || place.name,
+      localizeCountry(place.country) || place.country || country,
+      {
+        ...place,
+        name: localizeCity(place.name) || place.name,
+        country: localizeCountry(place.country) || place.country,
+        admin1: localizeCity(place.admin1) || place.admin1,
+      },
+    )
     setCityFocused(false)
     cityFocusedRef.current = false
     editedSinceFocusRef.current = false
@@ -134,6 +159,7 @@ export function CitySuggestFields({
         'city-suggest',
         'city-suggest-city-first',
         showCountry ? '' : 'city-suggest-city-only',
+        hideLabel ? 'city-suggest-hide-label' : '',
         className,
       ]
         .filter(Boolean)
@@ -142,10 +168,12 @@ export function CitySuggestFields({
     >
       <div className="city-suggest-city">
         <label>
-          {cityLabel}
+          {hideLabel ? <span className="sr-only">{cityLabel}</span> : cityLabel}
           <input
             value={city}
             autoFocus={autoFocus}
+            disabled={disabled}
+            aria-label={hideLabel ? cityLabel : undefined}
             onChange={(e) => handleCityChange(e.target.value)}
             onFocus={() => {
               cityFocusedRef.current = true

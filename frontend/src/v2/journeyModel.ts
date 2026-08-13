@@ -1,5 +1,6 @@
 import type { PlannerSettings } from '../userSettings'
 import { arriveTimeSortKey, normalizeClockTime, normalizeDepartures } from '../api'
+import { compactNoteHtml, noteHasContent } from './noteHtml'
 
 export type JourneyPackageType =
   | 'cruise'
@@ -9,6 +10,9 @@ export type JourneyPackageType =
   | 'other'
 
 export type JourneyStopKind = 'place' | 'home' | JourneyPackageType
+
+/** Visit the city, or only change transport there. */
+export type PlacePurpose = 'visit' | 'transfer'
 
 export const PACKAGE_TYPES: JourneyPackageType[] = [
   'cruise',
@@ -69,6 +73,8 @@ export interface JourneyActivity {
   dayOffset?: number
   startTime?: string
   endTime?: string
+  /** Visit this place, or only change transport there. */
+  purpose?: PlacePurpose
   sortOrder: number
 }
 
@@ -81,6 +87,8 @@ export interface JourneyPackageDay {
   atSea: boolean
   city?: string
   country?: string
+  latitude?: number
+  longitude?: number
   arriveTime?: string
   leaveTime?: string
 }
@@ -93,6 +101,8 @@ export interface JourneyPackage {
   /** Home port, start city or main base. */
   basePlace?: string
   baseCountry?: string
+  baseLatitude?: number
+  baseLongitude?: number
   /** Cabin, booking ref, etc. */
   detail?: string
   price?: string
@@ -134,6 +144,9 @@ export interface JourneyStop {
   id: string
   city: string
   country: string
+  /** Cached map coordinates from place search (skip geocode on map). */
+  latitude?: number
+  longitude?: number
   address?: string
   arriveDate: string
   kind: JourneyStopKind
@@ -144,8 +157,105 @@ export interface JourneyStop {
   cruise?: JourneyCruise | null
   /** Attractions / excursions in this city (optionally per dayOffset). */
   sights?: JourneyActivity[]
+  /** Visit the city, or only change transport there. */
+  purpose?: PlacePurpose
+  /** Legacy single city note; kept in sync with the first document. */
   notes?: string
+  /** Extra info documents for the city (tips, restaurants, tickets, …). */
+  docs?: JourneyCityDoc[]
   sortOrder: number
+}
+
+export interface JourneyCityDoc {
+  id: string
+  title: string
+  body: string
+  sortOrder: number
+}
+
+export function newCityDoc(sortOrder = 0, title = ''): JourneyCityDoc {
+  return {
+    id: crypto.randomUUID(),
+    title,
+    body: '',
+    sortOrder,
+  }
+}
+
+export function normalizeCityDocs(
+  list?: JourneyCityDoc[] | null,
+  keepEmpty = false,
+): JourneyCityDoc[] {
+  const mapped = [...(list || [])].map((d, i) => ({
+    id: d.id || crypto.randomUUID(),
+    title: (d.title || '').trim(),
+    body: d.body || '',
+    sortOrder: i,
+  }))
+  return keepEmpty
+    ? mapped
+    : mapped.filter((d) => d.title || noteHasContent(d.body))
+}
+
+/** Documents to show, including a legacy `notes` field. */
+export function cityDocsOf(
+  stop: Pick<JourneyStop, 'notes' | 'docs'> | null | undefined,
+): JourneyCityDoc[] {
+  const docs = normalizeCityDocs(stop?.docs)
+  if (docs.length) return docs
+  const note = (stop?.notes || '').trim()
+  if (!noteHasContent(note)) return []
+  return [
+    {
+      id: 'notes',
+      title: 'Om byen',
+      body: note,
+      sortOrder: 0,
+    },
+  ]
+}
+
+/** Always at least one row in the editor. */
+export function cityDocsForEdit(
+  stop: Pick<JourneyStop, 'notes' | 'docs'> | null | undefined,
+): JourneyCityDoc[] {
+  const raw = normalizeCityDocs(stop?.docs, true)
+  if (raw.length) return raw
+  const note = (stop?.notes || '').trim()
+  if (noteHasContent(note)) {
+    return [{ id: 'notes', title: 'Om byen', body: note, sortOrder: 0 }]
+  }
+  return [{ id: 'notes', title: 'Om byen', body: '', sortOrder: 0 }]
+}
+
+export function withCityDocs(
+  stop: JourneyStop,
+  docs: JourneyCityDoc[],
+): JourneyStop {
+  const list = [...docs].map((d, i) => ({
+    ...d,
+    id: d.id || crypto.randomUUID(),
+    title: d.title || '',
+    body: d.body || '',
+    sortOrder: i,
+  }))
+  const first = list.find((d) => noteHasContent(d.body)) || list[0]
+  return {
+    ...stop,
+    docs: list,
+    notes: first?.body || '',
+  }
+}
+
+export function compactCityDocs(
+  list?: JourneyCityDoc[] | null,
+): JourneyCityDoc[] {
+  return normalizeCityDocs(list).map((d, i) => ({
+    ...d,
+    id: d.id && d.id !== 'notes' ? d.id : crypto.randomUUID(),
+    body: compactNoteHtml(d.body),
+    sortOrder: i,
+  }))
 }
 
 /** One way to travel between two places (bus OR train, etc.). */
@@ -178,6 +288,8 @@ export interface JourneyVia {
   /** City or airport name (e.g. Bergamo, Milano, Genova). */
   title: string
   country?: string
+  latitude?: number
+  longitude?: number
   /** @deprecated Prefer options[] — kept for older data. */
   mode?: JourneyLegMode | string
   startTime?: string
@@ -188,7 +300,26 @@ export interface JourneyVia {
   options?: JourneyTransportOption[]
   /** Attractions / excursions while at this via city. */
   sights?: JourneyActivity[]
+  /** Visit the city, or only change transport there. */
+  purpose?: PlacePurpose
   sortOrder: number
+}
+
+/** Valid map coordinates, or undefined if missing/invalid. */
+export function geoCoordsOf(
+  lat?: number | null,
+  lon?: number | null,
+): { latitude: number; longitude: number } | undefined {
+  if (
+    typeof lat !== 'number' ||
+    typeof lon !== 'number' ||
+    !Number.isFinite(lat) ||
+    !Number.isFinite(lon) ||
+    (lat === 0 && lon === 0)
+  ) {
+    return undefined
+  }
+  return { latitude: lat, longitude: lon }
 }
 
 export interface JourneyLeg {
@@ -263,8 +394,180 @@ export function newJourneyVia(sortOrder = 0): JourneyVia {
     notes: '',
     departures: [],
     options: [],
+    purpose: 'transfer',
     sortOrder,
   }
+}
+
+export function viaPurpose(
+  via: Pick<JourneyVia, 'purpose' | 'sights'> | null | undefined,
+): PlacePurpose {
+  if (via?.purpose === 'transfer') return 'transfer'
+  return 'visit'
+}
+
+export function activityPurpose(
+  activity: Pick<JourneyActivity, 'purpose'> | null | undefined,
+): PlacePurpose {
+  if (activity?.purpose === 'transfer') return 'transfer'
+  return 'visit'
+}
+
+export interface VisitCity {
+  city: string
+  country: string
+  /** Optional city info shown as an (i) icon. */
+  info?: string
+  docs?: JourneyCityDoc[]
+}
+
+/** Unique visit cities/countries in journey order (not home, not transfer-only). */
+export function journeyVisitPlaces(journey: Journey): {
+  cities: VisitCity[]
+  countries: string[]
+} {
+  const cities: VisitCity[] = []
+  const cityIndex = new Map<string, number>()
+  const countries: string[] = []
+  const countryKeys = new Set<string>()
+
+  function sameCity(a?: string, b?: string) {
+    return (a || '').trim().toLowerCase() === (b || '').trim().toLowerCase()
+  }
+
+  function addPlace(
+    city?: string,
+    country?: string,
+    info?: string,
+    docs?: JourneyCityDoc[],
+  ) {
+    const name = (city || '').trim()
+    if (!name) return
+    const nation = (country || '').trim()
+    const note = (info || '').trim()
+    const nextDocs = cityDocsOf({ notes: note, docs })
+    const key = name.toLowerCase()
+    const existing = cityIndex.get(key)
+    if (existing !== undefined) {
+      const cur = cities[existing]
+      cities[existing] = {
+        city: cur.city,
+        country: cur.country || nation,
+        info: cur.info || note || undefined,
+        docs: cur.docs?.length ? cur.docs : nextDocs,
+      }
+    } else {
+      cityIndex.set(key, cities.length)
+      cities.push({
+        city: name,
+        country: nation,
+        info: note || undefined,
+        docs: nextDocs,
+      })
+    }
+    if (nation) {
+      const nkey = nation.toLowerCase()
+      if (!countryKeys.has(nkey)) {
+        countryKeys.add(nkey)
+        countries.push(nation)
+      }
+    }
+  }
+
+  function addVisitActivities(
+    sights: JourneyActivity[] | null | undefined,
+    country?: string,
+    parentCity?: string,
+  ) {
+    for (const activity of sights || []) {
+      if (activityPurpose(activity) === 'transfer') continue
+      if (sameCity(activity.title, parentCity)) continue
+      addPlace(activity.title, country)
+    }
+  }
+
+  const stops = [...(journey.stops || [])].sort(
+    (a, b) => a.sortOrder - b.sortOrder,
+  )
+  for (let i = 0; i < stops.length; i++) {
+    const stop = stops[i]
+    if (i > 0) {
+      const leg = (journey.legs || []).find(
+        (l) => l.fromStopId === stops[i - 1].id && l.toStopId === stop.id,
+      )
+      for (const via of transportSegments(leg)) {
+        if (viaPurpose(via) !== 'transfer') {
+          if (
+            !sameCity(via.title, stop.city) &&
+            !(stop.kind === 'home' && sameCity(via.title, stop.address))
+          ) {
+            addPlace(via.title, via.country, via.notes)
+          }
+        }
+        addVisitActivities(
+          via.sights,
+          via.country || stop.country,
+          via.title,
+        )
+      }
+    }
+    if (stop.kind === 'home') {
+      addVisitActivities(stop.sights, stop.country, stop.city || stop.address)
+      continue
+    }
+    if (isPackageStop(stop)) {
+      const pack = packageOf(stop)
+      const freeLabel = packageFreeDayLabel(stop.kind)
+      const nights = Math.max(1, Math.floor(pack?.nights || 1))
+      const days = [...(pack?.days || [])].sort((a, b) => a.offset - b.offset)
+      const byOffset = new Map(days.map((d) => [d.offset, d]))
+      for (let offset = 0; offset <= nights; offset++) {
+        const day = byOffset.get(offset)
+        if (day?.atSea) continue
+        const city =
+          day?.city?.trim() ||
+          (offset === 0 || offset === nights
+            ? pack?.basePlace?.trim() || stop.city?.trim()
+            : '') ||
+          ''
+        if (!city || city === freeLabel) continue
+        addPlace(
+          city,
+          day?.country || pack?.baseCountry || stop.country,
+          stop.notes,
+          stop.docs,
+        )
+      }
+      addVisitActivities(
+        stop.sights,
+        pack?.baseCountry || stop.country,
+        stop.city,
+      )
+      continue
+    }
+    if (stopPurpose(stop) !== 'transfer') {
+      addPlace(stop.city, stop.country, stop.notes, stop.docs)
+    }
+    addVisitActivities(stop.sights, stop.country, stop.city)
+  }
+
+  return { cities, countries }
+}
+
+export function journeyVisitStats(journey: Journey): {
+  cityCount: number
+  countryCount: number
+} {
+  const { cities, countries } = journeyVisitPlaces(journey)
+  return { cityCount: cities.length, countryCount: countries.length }
+}
+
+export function stopPurpose(
+  stop: Pick<JourneyStop, 'kind' | 'purpose'> | null | undefined,
+): PlacePurpose {
+  if (!stop || stop.kind === 'home' || isPackageType(stop.kind)) return 'visit'
+  if (stop.purpose === 'visit' || stop.purpose === 'transfer') return stop.purpose
+  return 'visit'
 }
 
 /** One departure alternative — list is sorted by startTime across modes. */
@@ -427,6 +730,7 @@ export function withTransportSegments(
       ...normalized,
       title: v.title || '',
       country: v.country || '',
+      purpose: viaPurpose(v),
       sortOrder: i,
     }
   })
@@ -548,17 +852,117 @@ export function summarizeViaHop(
   return `${route} · ${shown}${more}`
 }
 
+export type JourneyLiveKind = 'food' | 'drink' | 'shop' | 'other'
+
+/** Something that happened on the trip but is not on the plan. */
+export interface JourneyLiveEntry {
+  id: string
+  date: string
+  kind: JourneyLiveKind
+  title: string
+  price?: string
+  notes?: string
+  time?: string
+  sortOrder: number
+}
+
 export interface Journey {
   id?: string
   tripId: string
   stops: JourneyStop[]
   legs: JourneyLeg[]
+  /** Off-plan log (food, drinks, purchases) while travelling. */
+  live?: JourneyLiveEntry[]
   createdAt?: string
   updatedAt?: string
 }
 
 export function emptyJourney(tripId: string): Journey {
-  return { tripId, stops: [], legs: [] }
+  return { tripId, stops: [], legs: [], live: [] }
+}
+
+export function newLiveEntry(
+  date: string,
+  kind: JourneyLiveKind,
+  sortOrder = 0,
+): JourneyLiveEntry {
+  return {
+    id: crypto.randomUUID(),
+    date,
+    kind,
+    title: '',
+    price: '',
+    notes: '',
+    time: '',
+    sortOrder,
+  }
+}
+
+export function liveKindLabel(kind?: JourneyLiveKind | string): string {
+  switch (kind) {
+    case 'food':
+      return 'Mat'
+    case 'drink':
+      return 'Drikke'
+    case 'shop':
+      return 'Kjøpt'
+    default:
+      return 'Annet'
+  }
+}
+
+export function normalizeLive(
+  list?: JourneyLiveEntry[] | null,
+): JourneyLiveEntry[] {
+  return [...(list || [])]
+    .map((e, i) => {
+      const kind: JourneyLiveKind =
+        e.kind === 'food' || e.kind === 'drink' || e.kind === 'shop'
+          ? e.kind
+          : 'other'
+      return {
+        ...e,
+        id: e.id || crypto.randomUUID(),
+        date: (e.date || '').trim(),
+        kind,
+        title: e.title || '',
+        price: e.price || '',
+        notes: e.notes || '',
+        time: e.time || '',
+        sortOrder: i,
+      }
+    })
+}
+
+/** Drop blank draft rows before persist. */
+export function compactLive(
+  list?: JourneyLiveEntry[] | null,
+): JourneyLiveEntry[] {
+  return normalizeLive(list).filter(
+    (e) =>
+      e.date &&
+      (e.title.trim() || (e.price || '').trim() || (e.notes || '').trim()),
+  )
+}
+
+export function todayIsoOslo(): string {
+  return new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Oslo' })
+}
+
+export function journeyDateSpan(journey: Journey): {
+  start: string
+  end: string
+} | null {
+  const dates: string[] = []
+  for (const stop of journey.stops || []) {
+    const arrive = (stop.arriveDate || '').trim()
+    if (arrive) dates.push(arrive)
+    const depart = (stopDepartDate(stop) || '').trim()
+    if (depart) dates.push(depart)
+  }
+  dates.sort()
+  if (!dates.length) return null
+  return { start: dates[0], end: dates[dates.length - 1] }
 }
 
 export function newStopId(): string {
@@ -594,6 +998,7 @@ export function newSight(
     dayOffset,
     startTime: '',
     endTime: '',
+    purpose: 'visit',
     sortOrder,
   }
 }
@@ -612,20 +1017,28 @@ export function normalizeSights(
       return {
         ...s,
         id: s.id || newSightId(),
-        title: (s.title || '').trim(),
-        notes: (s.notes || '').trim(),
-        url: (s.url || '').trim(),
+        title: s.title || '',
+        notes: s.notes || '',
+        url: s.url || '',
         kind,
         dayOffset:
           typeof s.dayOffset === 'number' && s.dayOffset >= 0
             ? Math.floor(s.dayOffset)
             : 0,
-        startTime: (s.startTime || '').trim(),
-        endTime: (s.endTime || '').trim(),
+        startTime: s.startTime || '',
+        endTime: s.endTime || '',
+        purpose: activityPurpose(s),
         sortOrder: i,
       }
     })
-    .filter((s) => s.title || s.notes || s.url)
+    .filter(
+      (s) =>
+        s.title.trim() ||
+        s.notes.trim() ||
+        s.url.trim() ||
+        s.startTime.trim() ||
+        s.endTime.trim(),
+    )
 }
 
 /**
@@ -704,7 +1117,10 @@ export function addDaysIso(iso: string, days: number): string {
   const d = new Date(`${iso}T12:00:00`)
   if (Number.isNaN(d.getTime())) return iso
   d.setDate(d.getDate() + days)
-  return d.toISOString().slice(0, 10)
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
 }
 
 export const CRUISE_AT_SEA = 'Til sjøs'
@@ -924,7 +1340,10 @@ export function newCruiseDayId(): string {
 
 /** Normalize legacy cruise field shape into JourneyPackage. */
 export function packageOf(
-  stop: Pick<JourneyStop, 'pack' | 'cruise' | 'city' | 'country'> | null | undefined,
+  stop: Pick<
+    JourneyStop,
+    'pack' | 'cruise' | 'city' | 'country' | 'latitude' | 'longitude'
+  > | null | undefined,
 ): JourneyPackage | null {
   if (stop?.pack) {
     return {
@@ -933,6 +1352,10 @@ export function packageOf(
       // City on the stop is the package base / hjemhavn when pack.basePlace is missing.
       basePlace: stop.pack.basePlace || stop.city || '',
       baseCountry: stop.pack.baseCountry || stop.country || '',
+      baseLatitude:
+        stop.pack.baseLatitude || stop.latitude || undefined,
+      baseLongitude:
+        stop.pack.baseLongitude || stop.longitude || undefined,
       detail: stop.pack.detail || '',
       price: stop.pack.price || '',
       costs: [...(stop.pack.costs || [])],
@@ -946,6 +1369,8 @@ export function packageOf(
     title: c.title || c.shipName || '',
     basePlace: c.basePlace || c.homePort || stop.city || '',
     baseCountry: c.baseCountry || c.homeCountry || stop.country || '',
+    baseLatitude: stop.latitude || undefined,
+    baseLongitude: stop.longitude || undefined,
     detail: c.detail || c.cabinNumber || '',
     price: c.price || '',
     costs: [...(c.costs || [])],
@@ -954,7 +1379,15 @@ export function packageOf(
 }
 
 export function packageNightsOf(pack?: JourneyPackage | null): number {
-  const n = Math.floor(pack?.nights || 0)
+  const fromField = Math.floor(Number(pack?.nights) || 0)
+  // Day list is offset 0 … nights (inclusive). Prefer the longer signal so a
+  // missing/stale nights field cannot collapse a 7-night cruise to 1 day.
+  let fromDays = 0
+  for (const d of pack?.days || []) {
+    const off = Math.floor(Number(d.offset) || 0)
+    if (off > fromDays) fromDays = off
+  }
+  const n = Math.max(fromField, fromDays)
   return Math.max(1, Math.min(30, n || 1))
 }
 
@@ -973,6 +1406,7 @@ export function syncPackageDays(
   const baseCountryRaw = pack.baseCountry ?? ''
   const base = baseRaw.trim()
   const baseCountry = baseCountryRaw.trim()
+  const baseCoords = geoCoordsOf(pack.baseLatitude, pack.baseLongitude)
   const freeLabel = packageFreeDayLabel(type)
   const prev = [...(pack.days || [])].sort((a, b) => a.offset - b.offset)
   const byOffset = new Map(prev.map((d) => [d.offset, d]))
@@ -1001,6 +1435,11 @@ export function syncPackageDays(
       const noArrive = atHomePort && !isLast
       /** Iland-dag: no ship departure. */
       const noLeave = type === 'cruise' && isLast
+      const dayCoords = atSea
+        ? undefined
+        : useBase
+          ? baseCoords
+          : geoCoordsOf(existing.latitude, existing.longitude)
       days.push({
         ...existing,
         offset,
@@ -1011,6 +1450,8 @@ export function syncPackageDays(
           : useBase
             ? baseCountry
             : (existing.country || '').trim(),
+        latitude: dayCoords?.latitude,
+        longitude: dayCoords?.longitude,
         arriveTime: atSea || noArrive ? '' : (existing.arriveTime || '').trim(),
         leaveTime: atSea || noLeave ? '' : (existing.leaveTime || '').trim(),
       })
@@ -1022,6 +1463,8 @@ export function syncPackageDays(
       atSea: false,
       city: fillBase ? base : '',
       country: fillBase ? baseCountry : '',
+      latitude: fillBase ? baseCoords?.latitude : undefined,
+      longitude: fillBase ? baseCoords?.longitude : undefined,
       arriveTime: '',
       leaveTime: '',
     })
@@ -1031,6 +1474,8 @@ export function syncPackageDays(
     nights,
     basePlace: baseRaw,
     baseCountry: baseCountryRaw,
+    baseLatitude: baseCoords?.latitude,
+    baseLongitude: baseCoords?.longitude,
     title: pack.title ?? '',
     detail: pack.detail ?? '',
     price: pack.price ?? '',
@@ -1072,6 +1517,8 @@ export function emptyPackage(
       title: '',
       basePlace: '',
       baseCountry: '',
+      baseLatitude: undefined,
+      baseLongitude: undefined,
       detail: '',
       price: '',
       costs: [],
@@ -1101,11 +1548,70 @@ export function stayNights(stop: JourneyStop): number {
   return 0
 }
 
-/** Checkout morning date (arrive + nights), or arrive date if no stay. */
+/** Checkout morning / package end date (arrive + nights), or arrive if no stay. */
 export function stopDepartDate(stop: JourneyStop): string {
+  const arrive = (stop.arriveDate || '').trim()
+  if (!arrive) return ''
+  if (isPackageStop(stop)) {
+    return addDaysIso(arrive, packageNightsOf(packageOf(stop)))
+  }
   const nights = stayNights(stop)
-  if (!stop.arriveDate) return ''
-  return nights > 0 ? addDaysIso(stop.arriveDate, nights) : stop.arriveDate
+  return nights > 0 ? addDaysIso(arrive, nights) : arrive
+}
+
+/** Visit city that should have a hotel, but no name is set. */
+export function cityMissingHotel(stop: JourneyStop): boolean {
+  if (stop.kind === 'home' || isPackageStop(stop)) return false
+  if (stopPurpose(stop) !== 'visit') return false
+  if ((stop.stay?.hotelName || '').trim()) return false
+  if (stop.stay && stayNights(stop) < 1) return false
+  return true
+}
+
+export type LiveHotelAlert = {
+  stopId: string
+  city: string
+  kind: 'arrive' | 'tomorrow' | 'enroute'
+}
+
+/** Cities we are approaching / arriving at on `date` without a hotel. */
+export function liveMissingHotelAlerts(
+  journey: Journey,
+  date: string,
+): LiveHotelAlert[] {
+  const stops = [...(journey.stops || [])].sort(
+    (a, b) => a.sortOrder - b.sortOrder,
+  )
+  const out: LiveHotelAlert[] = []
+  const seen = new Set<string>()
+  for (let i = 0; i < stops.length; i++) {
+    const stop = stops[i]
+    if (!cityMissingHotel(stop)) continue
+    const arrive = (stop.arriveDate || '').trim()
+    if (!arrive) continue
+    const city = (stop.city || '').trim() || 'byen'
+    let kind: LiveHotelAlert['kind'] | null = null
+    if (arrive === date) kind = 'arrive'
+    else if (addDaysIso(arrive, -1) === date) kind = 'tomorrow'
+    else if (i > 0 && (stopDepartDate(stops[i - 1]) || '') === date) {
+      kind = 'enroute'
+    }
+    if (!kind || seen.has(stop.id)) continue
+    seen.add(stop.id)
+    out.push({ stopId: stop.id, city, kind })
+  }
+  return out
+}
+
+export function liveHotelAlertText(alert: LiveHotelAlert): string {
+  switch (alert.kind) {
+    case 'arrive':
+      return `Dere ankommer ${alert.city}, og det er ikke lagt inn hotell.`
+    case 'tomorrow':
+      return `I morgen ankommer vi ${alert.city} uten hotell.`
+    default:
+      return `Dere er på vei til ${alert.city} uten hotell.`
+  }
 }
 
 /**
@@ -1178,6 +1684,36 @@ export function gapFillPrefill(
  * or when there is a real date gap between this stop and the next.
  * Contiguous city/package pairs hide the action.
  */
+/** Overlay registered home city/address onto every home stop. */
+export function journeyWithRegisteredHome(
+  journey: Journey,
+  home: { city: string; country: string; address: string },
+): Journey {
+  const city = home.city.trim()
+  const country = home.country.trim()
+  const address = home.address.trim()
+  if (!city && !address) return journey
+  let changed = false
+  const stops = journey.stops.map((s) => {
+    if (s.kind !== 'home') return s
+    const next = {
+      ...s,
+      city: city || s.city,
+      country: country || s.country,
+      address,
+    }
+    if (
+      next.city !== s.city ||
+      next.country !== s.country ||
+      (s.address || '') !== address
+    ) {
+      changed = true
+    }
+    return next
+  })
+  return changed ? { ...journey, stops } : journey
+}
+
 export function showOnwardFromHere(
   stop: JourneyStop,
   nextStop?: JourneyStop | null,
@@ -1321,7 +1857,7 @@ export function summarizeTransportGaps(gaps: TransportGap[]): string {
   return parts.join(' · ')
 }
 
-export type StopWarning = 'place' | 'date' | 'stay' | 'travel'
+export type StopWarning = 'place' | 'date' | 'stay' | 'travel' | 'schedule'
 
 export function warningsForStop(
   journey: Journey,
@@ -1330,9 +1866,14 @@ export function warningsForStop(
 ): StopWarning[] {
   const stop = journey.stops[stopIndex]
   if (!stop) return []
-  // Multi-day packages = title + nights + day list; no hotel or city-transport on the block.
-  if (isPackageStop(stop)) return []
   const warnings: StopWarning[] = []
+  // Multi-day packages = title + nights + day list; no hotel or city-transport on the block.
+  if (isPackageStop(stop)) {
+    if (scheduleWarnings(journey, stopIndex).length) {
+      warnings.push('schedule')
+    }
+    return warnings
+  }
   if (stop.kind !== 'home' && !(stop.city || '').trim()) {
     warnings.push('place')
   }
@@ -1358,7 +1899,101 @@ export function warningsForStop(
       warnings.push('travel')
     }
   }
+  if (scheduleWarnings(journey, stopIndex).length) {
+    warnings.push('schedule')
+  }
   return warnings
+}
+
+export function stopShiftLabel(stop: JourneyStop): string {
+  if (stop.kind === 'home') return 'hjem'
+  if (isPackageStop(stop)) {
+    return packageOf(stop)?.title?.trim() || stop.city?.trim() || 'pakke'
+  }
+  return stop.city?.trim() || 'by'
+}
+
+/** Date clashes and thread-order issues — warnings only, never blocks. */
+export function scheduleWarnings(
+  journey: Journey,
+  stopIndex: number,
+): string[] {
+  const stop = journey.stops[stopIndex]
+  if (!stop || stop.kind === 'home') return []
+  const arrive = (stop.arriveDate || '').trim()
+  if (!arrive) return []
+  const depart = (stopDepartDate(stop) || arrive).trim()
+  const msgs: string[] = []
+  const seen = new Set<string>()
+
+  function add(msg: string) {
+    if (!msg || seen.has(msg)) return
+    seen.add(msg)
+    msgs.push(msg)
+  }
+
+  const prev = journey.stops[stopIndex - 1]
+  if (prev && (prev.arriveDate || '').trim() && arrive < prev.arriveDate.trim()) {
+    add(`Ankomst er før ${stopShiftLabel(prev)} i listen`)
+  }
+  const next = journey.stops[stopIndex + 1]
+  if (next && (next.arriveDate || '').trim() && arrive > next.arriveDate.trim()) {
+    add(`Ankomst er etter ${stopShiftLabel(next)} i listen`)
+  }
+
+  for (let i = 0; i < journey.stops.length; i++) {
+    if (i === stopIndex) continue
+    const other = journey.stops[i]
+    if (!other || other.kind === 'home') continue
+    const otherArrive = (other.arriveDate || '').trim()
+    if (!otherArrive) continue
+    const otherDepart = (stopDepartDate(other) || otherArrive).trim()
+    const name = stopShiftLabel(other)
+    if (arrive === otherArrive) {
+      add(`Samme ankomstdag som ${name}`)
+    } else if (arrive < otherDepart && otherArrive < depart) {
+      add(`Overlapper oppholdet i ${name}`)
+    }
+  }
+  return msgs
+}
+
+export function shiftStopsAfter(
+  journey: Journey,
+  fromStopId: string,
+  days: number,
+): Journey {
+  if (!days) return journey
+  const idx = journey.stops.findIndex((s) => s.id === fromStopId)
+  if (idx < 0) return journey
+  const stops = journey.stops.map((s, i) => {
+    if (i <= idx) return s
+    const date = (s.arriveDate || '').trim()
+    if (!date) return s
+    return { ...s, arriveDate: addDaysIso(date, days) }
+  })
+  return syncJourneyLegs({ ...journey, stops })
+}
+
+export function confirmShiftAfterNights(
+  city: string,
+  delta: number,
+  later: JourneyStop[],
+): boolean {
+  if (!delta || !later.length) return false
+  const names = later.map(stopShiftLabel).filter(Boolean)
+  if (!names.length) return false
+  const abs = Math.abs(delta)
+  const nightWord = abs === 1 ? 'natt' : 'netter'
+  const dayWord = abs === 1 ? 'dag' : 'dager'
+  const longer = delta > 0
+  const who =
+    names.length === 1
+      ? names[0]
+      : `${names.slice(0, -1).join(', ')} og ${names[names.length - 1]}`
+  return window.confirm(
+    `Oppholdet i ${city} er ${abs} ${nightWord} ${longer ? 'lenger' : 'kortere'}.\n\nForskyve ${who} ${abs} ${dayWord} ${longer ? 'senere' : 'tidligere'}?`,
+  )
 }
 
 export function stopWarningLabel(w: StopWarning): string {
@@ -1371,6 +2006,53 @@ export function stopWarningLabel(w: StopWarning): string {
       return 'Mangler hotell'
     case 'travel':
       return 'Mangler reise'
+    case 'schedule':
+      return 'Dato eller rekkefølge'
+  }
+}
+
+function keepActivityPurpose(
+  saved: JourneyActivity[] | undefined,
+  local: JourneyActivity[] | undefined,
+): JourneyActivity[] | undefined {
+  if (!saved?.length) return saved
+  const byId = new Map((local || []).map((s) => [s.id, s.purpose] as const))
+  return saved.map((s) => ({
+    ...s,
+    purpose: s.purpose || byId.get(s.id),
+  }))
+}
+
+/** Keep visit/transfer if a save response omitted the field. */
+export function keepPlacePurpose(local: Journey, saved: Journey): Journey {
+  const stopById = new Map(local.stops.map((s) => [s.id, s] as const))
+  const viaById = new Map<string, JourneyVia>()
+  for (const leg of local.legs || []) {
+    for (const via of leg.vias || []) {
+      viaById.set(via.id, via)
+    }
+  }
+  return {
+    ...saved,
+    stops: (saved.stops || []).map((s) => {
+      const prev = stopById.get(s.id)
+      return {
+        ...s,
+        purpose: s.purpose || prev?.purpose,
+        sights: keepActivityPurpose(s.sights, prev?.sights),
+      }
+    }),
+    legs: (saved.legs || []).map((l) => ({
+      ...l,
+      vias: (l.vias || []).map((v) => {
+        const prev = viaById.get(v.id)
+        return {
+          ...v,
+          purpose: v.purpose || prev?.purpose,
+          sights: keepActivityPurpose(v.sights, prev?.sights),
+        }
+      }),
+    })),
   }
 }
 
@@ -1379,7 +2061,20 @@ export function syncJourneyLegs(journey: Journey): Journey {
   for (const l of journey.legs) {
     byPair.set(`${l.fromStopId}->${l.toStopId}`, l)
   }
-  const stops = journey.stops.map((s, i) => ({ ...s, sortOrder: i }))
+  const stops = journey.stops.map((s, i) => {
+    const base = { ...s, sortOrder: i }
+    if (!isPackageStop(base)) return base
+    const type = isPackageType(base.kind) ? base.kind : 'other'
+    return {
+      ...base,
+      stay: null,
+      pack: syncPackageDays(
+        packageOf(base) || emptyPackage(type),
+        type,
+      ),
+      cruise: null,
+    }
+  })
   const legs: JourneyLeg[] = []
   for (let i = 0; i + 1 < stops.length; i++) {
     const key = `${stops[i].id}->${stops[i + 1].id}`
@@ -1443,9 +2138,11 @@ export function upsertStop(
     ? {
         ...stop,
         stay: null,
-        pack:
+        pack: syncPackageDays(
           packageOf(stop) ||
-          emptyPackage(isPackageType(stop.kind) ? stop.kind : 'other'),
+            emptyPackage(isPackageType(stop.kind) ? stop.kind : 'other'),
+          isPackageType(stop.kind) ? stop.kind : 'other',
+        ),
         cruise: null,
       }
     : stop
@@ -1511,25 +2208,29 @@ export function removeStop(journey: Journey, stopId: string): Journey {
   })
 }
 
-/** Suggested arrive date for the next stop (day after previous block). */
+/** Suggested arrive date for the next stop (end of previous block). */
 export function suggestNextArriveDate(
   journey: Journey,
   tripStartDate = '',
+  fromStopId?: string,
 ): string {
   const fallback =
     tripStartDate.trim() || new Date().toISOString().slice(0, 10)
   if (!journey.stops.length) {
     return fallback
   }
-  const last = journey.stops[journey.stops.length - 1]
-  if (!last.arriveDate?.trim()) return fallback
 
-  const nights = stayNights(last)
-  if (nights >= 1) {
-    // Day after last overnight = checkout / package end (natural travel day).
-    return stopDepartDate(last) || addDaysIso(last.arriveDate, nights)
+  const from =
+    (fromStopId
+      ? journey.stops.find((s) => s.id === fromStopId)
+      : undefined) || journey.stops[journey.stops.length - 1]
+  if (!from.arriveDate?.trim()) return fallback
+
+  const nights = stayNights(from)
+  if (isPackageStop(from) || nights >= 1) {
+    return stopDepartDate(from) || addDaysIso(from.arriveDate, nights)
   }
   // Home start: often leave the same day. Other stops without stay: next calendar day.
-  if (last.kind === 'home') return last.arriveDate
-  return addDaysIso(last.arriveDate, 1)
+  if (from.kind === 'home') return from.arriveDate
+  return addDaysIso(from.arriveDate, 1)
 }

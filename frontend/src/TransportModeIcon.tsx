@@ -1,4 +1,4 @@
-/** Shared transport mode SVG icons (classic + v2). Clear at 16–20px. */
+/** Shared transport mode SVG icons. Clear at 16–20px. */
 
 export function TransportModeIcon({
   mode,

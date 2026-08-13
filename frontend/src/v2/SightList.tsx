@@ -1,12 +1,15 @@
 import { useEffect, useRef, useState } from 'react'
+import { CitySuggestFields } from '../CitySuggest'
 import { TrashIcon } from '../TransportModeIcon'
 import {
   activityKindLabel,
+  activityPurpose,
   newSight,
   normalizeSights,
   type JourneyActivity,
   type JourneyActivityKind,
 } from './journeyModel'
+import { PurposeToggle } from './PurposeToggle'
 
 function ordered(list: JourneyActivity[]): JourneyActivity[] {
   return list.map((s, i) => ({ ...s, sortOrder: i }))
@@ -32,12 +35,21 @@ export function SightList({
   sights,
   disabled,
   compact,
+  heading = 'På programmet',
+  suggestCountry = '',
+  dayOffset = 0,
   onChange,
 }: {
   sights?: JourneyActivity[] | null
   disabled?: boolean
   /** Tighter layout inside via accordion (no notes / times). */
   compact?: boolean
+  /** Section title above the list. */
+  heading?: string
+  /** Rank place suggestions by this country (from the stop / via). */
+  suggestCountry?: string
+  /** Calendar day from stop.arriveDate (0 = ankomstdag). */
+  dayOffset?: number
   onChange: (sights: JourneyActivity[]) => void
 }) {
   const [draft, setDraft] = useState<JourneyActivity[]>(() =>
@@ -65,7 +77,10 @@ export function SightList({
     const nextOrdered = ordered(
       next.map((s) => ({
         ...s,
-        dayOffset: 0,
+        dayOffset:
+          typeof s.dayOffset === 'number' && s.dayOffset >= 0
+            ? Math.floor(s.dayOffset)
+            : dayOffset,
         kind: normalizeKind(s.kind),
       })),
     )
@@ -88,8 +103,64 @@ export function SightList({
     emit(draft.map((s, i) => (i === idx ? { ...s, ...partial } : s)))
   }
 
+  function commit(idx: number) {
+    const row = draftRef.current[idx]
+    if (!row) return
+    emit(
+      draftRef.current.map((s, i) =>
+        i === idx
+          ? {
+              ...s,
+              title: s.title.trim(),
+              notes: (s.notes || '').trim(),
+              url: (s.url || '').trim(),
+            }
+          : s,
+      ),
+      true,
+    )
+  }
+
+  function nameField(
+    sight: JourneyActivity,
+    idx: number,
+    kind: JourneyActivityKind,
+    compactField: boolean,
+  ) {
+    const placeholder = compactField
+      ? activityKindLabel(kind)
+      : kind === 'excursion'
+        ? 'F.eks. Cinque Terre-tur'
+        : kind === 'other'
+          ? 'F.eks. Middag, billetter…'
+          : 'F.eks. Castello'
+    return (
+      <CitySuggestFields
+        city={sight.title || ''}
+        country={suggestCountry}
+        cityLabel="Navn"
+        cityPlaceholder={placeholder}
+        showCountry={false}
+        hideHint
+        hideLabel={compactField}
+        disabled={disabled}
+        onCityChange={(city) => update(idx, { title: city })}
+        onCountryChange={() => {}}
+        onSelectPlace={(city) => {
+          emit(
+            draftRef.current.map((s, i) =>
+              i === idx ? { ...s, title: city } : s,
+            ),
+            true,
+          )
+        }}
+        className={compactField ? 'city-suggest-sight-inline' : 'city-suggest-sight'}
+      />
+    )
+  }
+
   function add(kind: JourneyActivityKind) {
-    const row = newSight(draft.length, kind, 0)
+    const row = newSight(draft.length, kind, dayOffset)
     setDraft((prev) => ordered([...prev, row]))
     setOpenId(row.id)
   }
@@ -106,7 +177,7 @@ export function SightList({
   return (
     <div className={`v2-sights${compact ? ' is-compact' : ''}`}>
       <div className="v2-sights-head">
-        <span>På programmet</span>
+        <span>{heading}</span>
         <div className="v2-sights-add">
           <button
             type="button"
@@ -150,6 +221,7 @@ export function SightList({
           const timeBits = [sight.startTime, sight.endTime]
             .filter(Boolean)
             .join('–')
+          const purpose = activityPurpose(sight)
           if (compact) {
             return (
               <div key={sight.id} className="v2-sight-row">
@@ -159,15 +231,7 @@ export function SightList({
                 >
                   {kind === 'excursion' ? 'U' : kind === 'other' ? 'A' : 'S'}
                 </span>
-                <input
-                  value={sight.title || ''}
-                  disabled={disabled}
-                  placeholder={activityKindLabel(kind)}
-                  aria-label={activityKindLabel(kind)}
-                  title={activityKindLabel(kind)}
-                  onChange={(e) => update(idx, { title: e.target.value })}
-                  onBlur={() => emit(draftRef.current, true)}
-                />
+                {nameField(sight, idx, kind, true)}
                 <button
                   type="button"
                   className="v2-via-remove"
@@ -178,6 +242,21 @@ export function SightList({
                 >
                   <TrashIcon size={14} />
                 </button>
+                <div className="v2-sight-row-purpose">
+                  <PurposeToggle
+                    compact
+                    value={purpose}
+                    disabled={disabled}
+                    onChange={(next) =>
+                      emit(
+                        draftRef.current.map((s, i) =>
+                          i === idx ? { ...s, purpose: next } : s,
+                        ),
+                        true,
+                      )
+                    }
+                  />
+                </div>
               </div>
             )
           }
@@ -205,9 +284,15 @@ export function SightList({
                     {activityKindLabel(kind)}
                   </span>
                   <span className="v2-activity-title">{title}</span>
-                  {(timeBits || sight.notes?.trim()) && (
+                  {(timeBits ||
+                    sight.notes?.trim() ||
+                    purpose === 'transfer') && (
                     <span className="v2-meta">
-                      {[timeBits, sight.notes?.trim()]
+                      {[
+                        timeBits,
+                        sight.notes?.trim(),
+                        purpose === 'transfer' ? 'Bare bytte' : '',
+                      ]
                         .filter(Boolean)
                         .join(' · ')}
                     </span>
@@ -238,23 +323,19 @@ export function SightList({
               </div>
               {expanded && (
                 <div className="v2-activity-body">
-                  <label>
-                    Navn
-                    <input
-                      value={sight.title || ''}
-                      disabled={disabled}
-                      placeholder={
-                        kind === 'excursion'
-                          ? 'F.eks. Cinque Terre-tur'
-                          : kind === 'other'
-                            ? 'F.eks. Middag, billetter…'
-                            : 'F.eks. Castello'
-                      }
-                      title="Navn"
-                      onChange={(e) => update(idx, { title: e.target.value })}
-                      onBlur={() => emit(draftRef.current, true)}
-                    />
-                  </label>
+                  <PurposeToggle
+                    value={purpose}
+                    disabled={disabled}
+                    onChange={(next) =>
+                      emit(
+                        draftRef.current.map((s, i) =>
+                          i === idx ? { ...s, purpose: next } : s,
+                        ),
+                        true,
+                      )
+                    }
+                  />
+                  {nameField(sight, idx, kind, false)}
                   <div className="v2-activity-times">
                     <label>
                       Fra
@@ -291,7 +372,7 @@ export function SightList({
                       placeholder="Møtested, billett, tips…"
                       title="Notat"
                       onChange={(e) => update(idx, { notes: e.target.value })}
-                      onBlur={() => emit(draftRef.current, true)}
+                      onBlur={() => commit(idx)}
                     />
                   </label>
                   <label>
@@ -302,7 +383,7 @@ export function SightList({
                       placeholder="https://…"
                       title="Lenke"
                       onChange={(e) => update(idx, { url: e.target.value })}
-                      onBlur={() => emit(draftRef.current, true)}
+                      onBlur={() => commit(idx)}
                     />
                   </label>
                 </div>
@@ -323,14 +404,78 @@ export function SightPreview({ sights }: { sights?: JourneyActivity[] | null }) 
       {list.map((s) => (
         <li
           key={s.id}
-          className={
+          className={[
             s.kind === 'excursion'
               ? 'is-excursion'
               : s.kind === 'other'
                 ? 'is-other'
-                : 'is-sight'
+                : 'is-sight',
+            activityPurpose(s) === 'transfer' ? 'is-transfer' : '',
+          ]
+            .filter(Boolean)
+            .join(' ')}
+          title={
+            activityPurpose(s) === 'transfer'
+              ? `${activityKindLabel(s.kind)} · Bare bytte`
+              : activityKindLabel(s.kind)
           }
-          title={activityKindLabel(s.kind)}
+        >
+          {s.title}
+        </li>
+      ))}
+    </ul>
+  )
+}
+
+/** Collapsed preview of hotel + program linked to a city. */
+export function PlaceLinkedPreview({
+  hotel,
+  nights,
+  warnMissingStay,
+  sights,
+}: {
+  hotel?: string
+  nights?: number
+  warnMissingStay?: boolean
+  sights?: JourneyActivity[] | null
+}) {
+  const list = normalizeSights(sights)
+  const hasHotel = !!(hotel || '').trim()
+  const hasStay = (nights || 0) >= 1
+  if (!hasHotel && !hasStay && !list.length && !warnMissingStay) return null
+  return (
+    <ul className="v2-sights-preview v2-linked-preview">
+      {hasHotel ? (
+        <li className="is-hotel" title="Hotell">
+          {hotel!.trim()}
+        </li>
+      ) : hasStay ? (
+        <li className="is-hotel is-empty" title="Hotell">
+          Hotell ikke satt
+        </li>
+      ) : warnMissingStay ? (
+        <li className="is-hotel is-empty" title="Hotell">
+          Uten hotell
+        </li>
+      ) : null}
+      {list.map((s) => (
+        <li
+          key={s.id}
+          className={[
+            s.kind === 'excursion'
+              ? 'is-excursion'
+              : s.kind === 'other'
+                ? 'is-other'
+                : 'is-sight',
+            activityPurpose(s) === 'transfer' ? 'is-transfer' : '',
+          ]
+            .filter(Boolean)
+            .join(' ')}
+          title={
+            activityPurpose(s) === 'transfer'
+              ? `${activityKindLabel(s.kind)} · Bare bytte`
+              : activityKindLabel(s.kind)
+          }
         >
           {s.title}
         </li>

@@ -1,9 +1,13 @@
-import type { ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import {
   emptyTripFeatures,
+  formatTravelers,
+  normalizeTravelers,
   type Trip,
   type TripInput,
 } from '../api'
+import { DeleteTripSheet } from './DeleteTripSheet'
+import { EditTripSheet, TravelerEditor } from './EditTripSheet'
 import {
   formatHomePlace,
   hasHomePlace,
@@ -36,6 +40,8 @@ export function HomePage({
   onNewTripChange,
   onStartsFromHomeChange,
   onCreateTrip,
+  onTripDeleted,
+  onTripUpdated,
 }: {
   trips: Trip[]
   tripDayCounts: Record<
@@ -58,7 +64,12 @@ export function HomePage({
   onNewTripChange: (next: TripInput) => void
   onStartsFromHomeChange: (value: boolean) => void
   onCreateTrip: () => void
+  onTripDeleted: () => void
+  onTripUpdated: (trip: Trip) => void
 }) {
+  const [deleteTrip, setDeleteTrip] = useState<Trip | null>(null)
+  const [editTrip, setEditTrip] = useState<Trip | null>(null)
+
   return (
     <div className="v2-shell v2-home">
       <header className="v2-home-top">
@@ -118,30 +129,75 @@ export function HomePage({
         <div className="v2-home-trips">
           {trips.map((trip) => {
             const stats = tripDayCounts[trip.id]
+            const who = formatTravelers(trip.travelers)
             return (
-              <button
-                key={trip.id}
-                type="button"
-                className="v2-home-trip"
-                title={`Åpne ${trip.name}`}
-                onClick={() => onOpenTrip(trip.id)}
-              >
-                <span className="v2-home-trip-main">
-                  <strong>{trip.name}</strong>
-                  <span className="v2-meta">
-                    {formatDateRange(trip.startDate, trip.endDate)}
+              <div key={trip.id} className="v2-home-trip-row">
+                <button
+                  type="button"
+                  className="v2-home-trip"
+                  title={`Åpne ${trip.name}`}
+                  onClick={() => onOpenTrip(trip.id)}
+                >
+                  <span className="v2-home-trip-main">
+                    <strong>{trip.name}</strong>
+                    <span className="v2-meta">
+                      {formatDateRange(trip.startDate, trip.endDate)}
+                    </span>
+                    {who ? <span className="v2-meta">{who}</span> : null}
                   </span>
-                </span>
-                <span className="v2-home-trip-chip">
-                  {stats
-                    ? `${stats.dayCount} d · ${stats.cityCount} byer`
-                    : '…'}
-                </span>
-              </button>
+                  <span className="v2-home-trip-chip">
+                    {stats
+                      ? `${stats.cityCount} ${stats.cityCount === 1 ? 'by' : 'byer'} · ${stats.countryCount} land`
+                      : '…'}
+                    <span className="v2-home-trip-arrow" aria-hidden>
+                      ›
+                    </span>
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  className="v2-home-trip-edit"
+                  title={`Rediger ${trip.name}`}
+                  onClick={() => setEditTrip(trip)}
+                >
+                  Endre
+                </button>
+                <button
+                  type="button"
+                  className="v2-home-trip-delete"
+                  title={`Slett ${trip.name}`}
+                  onClick={() => setDeleteTrip(trip)}
+                >
+                  Slett
+                </button>
+              </div>
             )
           })}
         </div>
       </section>
+
+      {editTrip && (
+        <EditTripSheet
+          trip={editTrip}
+          onCancel={() => setEditTrip(null)}
+          onSaved={(trip) => {
+            setEditTrip(null)
+            onTripUpdated(trip)
+          }}
+        />
+      )}
+
+      {deleteTrip && (
+        <DeleteTripSheet
+          tripId={deleteTrip.id}
+          tripName={deleteTrip.name}
+          onCancel={() => setDeleteTrip(null)}
+          onDeleted={() => {
+            setDeleteTrip(null)
+            onTripDeleted()
+          }}
+        />
+      )}
 
       {showNewTrip && (
         <div className="v2-sheet" role="dialog" aria-modal="true">
@@ -227,6 +283,15 @@ export function HomePage({
                   </button>
                 </p>
               )}
+              <div className="full">
+                <TravelerEditor
+                  travelers={normalizeTravelers(newTrip.travelers)}
+                  disabled={saving}
+                  onChange={(travelers) =>
+                    onNewTripChange({ ...newTrip, travelers })
+                  }
+                />
+              </div>
               <label className="v2-home-check">
                 <input
                   type="checkbox"

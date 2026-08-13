@@ -17,6 +17,7 @@ import {
   GOOGLE_MY_MAPS_CREATE_URL,
   googleMapsPlaceUrl,
 } from './googleMaps'
+import { localizeCity, localizeCountry } from './placeNames'
 
 function escapeHtml(value: string) {
   return value
@@ -135,13 +136,19 @@ function groupStopsByCoord(stops: ResolvedStop[]): ResolvedStop[][] {
 function stopPopupLine(stop: ResolvedStop): string {
   const place = stop.place
   const name = escapeHtml(
-    stop.kind === 'sea' ? AT_SEA_LABEL : stop.city || place?.name || 'Stopp',
+    stop.kind === 'sea'
+      ? AT_SEA_LABEL
+      : localizeCity(stop.city) || localizeCity(place?.name) || 'Stopp',
   )
   const num =
     stop.kind === 'sea' ? '~' : String(stop.markerLabel ?? '')
   const bits = [
     stop.kind === 'via' ? 'Reise' : null,
-    stop.kind === 'sea' ? place?.admin1 || null : stop.country || place?.country || null,
+    stop.kind === 'sea'
+      ? localizeCity(place?.admin1) || null
+      : localizeCountry(stop.country) ||
+        localizeCountry(place?.country) ||
+        null,
     formatDateNO(stop.date),
     formatMapTime(stop.timeKey) || null,
   ].filter(Boolean)
@@ -162,7 +169,9 @@ function stackPopupHtml(group: ResolvedStop[]): string {
     const maps = mapsLinkHtml(
       place.latitude,
       place.longitude,
-      stop.kind === 'sea' ? AT_SEA_LABEL : stop.city || place.name,
+      stop.kind === 'sea'
+        ? AT_SEA_LABEL
+        : localizeCity(stop.city) || localizeCity(place.name),
     )
     if (stop.kind === 'sea') {
       return `<strong>${AT_SEA_LABEL}</strong><br/>${escapeHtml(
@@ -170,21 +179,25 @@ function stackPopupHtml(group: ResolvedStop[]): string {
       )}<br/><span class="meta">${formatDateNO(stop.date)}</span><br/>${maps}`
     }
     if (stop.kind === 'via') {
-      return `<strong>${escapeHtml(place.name)}</strong><br/>Via · ${formatDateNO(
+      return `<strong>${escapeHtml(localizeCity(place.name))}</strong><br/>Via · ${formatDateNO(
         stop.date,
       )}${
         place.country || stop.country
-          ? `<br/>${escapeHtml(place.country || stop.country)}`
+          ? `<br/>${escapeHtml(localizeCountry(place.country || stop.country))}`
           : ''
       }<br/>${maps}`
     }
-    return `<strong>${escapeHtml(place.name)}</strong><br/>${escapeHtml(
-      [place.admin1, place.country].filter(Boolean).join(', '),
+    return `<strong>${escapeHtml(localizeCity(place.name))}</strong><br/>${escapeHtml(
+      [localizeCity(place.admin1), localizeCountry(place.country)]
+        .filter(Boolean)
+        .join(', '),
     )}<br/><span class="meta">Første dag: ${formatDateNO(stop.date)}</span><br/>${maps}`
   }
 
   const place = group[0].place!
-  const placeName = escapeHtml(place?.name || group[0].city || 'Sted')
+  const placeName = escapeHtml(
+    localizeCity(place?.name) || localizeCity(group[0].city) || 'Sted',
+  )
   const maps = mapsLinkHtml(
     place.latitude,
     place.longitude,
@@ -235,6 +248,166 @@ type ResolvedStop = TripMapStop & {
   markerLabel?: string
 }
 
+/** Survives tab remounts so Kart does not re-geocode the same cities. */
+const placeGeocodeCache = new Map<string, PlaceSuggestion | null>()
+
+function storedPlaceOf(stop: TripMapStop): PlaceSuggestion | null {
+  if (
+    typeof stop.latitude === 'number' &&
+    typeof stop.longitude === 'number' &&
+    Number.isFinite(stop.latitude) &&
+    Number.isFinite(stop.longitude) &&
+    !(stop.latitude === 0 && stop.longitude === 0)
+  ) {
+    return {
+      name: stop.city,
+      country: stop.country || '',
+      latitude: stop.latitude,
+      longitude: stop.longitude,
+    }
+  }
+  return null
+}
+
+function placeCacheKey(stop: TripMapStop): string {
+  return `${stop.kind}|${stop.city}|${stop.country}|${stop.contextCity || ''}`.toLowerCase()
+}
+
+async function geocodeMapStop(
+  stop: TripMapStop,
+): Promise<PlaceSuggestion | null> {
+  const looksStreet = /\d|gate|gata|gaten|vei|street|strada/i.test(stop.city)
+  // Streets/airports: search without day-country first (Bergen-gate
+  // on an Italia-day must not be forced into Italy / Rapallo).
+  let places = (
+    await api.searchPlaces(
+      stop.city,
+      stop.kind === 'via' && looksStreet ? '' : stop.country,
+    )
+  ).places
+  let picked = pickBestPlace(
+    places,
+    stop.city,
+    looksStreet ? '' : stop.country,
+  )
+  if (!picked && stop.kind === 'via' && stop.country) {
+    places = (await api.searchPlaces(stop.city, stop.country)).places
+    picked = pickBestPlace(places, stop.city, stop.country)
+  }
+  if (
+    !picked &&
+    stop.kind === 'via' &&
+    stop.contextCity &&
+    stop.contextCity.toLowerCase() !== stop.city.toLowerCase()
+  ) {
+    places = (
+      await api.searchPlaces(`${stop.city}, ${stop.contextCity}`, '')
+    ).places
+    picked = pickBestPlace(places, stop.city, '')
+  }
+  if (!picked && stop.kind === 'via' && !looksStreet) {
+    places = (await api.searchPlaces(stop.city, '')).places
+    picked = pickBestPlace(places, stop.city, '')
+  }
+  if (!picked && stop.kind === 'port') {
+    places = (await api.searchPlaces(stop.city, '')).places
+    picked = pickBestPlace(places, stop.city, '')
+  }
+  return picked || null
+}
+
+async function mapPool<T>(
+  items: T[],
+  concurrency: number,
+  worker: (item: T) => Promise<void>,
+): Promise<void> {
+  if (!items.length) return
+  let next = 0
+  const run = async () => {
+    while (next < items.length) {
+      const i = next
+      next += 1
+      await worker(items[i])
+    }
+  }
+  const n = Math.min(Math.max(1, concurrency), items.length)
+  await Promise.all(Array.from({ length: n }, () => run()))
+}
+
+/** Fill sea midpoints + marker labels (1, 1a, 1b…). */
+function finalizeResolvedStops(geocoded: ResolvedStop[]): ResolvedStop[] {
+  let portSeq = 0
+  const next: ResolvedStop[] = geocoded.map((stop, idx) => {
+    if (stop.kind === 'sea') {
+      let prev: PlaceSuggestion | undefined
+      for (let i = idx - 1; i >= 0; i--) {
+        if (geocoded[i].place && geocoded[i].kind !== 'sea') {
+          prev = geocoded[i].place
+          break
+        }
+      }
+      let after: PlaceSuggestion | undefined
+      for (let i = idx + 1; i < geocoded.length; i++) {
+        if (geocoded[i].place && geocoded[i].kind !== 'sea') {
+          after = geocoded[i].place
+          break
+        }
+      }
+      if (!prev || !after) {
+        return {
+          ...stop,
+          error: 'Mangler by før/etter for midtpunkt',
+        }
+      }
+      return {
+        ...stop,
+        place: midpointPlace(prev, after, AT_SEA_LABEL),
+        markerLabel: '~',
+      }
+    }
+    return stop
+  })
+
+  let i = 0
+  while (i < next.length) {
+    if (next[i].kind === 'sea') {
+      i += 1
+      continue
+    }
+    if (next[i].kind === 'port') {
+      portSeq += 1
+      next[i] = { ...next[i], markerLabel: String(portSeq) }
+      i += 1
+      continue
+    }
+    const viaStart = i
+    while (i < next.length && next[i].kind === 'via') i += 1
+    const viaEnd = i
+    let portIdx = -1
+    if (
+      i < next.length &&
+      next[i].kind === 'port' &&
+      next[i].date === next[viaStart].date
+    ) {
+      portIdx = i
+      portSeq += 1
+      next[portIdx] = { ...next[portIdx], markerLabel: String(portSeq) }
+    } else {
+      portSeq += 1
+    }
+    const base = portSeq
+    let viaOrd = 0
+    for (let v = viaStart; v < viaEnd; v++) {
+      const letter =
+        viaOrd < 26 ? String.fromCharCode(97 + viaOrd) : `-${viaOrd + 1}`
+      next[v] = { ...next[v], markerLabel: `${base}${letter}` }
+      viaOrd += 1
+    }
+    if (portIdx >= 0) i = portIdx + 1
+  }
+  return next
+}
+
 function userLocationIcon() {
   return L.divIcon({
     className: 'trip-map-marker is-user',
@@ -249,18 +422,24 @@ export function TripMap({
   stops: stopsProp,
   routeKey: routeKeyProp,
   tripName = 'Reise',
+  onRefresh,
 }: {
   days?: TripDay[]
   /** Prefer explicit stops (v2 journey). Falls back to days. */
   stops?: TripMapStop[]
   routeKey?: string
   tripName?: string
+  /** Reload journey data (optional — also remounts geocode). */
+  onRefresh?: () => void
 }) {
+  const [refreshNonce, setRefreshNonce] = useState(0)
   const routeKey = useMemo(
     () =>
-      routeKeyProp ||
-      (days ? tripMapRouteKey(days) : (stopsProp || []).map((s) => s.key).join('|')),
-    [routeKeyProp, days, stopsProp],
+      `${
+        routeKeyProp ||
+        (days ? tripMapRouteKey(days) : (stopsProp || []).map((s) => s.key).join('|'))
+      }#${refreshNonce}`,
+    [routeKeyProp, days, stopsProp, refreshNonce],
   )
   const stops = useMemo(
     () => stopsProp || (days ? tripMapStopsInOrder(days) : []),
@@ -293,152 +472,54 @@ export function TripMap({
     setStatus('loading')
 
     void (async () => {
-      const placeCache = new Map<string, PlaceSuggestion | null>()
-      const geocoded: ResolvedStop[] = []
-
-      for (const stop of stops) {
-        if (cancelled) return
-        if (stop.kind === 'sea') {
-          geocoded.push({ ...stop })
-          continue
+      const geocoded: ResolvedStop[] = stops.map((stop) => {
+        if (stop.kind === 'sea') return { ...stop }
+        const stored = storedPlaceOf(stop)
+        if (stored) return { ...stop, place: stored }
+        const cached = placeGeocodeCache.get(placeCacheKey(stop))
+        if (cached) return { ...stop, place: cached }
+        if (cached === null) {
+          return { ...stop, error: 'Fant ikke koordinater' }
         }
-        const cacheKey =
-          `${stop.kind}|${stop.city}|${stop.country}|${stop.contextCity || ''}`.toLowerCase()
-        if (!placeCache.has(cacheKey)) {
-          try {
-            const looksStreet = /\d|gate|gata|gaten|vei|street|strada/i.test(
-              stop.city,
-            )
-            // Streets/airports: search without day-country first (Bergen-gate
-            // on an Italia-day must not be forced into Italy / Rapallo).
-            let places = (
-              await api.searchPlaces(
-                stop.city,
-                stop.kind === 'via' && looksStreet ? '' : stop.country,
-              )
-            ).places
-            let picked = pickBestPlace(
-              places,
-              stop.city,
-              looksStreet ? '' : stop.country,
-            )
-            if (!picked && stop.kind === 'via' && stop.country) {
-              places = (await api.searchPlaces(stop.city, stop.country)).places
-              picked = pickBestPlace(places, stop.city, stop.country)
-            }
-            if (
-              !picked &&
-              stop.kind === 'via' &&
-              stop.contextCity &&
-              stop.contextCity.toLowerCase() !== stop.city.toLowerCase()
-            ) {
-              // Try "street, nearby city" but never replace the via with the city itself.
-              places = (
-                await api.searchPlaces(
-                  `${stop.city}, ${stop.contextCity}`,
-                  '',
-                )
-              ).places
-              picked = pickBestPlace(places, stop.city, '')
-            }
-            if (!picked && stop.kind === 'via' && !looksStreet) {
-              places = (await api.searchPlaces(stop.city, '')).places
-              picked = pickBestPlace(places, stop.city, '')
-            }
-            placeCache.set(cacheKey, picked || null)
-          } catch {
-            placeCache.set(cacheKey, null)
-          }
-        }
-        const place = placeCache.get(cacheKey) || undefined
-        geocoded.push(
-          place
-            ? { ...stop, place }
-            : { ...stop, error: 'Fant ikke koordinater' },
-        )
-      }
-
-      // Main route numbers = byer/havner (+ sjø uten nummer).
-      // Via under neste by: 1a, 1b … så byen som 1 — unngår at flyplasser
-      // «stjeler» 1,2,3 og får hele linjen til å se rotete ut.
-      let portSeq = 0
-      const next: ResolvedStop[] = geocoded.map((stop, idx) => {
-        if (stop.kind === 'sea') {
-          let prev: PlaceSuggestion | undefined
-          for (let i = idx - 1; i >= 0; i--) {
-            if (geocoded[i].place && geocoded[i].kind !== 'sea') {
-              prev = geocoded[i].place
-              break
-            }
-          }
-          let after: PlaceSuggestion | undefined
-          for (let i = idx + 1; i < geocoded.length; i++) {
-            if (geocoded[i].place && geocoded[i].kind !== 'sea') {
-              after = geocoded[i].place
-              break
-            }
-          }
-          if (!prev || !after) {
-            return {
-              ...stop,
-              error: 'Mangler by før/etter for midtpunkt',
-            }
-          }
-          return {
-            ...stop,
-            place: midpointPlace(prev, after, AT_SEA_LABEL),
-            markerLabel: '~',
-          }
-        }
-        return stop
+        return { ...stop }
       })
 
-      let i = 0
-      while (i < next.length) {
-        if (next[i].kind === 'sea') {
-          i += 1
-          continue
-        }
-        if (next[i].kind === 'port') {
-          portSeq += 1
-          next[i] = { ...next[i], markerLabel: String(portSeq) }
-          i += 1
-          continue
-        }
-        // Collect vias until the port they belong to (same day), else until next port/sea.
-        const viaStart = i
-        while (i < next.length && next[i].kind === 'via') i += 1
-        const viaEnd = i
-        let portIdx = -1
-        if (
-          i < next.length &&
-          next[i].kind === 'port' &&
-          next[i].date === next[viaStart].date
-        ) {
-          portIdx = i
-          portSeq += 1
-          next[portIdx] = { ...next[portIdx], markerLabel: String(portSeq) }
-        } else {
-          // Orphan vias (no new city that day) — attach to next upcoming port number.
-          portSeq += 1
-        }
-        const base = portSeq
-        let viaOrd = 0
-        for (let v = viaStart; v < viaEnd; v++) {
-          const letter =
-            viaOrd < 26
-              ? String.fromCharCode(97 + viaOrd)
-              : `-${viaOrd + 1}`
-          next[v] = { ...next[v], markerLabel: `${base}${letter}` }
-          viaOrd += 1
-        }
-        if (portIdx >= 0) i = portIdx + 1
+      // Paint known positions immediately (saved coords / session cache).
+      if (!cancelled) {
+        setResolved(finalizeResolvedStops(geocoded))
       }
 
-      if (!cancelled) {
-        setResolved(next)
-        setStatus('ready')
+      const pendingKeys = new Map<string, TripMapStop>()
+      for (const stop of stops) {
+        if (stop.kind === 'sea') continue
+        if (storedPlaceOf(stop)) continue
+        const key = placeCacheKey(stop)
+        if (placeGeocodeCache.has(key) || pendingKeys.has(key)) continue
+        pendingKeys.set(key, stop)
       }
+
+      await mapPool([...pendingKeys.entries()], 6, async ([key, stop]) => {
+        if (cancelled) return
+        try {
+          placeGeocodeCache.set(key, await geocodeMapStop(stop))
+        } catch {
+          placeGeocodeCache.set(key, null)
+        }
+      })
+
+      if (cancelled) return
+
+      for (let i = 0; i < stops.length; i++) {
+        const stop = stops[i]
+        if (stop.kind === 'sea' || storedPlaceOf(stop)) continue
+        const place = placeGeocodeCache.get(placeCacheKey(stop)) || undefined
+        geocoded[i] = place
+          ? { ...stop, place }
+          : { ...stop, error: 'Fant ikke koordinater' }
+      }
+
+      setResolved(finalizeResolvedStops(geocoded))
+      setStatus('ready')
     })()
 
     return () => {
@@ -542,9 +623,11 @@ export function TripMap({
       stop.place!.latitude,
       stop.place!.longitude,
     ])
-    // Via-etapper: connect every via→via→by chain (flush leftovers too).
+    // Via-etapper: forrige by → via → via → ankomstby (hovedlinjen brytes
+    // før byer med inbound-via, så uten forrige by mangler f.eks. Trieste→Ljubljana).
     const viaLegs: L.LatLngExpression[][] = []
     let leg: L.LatLngExpression[] = []
+    let lastPortLl: L.LatLngExpression | null = null
     const flushViaLeg = () => {
       if (leg.length >= 2) viaLegs.push(leg)
       leg = []
@@ -552,22 +635,32 @@ export function TripMap({
     for (const stop of resolved) {
       if (!stop.place) {
         // Broken geocode in the middle — keep chain, just skip the point.
-        if (stop.kind !== 'via') flushViaLeg()
+        if (stop.kind !== 'via') {
+          flushViaLeg()
+          if (stop.kind === 'port') lastPortLl = null
+        }
         continue
       }
+      const ll: L.LatLngExpression = [
+        stop.place.latitude,
+        stop.place.longitude,
+      ]
       if (stop.kind === 'via') {
-        leg.push([stop.place.latitude, stop.place.longitude])
+        if (!leg.length && lastPortLl) leg.push(lastPortLl)
+        leg.push(ll)
         continue
       }
       if (stop.kind === 'port') {
         if (leg.length) {
-          leg.push([stop.place.latitude, stop.place.longitude])
+          leg.push(ll)
           flushViaLeg()
         }
+        lastPortLl = ll
         continue
       }
-      // sea / other — end current via chain
+      // sea / other — end current via chain; sea midpoint can bridge packages.
       flushViaLeg()
+      lastPortLl = ll
     }
     flushViaLeg()
     const groups = groupStopsByCoord(withCoords)
@@ -781,6 +874,18 @@ export function TripMap({
             : `${plotted} av ${stops.length} punkt (hovedrute = byer; via som 1a, 1b…)`}
         </p>
         <div className="trip-map-actions">
+          <button
+            type="button"
+            className="btn btn-soft btn-sm"
+            disabled={status === 'loading'}
+            title="Hent reisen på nytt og tegn kartet"
+            onClick={() => {
+              if (onRefresh) onRefresh()
+              else setRefreshNonce((n) => n + 1)
+            }}
+          >
+            Oppdater kart
+          </button>
           {markerPoints.length > 0 && (
             <button
               type="button"
@@ -929,15 +1034,17 @@ export function TripMap({
               </span>
               <span className="trip-map-legend-body">
                 <strong>
-                  {stop.kind === 'sea' ? AT_SEA_LABEL : stop.city}
+                  {stop.kind === 'sea'
+                    ? AT_SEA_LABEL
+                    : localizeCity(stop.city)}
                 </strong>
                 {stop.kind === 'via' ? (
                   <span className="meta"> · Via</span>
                 ) : null}
                 {stop.kind === 'sea' && stop.place?.admin1
-                  ? ` · ${stop.place.admin1}`
+                  ? ` · ${localizeCity(stop.place.admin1)}`
                   : stop.country
-                    ? ` · ${stop.country}`
+                    ? ` · ${localizeCountry(stop.country)}`
                     : ''}
                 <span className="meta"> · {formatDateNO(stop.date)}</span>
                 {formatMapTime(stop.timeKey) ? (

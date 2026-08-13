@@ -13,6 +13,7 @@ import {
   packageEndRoleLabel,
   packageFreeDayLabel,
   packageOf,
+  packageNightsOf,
   packagePlaceDayLabel,
   packageStartRoleLabel,
   packageTitleLabel,
@@ -67,10 +68,12 @@ export function OnwardChoiceSheet({
   onClose,
   onPlace,
   onPackage,
+  onHome,
 }: {
   onClose: () => void
   onPlace: () => void
   onPackage: (type: JourneyPackageType) => void
+  onHome?: () => void
 }) {
   return (
     <div className="v2-sheet" role="dialog" aria-modal="true">
@@ -79,8 +82,7 @@ export function OnwardChoiceSheet({
           <div>
             <h2>Reise videre</h2>
             <p className="v2-meta">
-              Neste by på ferden, eller en flerdagers pakke uten hotell og
-              buss/tog mellom dagene.
+              Neste by, en flerdagers pakke, eller hjem når turen er over.
             </p>
           </div>
           <button
@@ -107,6 +109,17 @@ export function OnwardChoiceSheet({
               <span>{c.blurb}</span>
             </button>
           ))}
+          {onHome ? (
+            <button
+              type="button"
+              className="v2-choice-card is-home"
+              title="Reise hjem"
+              onClick={onHome}
+            >
+              <strong>Reise hjem</strong>
+              <span>Avslutt ferden — tilbake til hjemmeadressen</span>
+            </button>
+          ) : null}
         </div>
       </div>
     </div>
@@ -117,6 +130,7 @@ export function PackageWizard({
   journey,
   packageType,
   stopId,
+  fromStopId,
   tripStartDate = '',
   saving,
   onClose,
@@ -125,6 +139,7 @@ export function PackageWizard({
   journey: Journey
   packageType: JourneyPackageType
   stopId?: string
+  fromStopId?: string
   tripStartDate?: string
   saving: boolean
   onClose: () => void
@@ -141,7 +156,7 @@ export function PackageWizard({
   const [arriveDate, setArriveDate] = useState(
     () =>
       existing?.arriveDate ||
-      suggestNextArriveDate(journey, tripStartDate),
+      suggestNextArriveDate(journey, tripStartDate, fromStopId),
   )
   const [pack, setPack] = useState<JourneyPackage>(() =>
     syncPackageDays(
@@ -233,6 +248,8 @@ export function PackageWizard({
       id: existing?.id || newStopId(),
       city: base,
       country: (nextPack.baseCountry || '').trim(),
+      latitude: nextPack.baseLatitude,
+      longitude: nextPack.baseLongitude,
       address: '',
       arriveDate: arriveDate.trim(),
       kind: type,
@@ -298,9 +315,9 @@ export function PackageWizard({
             Netter
             <input
               inputMode="numeric"
-              value={pack.nights || 7}
+              value={packageNightsOf(pack)}
               onChange={(e) => {
-                const n = Number(e.target.value.replace(/[^\d]/g, '') || '7')
+                const n = Number(e.target.value.replace(/[^\d]/g, '') || '1')
                 patchPack({ nights: Math.max(1, Math.min(30, n)) })
               }}
             />
@@ -322,14 +339,22 @@ export function PackageWizard({
                 type === 'cruise' ? 'Genova…' : 'Startby / base…'
               }
               hideHint
-              onCityChange={(city) => patchPack({ basePlace: city })}
+              onCityChange={(city) =>
+                patchPack({
+                  basePlace: city,
+                  baseLatitude: undefined,
+                  baseLongitude: undefined,
+                })
+              }
               onCountryChange={(country) =>
                 patchPack({ baseCountry: country })
               }
-              onSelectPlace={(city, country) =>
+              onSelectPlace={(city, country, place) =>
                 patchPack({
                   basePlace: city,
                   baseCountry: country || '',
+                  baseLatitude: place?.latitude,
+                  baseLongitude: place?.longitude,
                 })
               }
             />
@@ -378,37 +403,43 @@ export function PackageWizard({
             <div className="v2-cruise-cost-list">
               {(pack.costs || []).map((cost) => (
                 <div key={cost.id} className="v2-cruise-cost-row">
-                  <input
-                    value={cost.title}
-                    placeholder="Drikkepakke…"
-                    onChange={(e) =>
-                      patchPack({
-                        costs: (pack.costs || []).map((c) =>
-                          c.id === cost.id
-                            ? { ...c, title: e.target.value }
-                            : c,
-                        ),
-                      })
-                    }
-                  />
-                  <input
-                    value={cost.price || ''}
-                    placeholder="Pris"
-                    inputMode="decimal"
-                    onChange={(e) =>
-                      patchPack({
-                        costs: (pack.costs || []).map((c) =>
-                          c.id === cost.id
-                            ? { ...c, price: e.target.value }
-                            : c,
-                        ),
-                      })
-                    }
-                  />
+                  <label>
+                    Kostnad
+                    <input
+                      value={cost.title}
+                      placeholder="Drikkepakke…"
+                      onChange={(e) =>
+                        patchPack({
+                          costs: (pack.costs || []).map((c) =>
+                            c.id === cost.id
+                              ? { ...c, title: e.target.value }
+                              : c,
+                          ),
+                        })
+                      }
+                    />
+                  </label>
+                  <label>
+                    Pris
+                    <input
+                      value={cost.price || ''}
+                      placeholder="500 kr"
+                      inputMode="decimal"
+                      onChange={(e) =>
+                        patchPack({
+                          costs: (pack.costs || []).map((c) =>
+                            c.id === cost.id
+                              ? { ...c, price: e.target.value }
+                              : c,
+                          ),
+                        })
+                      }
+                    />
+                  </label>
                   <button
                     type="button"
                     className="btn btn-ghost btn-sm"
-                    title="Fjern"
+                    title="Fjern kostnad"
                     onClick={() =>
                       patchPack({
                         costs: (pack.costs || []).filter(
@@ -531,6 +562,8 @@ export function PackageWizard({
                               onCityChange={(city) =>
                                 updateDay(day.id, {
                                   city,
+                                  latitude: undefined,
+                                  longitude: undefined,
                                   ...(type === 'cruise' &&
                                   homePort &&
                                   !isLast &&
@@ -543,10 +576,12 @@ export function PackageWizard({
                               onCountryChange={(country) =>
                                 updateDay(day.id, { country })
                               }
-                              onSelectPlace={(city, country) =>
+                              onSelectPlace={(city, country, place) =>
                                 updateDay(day.id, {
                                   city,
                                   country: country || '',
+                                  latitude: place?.latitude,
+                                  longitude: place?.longitude,
                                   ...(type === 'cruise' &&
                                   homePort &&
                                   !isLast &&

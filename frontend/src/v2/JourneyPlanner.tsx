@@ -4,44 +4,57 @@ import { CitySuggestFields } from '../CitySuggest'
 import { PlaceMetaIcon, TrashIcon, TransportModeIcon } from '../TransportModeIcon'
 import { PackageWizard, OnwardChoiceSheet } from './CruiseWizard'
 import {
+  applyRegisteredHome,
+  formatHomePlace,
   hasHomePlace,
   type HomePlace,
   type PlannerSettings,
 } from '../userSettings'
 import {
+  activitiesForDay,
   addDaysIso,
   cityStayDays,
+  cityDocsOf,
+  compactCityDocs,
+  compactLive,
+  confirmShiftAfterNights,
   emptyJourney,
   formatDateNO,
   freeDaysBetweenStops,
   gapFillPrefill,
   hasPlanGapBetween,
   insertStopBefore,
+  journeyWithRegisteredHome,
+  keepPlacePurpose,
   isPackageStop,
   isPackageType,
   isViaHopFilled,
   legForGap,
   legModeLabel,
   legTransportGaps,
-  moveStop,
   moveTransportSegment,
   newJourneyVia,
   newStopId,
   newTransportOption,
   normalizeSights,
   packageFreeDayLabel,
+  packageNightsOf,
   packageOf,
   packageDayTableRow,
   packageTypeLabel,
   removeStop,
+  replaceDayActivities,
   reorderTransportSegments,
   modeHasPlatform,
   modeIsFlight,
   modeIsOther,
   modeIsWalk,
   sortTransportOptionsByTime,
+  scheduleWarnings,
+  shiftStopsAfter,
   stayNights,
   stopDepartDate,
+  stopShiftLabel,
   showOnwardFromHere,
   stopWarningLabel,
   suggestNextArriveDate,
@@ -50,7 +63,9 @@ import {
   syncJourneyLegs,
   transportSegments,
   upsertStop,
+  viaPurpose,
   viaTransportOptions,
+  stopPurpose,
   warningsForStop,
   withTransportSegments,
   withViaOptions,
@@ -63,7 +78,13 @@ import {
   type JourneyTransportOption,
   type JourneyVia,
 } from './journeyModel'
-import { SightList, SightPreview } from './SightList'
+import { localizeJourneyPlaces } from '../placeNames'
+import { CityDocsEditor } from './CityDocsEditor'
+import { CityInfoTip } from './CityInfoTip'
+import { NoteEditor } from './NoteEditor'
+import { compactNoteHtml } from './noteHtml'
+import { PurposeToggle } from './PurposeToggle'
+import { SightList, SightPreview, PlaceLinkedPreview } from './SightList'
 import './v2.css'
 
 type WizardKind = 'onward' | 'home' | 'edit' | 'depart' | 'choose' | 'package'
@@ -164,12 +185,25 @@ export function JourneyPlanner({
     insertBeforeId?: string
     /** Previous stop id when filling a calendar gap. */
     gapFromId?: string
+    /** Continue journey from this stop (date suggestion). */
+    fromStopId?: string
   }>(null)
   const [didAutoOnward, setDidAutoOnward] = useState(false)
   /** Expanded place-stop accordion on the thread. */
   const [openPlaceId, setOpenPlaceId] = useState<string | null>(null)
   /** Expanded package/cruise card on the thread. */
   const [openPackId, setOpenPackId] = useState<string | null>(null)
+  const journeyRef = useRef(journey)
+  journeyRef.current = journey
+  const placeSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const transportSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => {
+    return () => {
+      if (placeSaveTimer.current) clearTimeout(placeSaveTimer.current)
+      if (transportSaveTimer.current) clearTimeout(transportSaveTimer.current)
+    }
+  }, [])
 
   useEffect(() => {
     let cancelled = false
@@ -179,11 +213,16 @@ export function JourneyPlanner({
       .getJourney(tripId)
       .then((data) => {
         if (cancelled) return
-        const next = syncJourneyLegs({
-          ...emptyJourney(tripId),
-          ...data,
-          tripId,
-        })
+        const next = journeyWithRegisteredHome(
+          localizeJourneyPlaces(
+            syncJourneyLegs({
+              ...emptyJourney(tripId),
+              ...data,
+              tripId,
+            }),
+          ),
+          homePlace,
+        )
         setJourney(next)
         if (
           autoOnward &&
@@ -206,18 +245,27 @@ export function JourneyPlanner({
     return () => {
       cancelled = true
     }
-  }, [tripId, autoOnward, didAutoOnward])
+  }, [tripId, autoOnward, didAutoOnward, homePlace])
 
-  async function persist(next: Journey) {
-    setSaving(true)
+  async function persist(
+    next: Journey,
+    opts?: { quiet?: boolean },
+  ) {
+    if (!opts?.quiet) setSaving(true)
     setError('')
     try {
       const withSights: Journey = {
         ...next,
-        stops: next.stops.map((s) => ({
-          ...s,
-          sights: normalizeSights(s.sights),
-        })),
+        live: compactLive(next.live),
+        stops: next.stops.map((s) => {
+          const docs = compactCityDocs(cityDocsOf(s))
+          return {
+            ...s,
+            sights: normalizeSights(s.sights),
+            docs,
+            notes: docs[0]?.body || compactNoteHtml(s.notes || ''),
+          }
+        }),
         legs: next.legs.map((l) => ({
           ...l,
           vias: (l.vias || []).map((v) => ({
@@ -226,28 +274,100 @@ export function JourneyPlanner({
           })),
         })),
       }
-      const saved = await api.saveJourney(tripId, syncJourneyLegs(withSights))
-      setJourney(syncJourneyLegs({ ...saved, tripId }))
+      const saved = await api.saveJourney(
+        tripId,
+        localizeJourneyPlaces(
+          journeyWithRegisteredHome(syncJourneyLegs(withSights), homePlace),
+        ),
+      )
+      // Quiet saves keep optimistic UI — applying the response would steal
+      // focus / overwrite newer keystrokes still in flight.
+      if (!opts?.quiet) {
+        const synced = syncJourneyLegs(
+          keepPlacePurpose(withSights, { ...saved, tripId }),
+        )
+        journeyRef.current = synced
+        setJourney(synced)
+      }
       onJourneySaved?.()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Kunne ikke lagre')
       throw err
     } finally {
-      setSaving(false)
+      if (!opts?.quiet) setSaving(false)
     }
   }
 
-  function openOnward() {
-    setWizard({ kind: 'choose' })
+  /** Optimistic place edits — debounce API save so inputs keep focus. */
+  function patchPlaceStop(
+    nextStop: JourneyStop,
+    opts?: { immediate?: boolean; nightsDelta?: number },
+  ) {
+    let base = {
+      ...journeyRef.current,
+      stops: journeyRef.current.stops.map((s) =>
+        s.id === nextStop.id ? nextStop : s,
+      ),
+    }
+    const delta = opts?.immediate ? opts.nightsDelta || 0 : 0
+    if (delta) {
+      const idx = base.stops.findIndex((s) => s.id === nextStop.id)
+      const later = idx >= 0 ? base.stops.slice(idx + 1) : []
+      if (
+        later.some((s) => (s.arriveDate || '').trim()) &&
+        confirmShiftAfterNights(stopShiftLabel(nextStop), delta, later)
+      ) {
+        base = shiftStopsAfter(base, nextStop.id, delta)
+      }
+    }
+    const next = syncJourneyLegs(base)
+    journeyRef.current = next
+    setJourney(next)
+    if (placeSaveTimer.current) {
+      clearTimeout(placeSaveTimer.current)
+      placeSaveTimer.current = null
+    }
+    if (opts?.immediate) {
+      void persist(next, { quiet: true })
+      return
+    }
+    placeSaveTimer.current = setTimeout(() => {
+      placeSaveTimer.current = null
+      void persist(journeyRef.current, { quiet: true })
+    }, 450)
   }
 
-  function openHome() {
+  /** Optimistic transport edits — same quiet debounce as place fields. */
+  function patchTransportLeg(nextLeg: JourneyLeg) {
+    const next = syncJourneyLegs({
+      ...journeyRef.current,
+      legs: journeyRef.current.legs.map((l) =>
+        l.id === nextLeg.id ? nextLeg : l,
+      ),
+    })
+    journeyRef.current = next
+    setJourney(next)
+    if (transportSaveTimer.current) {
+      clearTimeout(transportSaveTimer.current)
+      transportSaveTimer.current = null
+    }
+    transportSaveTimer.current = setTimeout(() => {
+      transportSaveTimer.current = null
+      void persist(journeyRef.current, { quiet: true })
+    }, 450)
+  }
+
+  function openOnward(fromStopId?: string) {
+    setWizard({ kind: 'choose', fromStopId })
+  }
+
+  function openHome(fromStopId?: string) {
     if (!hasHomePlace(homePlace)) {
       setError('Sett hjemmeadresse under Innstillinger først.')
       onOpenSettings()
       return
     }
-    setWizard({ kind: 'home' })
+    setWizard({ kind: 'home', fromStopId })
   }
 
   return (
@@ -274,14 +394,25 @@ export function JourneyPlanner({
         {loading && <p className="v2-meta">Henter reisen…</p>}
         {!loading && journey.stops.length === 0 && (
           <div className="v2-empty">
-            Start med <strong>Reise videre</strong> til by/sted eller en{' '}
-            <strong>flerdagers pakke</strong> (cruise, charter …), eller{' '}
-            <strong>Reise hjem</strong> når turen er over.
+            <p>
+              Start med neste sted, en flerdagers pakke (cruise, charter …),
+              eller hjem når turen er over.
+            </p>
+            <button
+              type="button"
+              className="btn btn-primary"
+              disabled={saving}
+              title="Legg til neste sted, pakke — eller reis hjem"
+              onClick={() => openOnward()}
+            >
+              Reise videre
+            </button>
           </div>
         )}
 
         {journey.stops.map((stop, index) => {
           const warnings = warningsForStop(journey, index, settings)
+          const scheduleNotes = scheduleWarnings(journey, index)
           const prev = index > 0 ? journey.stops[index - 1] : null
           const nextStop = journey.stops[index + 1]
           const inboundLeg = prev
@@ -289,14 +420,16 @@ export function JourneyPlanner({
             : null
           const nights = stayNights(stop)
           const depart = stopDepartDate(stop)
-          const isHomeStart = stop.kind === 'home' && index === 0
+          const isHome = stop.kind === 'home'
+          const isHomeStart = isHome && index === 0
+          const isHomeReturn = isHome && index > 0
           const isPack = isPackageStop(stop)
           const pack = isPack ? packageOf(stop) : null
           const packType = isPackageType(stop.kind) ? stop.kind : 'other'
           const freeDayLabel = packageFreeDayLabel(packType)
 
           return (
-            <div key={stop.id}>
+            <div key={stop.id} className="v2-thread-item">
               {prev && inboundLeg && !isPack && (
                 <TransportBlock
                   from={prev}
@@ -304,16 +437,8 @@ export function JourneyPlanner({
                   leg={inboundLeg}
                   warn={warnings.includes('travel')}
                   requireTransportMode={settings.requireTransportMode}
-                  disabled={saving}
-                  onChange={(nextLeg) => {
-                    const next = {
-                      ...journey,
-                      legs: journey.legs.map((l) =>
-                        l.id === nextLeg.id ? nextLeg : l,
-                      ),
-                    }
-                    void persist(syncJourneyLegs(next))
-                  }}
+                  disabled={loading}
+                  onChange={patchTransportLeg}
                 />
               )}
 
@@ -329,27 +454,23 @@ export function JourneyPlanner({
                   aria-hidden
                 />
                 <div>
-                  {!isHomeStart && !isPack ? (
+                  {!isHome && !isPack ? (
                     <PlaceStopPanel
                       stop={stop}
                       warnings={warnings}
+                      scheduleNotes={scheduleNotes}
                       nights={nights}
                       depart={depart}
                       warnMissingStay={settings.warnMissingStay}
                       open={openPlaceId === stop.id}
-                      disabled={saving}
+                      disabled={loading}
                       onToggle={() =>
                         setOpenPlaceId((id) =>
                           id === stop.id ? null : stop.id,
                         )
                       }
-                      onChange={(nextStop) => {
-                        void persist({
-                          ...journey,
-                          stops: journey.stops.map((s) =>
-                            s.id === stop.id ? nextStop : s,
-                          ),
-                        })
+                      onChange={(nextStop, opts) => {
+                        patchPlaceStop(nextStop, opts)
                       }}
                     />
                   ) : (
@@ -365,7 +486,9 @@ export function JourneyPlanner({
                           ? openPackId === stop.id
                             ? 'Skjul pakke'
                             : 'Åpne pakke'
-                          : 'Rediger hjem'
+                          : isHomeReturn
+                            ? 'Hjemkomst — adresse fra innstillinger'
+                            : 'Rediger hjem'
                       }
                       onClick={() => {
                         if (isPack && isPackageType(stop.kind)) {
@@ -379,11 +502,22 @@ export function JourneyPlanner({
                     >
                       <div className="v2-stop-head">
                         <span className="v2-stop-title">
-                          {isHomeStart
-                            ? `Hjem · ${stop.city || 'Start'}`
-                            : pack?.title?.trim()
-                              ? `${packageTypeLabel(packType)} · ${pack.title}`
-                              : `${packageTypeLabel(packType)} · ${stop.city || 'Pakke'}`}
+                          {isHome
+                            ? `Hjem · ${stop.city || 'Hjem'}`
+                            : [
+                                stop.arriveDate && nights > 0
+                                  ? `${formatDateNO(stop.arriveDate)}–${formatDateNO(depart)} (${nights}n)`
+                                  : stop.arriveDate
+                                    ? formatDateNO(stop.arriveDate)
+                                    : '',
+                                pack?.title?.trim()
+                                  ? `${packageTypeLabel(packType)} · ${pack.title}`
+                                  : `${packageTypeLabel(packType)} · ${
+                                      stop.city || 'Pakke'
+                                    }`,
+                              ]
+                                .filter(Boolean)
+                                .join(' · ')}
                         </span>
                         {!isHomeStart && warnings.length > 0 && (
                           <span
@@ -395,30 +529,38 @@ export function JourneyPlanner({
                         )}
                       </div>
                       <div className="v2-meta">
-                        {isHomeStart
+                        {isHome
                           ? [
+                              stop.address,
                               stop.country,
-                              stop.arriveDate
-                                ? `Startdato ${formatDateNO(stop.arriveDate)}`
-                                : '',
-                              'Startpunkt — uten reise',
+                              isHomeStart
+                                ? stop.arriveDate
+                                  ? `Startdato ${formatDateNO(stop.arriveDate)}`
+                                  : ''
+                                : stop.arriveDate
+                                  ? formatDateNO(stop.arriveDate)
+                                  : '',
+                              isHomeStart
+                                ? 'Startpunkt — uten reise'
+                                : 'Hjemkomst',
                             ]
                               .filter(Boolean)
                               .join(' · ')
                           : [
                               stop.city,
                               stop.country,
-                              stop.arriveDate
-                                ? `Start ${formatDateNO(stop.arriveDate)}`
-                                : '',
-                              nights > 0
-                                ? `${nights} ${nights === 1 ? 'natt' : 'netter'} · slutt ${formatDateNO(depart)}`
-                                : '',
                               `${(pack?.days || []).filter((d) => d.atSea).length} ${freeDayLabel.toLowerCase()}`,
                             ]
                               .filter(Boolean)
                               .join(' · ')}
                       </div>
+                      {scheduleNotes.length > 0 && (
+                        <ul className="v2-schedule-warn">
+                          {scheduleNotes.map((note) => (
+                            <li key={note}>{note}</li>
+                          ))}
+                        </ul>
+                      )}
                     </button>
                   )}
                   {isPack && (pack?.days || []).length > 0 && (
@@ -467,6 +609,54 @@ export function JourneyPlanner({
                       </tbody>
                     </table>
                   )}
+                  {isPack && openPackId === stop.id && (pack?.days || []).length > 0 && (
+                    <div className="v2-pack-day-programs">
+                      {(pack?.days || []).map((day) => {
+                        const place =
+                          day.atSea
+                            ? freeDayLabel
+                            : day.city?.trim() ||
+                              pack?.basePlace?.trim() ||
+                              stop.city ||
+                              'Dag'
+                        const date = stop.arriveDate
+                          ? formatDateNO(
+                              addDaysIso(stop.arriveDate, day.offset),
+                            )
+                          : `Dag ${day.offset + 1}`
+                        return (
+                          <div key={day.id} className="v2-city-day">
+                            <div className="v2-city-day-head">
+                              <span className="v2-cruise-day-date">{date}</span>
+                              <span>{place}</span>
+                            </div>
+                            <SightList
+                              sights={activitiesForDay(stop.sights, day.offset)}
+                              dayOffset={day.offset}
+                              disabled={loading}
+                              heading="Utflukter og severdigheter"
+                              suggestCountry={
+                                day.country || pack?.baseCountry || stop.country
+                              }
+                              onChange={(dayList) =>
+                                patchPlaceStop(
+                                  {
+                                    ...stop,
+                                    sights: replaceDayActivities(
+                                      stop.sights,
+                                      day.offset,
+                                      dayList,
+                                    ),
+                                  },
+                                  { immediate: true },
+                                )
+                              }
+                            />
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
                   <div className="v2-stop-actions">
                     {isHomeStart && !nextStop && (
                       <button
@@ -474,9 +664,23 @@ export function JourneyPlanner({
                         className="v2-chip-btn"
                         disabled={saving}
                         title="Legg til neste sted eller pakke"
-                        onClick={openOnward}
+                        onClick={() => openOnward()}
                       >
                         Reise videre
+                      </button>
+                    )}
+                    {isHomeReturn && (
+                      <button
+                        type="button"
+                        className="v2-chip-btn is-danger"
+                        disabled={saving}
+                        title="Slett hjemkomst"
+                        onClick={() => {
+                          if (!confirm('Slette hjemkomst?')) return
+                          void persist(removeStop(journey, stop.id))
+                        }}
+                      >
+                        Slett
                       </button>
                     )}
                     {!isHomeStart &&
@@ -490,7 +694,7 @@ export function JourneyPlanner({
                           if (nextStop) {
                             setWizard({ kind: 'depart', stopId: stop.id })
                           } else {
-                            openOnward()
+                            openOnward(stop.id)
                           }
                         }}
                       >
@@ -514,33 +718,9 @@ export function JourneyPlanner({
                         Rediger
                       </button>
                     )}
-                    {!isHomeStart &&
+                    {!isHome &&
                       (openPlaceId === stop.id || openPackId === stop.id) && (
                       <>
-                        <button
-                          type="button"
-                          className="v2-chip-btn"
-                          disabled={saving || index === 0}
-                          title="Flytt hele stoppet opp"
-                          onClick={() =>
-                            void persist(moveStop(journey, stop.id, -1))
-                          }
-                        >
-                          ↑ Blokk
-                        </button>
-                        <button
-                          type="button"
-                          className="v2-chip-btn"
-                          disabled={
-                            saving || index >= journey.stops.length - 1
-                          }
-                          title="Flytt hele stoppet ned"
-                          onClick={() =>
-                            void persist(moveStop(journey, stop.id, 1))
-                          }
-                        >
-                          ↓ Blokk
-                        </button>
                         <button
                           type="button"
                           className="v2-chip-btn is-danger"
@@ -582,34 +762,20 @@ export function JourneyPlanner({
         })}
       </div>
 
-      <div className="v2-dock">
-        <button
-          type="button"
-          className="btn btn-primary"
-          disabled={saving}
-          title="Legg til neste sted eller pakke"
-          onClick={openOnward}
-        >
-          Reise videre
-        </button>
-        <button
-          type="button"
-          className="btn btn-soft"
-          disabled={saving}
-          title="Reise hjem"
-          onClick={openHome}
-        >
-          Reise hjem
-        </button>
-      </div>
-
       {wizard && wizard.kind === 'choose' && (
         <OnwardChoiceSheet
           onClose={() => setWizard(null)}
-          onPlace={() => setWizard({ kind: 'onward' })}
-          onPackage={(packageType) =>
-            setWizard({ kind: 'package', packageType })
+          onPlace={() =>
+            setWizard({ kind: 'onward', fromStopId: wizard.fromStopId })
           }
+          onPackage={(packageType) =>
+            setWizard({
+              kind: 'package',
+              packageType,
+              fromStopId: wizard.fromStopId,
+            })
+          }
+          onHome={() => openHome(wizard.fromStopId)}
         />
       )}
 
@@ -618,11 +784,27 @@ export function JourneyPlanner({
           journey={journey}
           packageType={wizard.packageType}
           stopId={wizard.stopId}
+          fromStopId={wizard.fromStopId}
           tripStartDate={tripStartDate}
           saving={saving}
           onClose={() => setWizard(null)}
           onSave={async (stop) => {
-            const next = upsertStop(journey, stop, null)
+            const existing = journey.stops.find((s) => s.id === stop.id)
+            let next = upsertStop(journey, stop, null)
+            if (existing) {
+              const delta =
+                packageNightsOf(packageOf(stop)) -
+                packageNightsOf(packageOf(existing))
+              const idx = next.stops.findIndex((s) => s.id === stop.id)
+              const later = idx >= 0 ? next.stops.slice(idx + 1) : []
+              if (
+                delta &&
+                later.some((s) => (s.arriveDate || '').trim()) &&
+                confirmShiftAfterNights(stopShiftLabel(stop), delta, later)
+              ) {
+                next = shiftStopsAfter(next, stop.id, delta)
+              }
+            }
             await persist(next)
             setOpenPackId(stop.id)
             setWizard(null)
@@ -649,7 +831,7 @@ export function JourneyPlanner({
             setWizard(null)
           }}
           onNeedDestination={() => {
-            setWizard({ kind: 'choose' })
+            setWizard({ kind: 'choose', fromStopId: wizard.stopId })
           }}
         />
       )}
@@ -665,6 +847,7 @@ export function JourneyPlanner({
           stopId={wizard.stopId}
           insertBeforeId={wizard.insertBeforeId}
           gapFromId={wizard.gapFromId}
+          fromStopId={wizard.fromStopId}
           tripStartDate={tripStartDate}
           homePlace={homePlace}
           saving={saving}
@@ -690,6 +873,7 @@ export function JourneyPlanner({
 function PlaceStopPanel({
   stop,
   warnings,
+  scheduleNotes,
   nights,
   depart,
   warnMissingStay,
@@ -700,16 +884,21 @@ function PlaceStopPanel({
 }: {
   stop: JourneyStop
   warnings: ReturnType<typeof warningsForStop>
+  scheduleNotes: string[]
   nights: number
   depart: string
   warnMissingStay: boolean
   open: boolean
   disabled?: boolean
   onToggle: () => void
-  onChange: (stop: JourneyStop) => void
+  onChange: (
+    stop: JourneyStop,
+    opts?: { immediate?: boolean; nightsDelta?: number },
+  ) => void
 }) {
-  const [editingStay, setEditingStay] = useState(false)
-  const [wantStay, setWantStay] = useState(() => stayNights(stop) >= 1)
+  const [editingBasics, setEditingBasics] = useState(false)
+  const [editingHotel, setEditingHotel] = useState(false)
+  const nightsAtEditStart = useRef(nights)
   const activityCount = normalizeSights(stop.sights).length
   const stay: JourneyStay = stop.stay || {
     nights: 1,
@@ -718,20 +907,30 @@ function PlaceStopPanel({
   }
 
   useEffect(() => {
-    setWantStay(stayNights(stop) >= 1)
-  }, [stop.id, stop.stay?.nights])
-
-  useEffect(() => {
-    if (!open) setEditingStay(false)
+    if (!open) {
+      setEditingBasics(false)
+      setEditingHotel(false)
+    }
   }, [open])
 
-  function patchStop(partial: Partial<JourneyStop>) {
-    onChange({ ...stop, ...partial })
+  useEffect(() => {
+    if (editingHotel) nightsAtEditStart.current = nights
+  }, [editingHotel])
+
+  function patchStop(
+    partial: Partial<JourneyStop>,
+    opts?: { immediate?: boolean },
+  ) {
+    onChange({ ...stop, ...partial }, opts)
   }
 
-  function patchStay(partial: Partial<JourneyStay>, withStay = true) {
+  function patchStay(
+    partial: Partial<JourneyStay>,
+    withStay = true,
+    opts?: { immediate?: boolean },
+  ) {
     if (!withStay) {
-      patchStop({ stay: null, sights: normalizeSights(stop.sights) })
+      patchStop({ stay: null, sights: normalizeSights(stop.sights) }, opts)
       return
     }
     const nextStay: JourneyStay = {
@@ -745,12 +944,42 @@ function PlaceStopPanel({
       address: (partial.address ?? stay.address ?? '').trim(),
       price: (partial.price ?? stay.price ?? '').trim(),
     }
-    patchStop({ stay: nextStay, sights: normalizeSights(stop.sights) })
+    patchStop(
+      {
+        stay: nextStay,
+        sights: normalizeSights(stop.sights),
+        purpose: nextStay.hotelName ? 'visit' : stop.purpose,
+      },
+      opts,
+    )
+  }
+
+  function startAddHotel() {
+    if (!stop.stay) {
+      const added: JourneyStop = {
+        ...stop,
+        stay: { nights: 1, hotelName: '', address: '', price: '' },
+        sights: normalizeSights(stop.sights),
+      }
+      onChange(added, { immediate: true, nightsDelta: 1 - nights })
+    }
+    setEditingHotel(true)
+  }
+
+  function removeHotel() {
+    onChange(
+      { ...stop, stay: null, sights: normalizeSights(stop.sights) },
+      { immediate: true, nightsDelta: 0 - nights },
+    )
+    setEditingHotel(false)
   }
 
   const city = stop.city?.trim() || 'Uten by'
   const hotel = stay.hotelName?.trim() || ''
   const hotelAddress = stay.address?.trim() || ''
+  const hotelPrice = stay.price?.trim() || ''
+  const visiting = stopPurpose(stop) === 'visit'
+  const hasStay = stayNights(stop) >= 1
   const daysInCity = cityStayDays(stop)
   const dateSpan =
     stop.arriveDate && nights > 0
@@ -759,7 +988,7 @@ function PlaceStopPanel({
         ? `Ankomst ${formatDateNO(stop.arriveDate)}`
         : nights > 0
           ? `Utsjekk ${formatDateNO(depart)}`
-          : warnMissingStay
+          : visiting && warnMissingStay
             ? 'Uten hotell'
             : ''
 
@@ -803,7 +1032,9 @@ function PlaceStopPanel({
               {stop.country?.trim() ? (
                 <span className="v2-place-bit-text">{stop.country.trim()}</span>
               ) : null}
-              {hotel ? (
+              {stopPurpose(stop) === 'transfer' ? (
+                <span className="v2-place-bit-text">Bare bytte</span>
+              ) : hotel ? (
                 <span className="v2-place-bit">
                   <PlaceMetaIcon name="hotel" size={13} />
                   <span className="v2-place-bit-text">{hotel}</span>
@@ -818,6 +1049,11 @@ function PlaceStopPanel({
             </span>
           )}
         </button>
+        <CityInfoTip
+          text={stop.notes}
+          docs={stop.docs}
+          disabled={disabled}
+        />
         <button
           type="button"
           className="v2-transport-toggle"
@@ -829,36 +1065,67 @@ function PlaceStopPanel({
           {open ? '▴' : '▾'}
         </button>
       </div>
-      {!open && <SightPreview sights={stop.sights} />}
+      {scheduleNotes.length > 0 && (
+        <ul className="v2-schedule-warn">
+          {scheduleNotes.map((note) => (
+            <li key={note}>{note}</li>
+          ))}
+        </ul>
+      )}
+      {!open && (
+        <PlaceLinkedPreview
+          hotel={hotel}
+          nights={nights}
+          warnMissingStay={visiting && warnMissingStay}
+          sights={stop.sights}
+        />
+      )}
 
       {open && (
         <div className="v2-transport-body v2-place-body">
           <div className="v2-place-basics">
             <div className="v2-sights-head">
-              <span>Opphold</span>
+              <span>By og dato</span>
               <button
                 type="button"
                 className="v2-chip-btn"
                 disabled={disabled}
-                title={editingStay ? 'Ferdig' : 'Rediger'}
-                onClick={() => setEditingStay((v) => !v)}
+                title={editingBasics ? 'Ferdig' : 'Endre by og dato'}
+                onClick={() => setEditingBasics((v) => !v)}
               >
-                {editingStay ? 'Ferdig' : 'Rediger'}
+                {editingBasics ? 'Ferdig' : 'Endre'}
               </button>
             </div>
-
-            {editingStay && (
+            {editingBasics && (
               <div className="form-grid">
+                <PurposeToggle
+                  value={stopPurpose(stop)}
+                  disabled={disabled}
+                  onChange={(purpose) =>
+                    patchStop({ purpose }, { immediate: true })
+                  }
+                />
                 <CitySuggestFields
                   city={stop.city}
                   country={stop.country}
                   cityLabel="By"
                   showCountry
                   hideHint
-                  onCityChange={(city) => patchStop({ city })}
+                  onCityChange={(city) =>
+                    patchStop({
+                      city,
+                      latitude: undefined,
+                      longitude: undefined,
+                    })
+                  }
                   onCountryChange={(country) => patchStop({ country })}
-                  onSelectPlace={(city, country) =>
-                    patchStop({ city, country: country || stop.country })
+                  onSelectPlace={(city, country, place) =>
+                    patchStop({
+                      city,
+                      country: country || stop.country,
+                      latitude: place?.latitude,
+                      longitude: place?.longitude,
+                    })
                   }
                 />
                 <label>
@@ -870,130 +1137,319 @@ function PlaceStopPanel({
                     onChange={(e) => patchStop({ arriveDate: e.target.value })}
                   />
                 </label>
-                <label className="v2-check-row">
-                  <input
-                    type="checkbox"
-                    checked={wantStay}
-                    disabled={disabled}
-                    onChange={(e) => {
-                      const on = e.target.checked
-                      setWantStay(on)
-                      if (!on) patchStay({}, false)
-                      else patchStay({ nights: stay.nights || 1 })
-                    }}
-                  />
-                  Overnatting her
-                </label>
-                {wantStay && (
-                  <>
-                    <label>
-                      Antall netter
-                      <input
-                        type="text"
-                        inputMode="numeric"
-                        pattern="[0-9]*"
-                        disabled={disabled}
-                        value={String(stay.nights || '')}
-                        onChange={(e) => {
-                          const raw = e.target.value
-                          if (raw !== '' && !/^\d+$/.test(raw)) return
-                          const n = raw === '' ? 0 : Number(raw)
-                          onChange({
-                            ...stop,
-                            stay: { ...stay, nights: n },
-                          })
-                        }}
-                        onBlur={() => patchStay({ nights: stay.nights || 1 })}
-                      />
-                    </label>
-                    <label>
-                      Hotell
-                      <input
-                        value={stay.hotelName || ''}
-                        disabled={disabled}
-                        placeholder="Hotellnavn"
-                        onChange={(e) =>
-                          onChange({
-                            ...stop,
-                            stay: { ...stay, hotelName: e.target.value },
-                          })
-                        }
-                        onBlur={() =>
-                          patchStay({ hotelName: stay.hotelName || '' })
-                        }
-                      />
-                    </label>
-                    <label>
-                      Hotelladresse
-                      <input
-                        value={stay.address || ''}
-                        disabled={disabled}
-                        onChange={(e) =>
-                          onChange({
-                            ...stop,
-                            stay: { ...stay, address: e.target.value },
-                          })
-                        }
-                        onBlur={() =>
-                          patchStay({ address: stay.address || '' })
-                        }
-                      />
-                    </label>
-                    <label>
-                      Pris
-                      <input
-                        value={stay.price || ''}
-                        disabled={disabled}
-                        placeholder="4500 kr"
-                        inputMode="decimal"
-                        onChange={(e) =>
-                          onChange({
-                            ...stop,
-                            stay: { ...stay, price: e.target.value },
-                          })
-                        }
-                        onBlur={() => patchStay({ price: stay.price || '' })}
-                      />
-                    </label>
-                  </>
-                )}
               </div>
             )}
+            <CityDocsEditor
+              stop={stop}
+              disabled={disabled}
+              onChange={(next, opts) => onChange(next, opts)}
+            />
           </div>
 
-          <div className="v2-day-list">
-            {daysInCity.length > 0 && (
-              <ul className="v2-cruise-days v2-city-days">
-                {daysInCity.map((day) => (
-                  <li key={day.offset}>
+          {daysInCity.length > 0 && (
+            <ul className="v2-cruise-days v2-city-days">
+              {daysInCity.map((day) => (
+                <li key={day.offset} className="v2-city-day">
+                  <div className="v2-city-day-head">
                     <span className="v2-cruise-day-date">
                       {formatDateNO(day.date)}
                     </span>
                     <span>{day.label}</span>
-                  </li>
-                ))}
-              </ul>
-            )}
-            {(hotel || hotelAddress) && (
-              <div className="v2-hotel-row">
-                <span className="v2-activity-kind is-hotel" aria-hidden>
-                  <PlaceMetaIcon name="hotel" size={12} />
-                </span>
-                <div className="v2-hotel-row-text">
-                  <span className="v2-hotel-row-name">
-                    {hotel || 'Hotell'}
-                  </span>
-                  {hotelAddress ? (
-                    <span className="v2-hotel-row-addr">{hotelAddress}</span>
-                  ) : null}
+                  </div>
+                  <SightList
+                    sights={activitiesForDay(stop.sights, day.offset)}
+                    dayOffset={day.offset}
+                    disabled={disabled}
+                    heading="Utflukter og severdigheter"
+                    suggestCountry={stop.country}
+                    onChange={(dayList) =>
+                      patchStop(
+                        {
+                          sights: replaceDayActivities(
+                            stop.sights,
+                            day.offset,
+                            dayList,
+                          ),
+                        },
+                        { immediate: true },
+                      )
+                    }
+                  />
+                </li>
+              ))}
+            </ul>
+          )}
+
+          <div className="v2-linked">
+            {stopPurpose(stop) === 'visit' && (
+            <>
+            <div className="v2-sights-head">
+              <span>Hotell / Overnatting</span>
+              {!editingHotel && !(hotel || hasStay) && (
+                <button
+                  type="button"
+                  className="v2-chip-btn"
+                  disabled={disabled}
+                  title="Legg til hotell / overnatting"
+                  onClick={startAddHotel}
+                >
+                  + Hotell
+                </button>
+              )}
+              {!editingHotel && (hotel || hasStay) && (
+                <button
+                  type="button"
+                  className="v2-chip-btn"
+                  disabled={disabled}
+                  title="Endre hotell"
+                  onClick={() => setEditingHotel(true)}
+                >
+                  Endre
+                </button>
+              )}
+              {editingHotel && (
+                <button
+                  type="button"
+                  className="v2-chip-btn"
+                  disabled={disabled}
+                  title="Ferdig"
+                  onClick={() => {
+                    patchStay({}, true, { immediate: true })
+                    setEditingHotel(false)
+                  }}
+                >
+                  Ferdig
+                </button>
+              )}
+            </div>
+
+            <div
+              className={`v2-hotel-card${editingHotel ? ' is-open' : ''}${
+                !hotel && !hasStay ? ' is-empty' : ''
+              }`}
+            >
+              {!editingHotel && (
+                <div className="v2-hotel-card-head">
+                  <button
+                    type="button"
+                    className="v2-hotel-summary"
+                    disabled={disabled}
+                    aria-expanded={false}
+                    title={
+                      hotel || hasStay
+                        ? 'Endre hotell'
+                        : 'Legg til hotell / overnatting'
+                    }
+                    onClick={() => {
+                      if (hotel || hasStay) setEditingHotel(true)
+                      else startAddHotel()
+                    }}
+                  >
+                    <span className="v2-activity-kind is-hotel" aria-hidden>
+                      <PlaceMetaIcon name="hotel" size={12} />
+                    </span>
+                    <span className="v2-hotel-row-text">
+                      {hotel ? (
+                        <>
+                          <span className="v2-hotel-row-name">{hotel}</span>
+                          {(hotelAddress || hotelPrice || nights > 0) && (
+                            <span className="v2-hotel-row-addr">
+                              {[
+                                hotelAddress,
+                                nights > 0
+                                  ? `${nights} ${nights === 1 ? 'natt' : 'netter'}`
+                                  : '',
+                                hotelPrice,
+                              ]
+                                .filter(Boolean)
+                                .join(' · ')}
+                            </span>
+                          )}
+                        </>
+                      ) : hasStay ? (
+                        <>
+                          <span className="v2-hotel-row-name">
+                            Hotell ikke satt
+                          </span>
+                          <span className="v2-hotel-row-addr">
+                            {nights} {nights === 1 ? 'natt' : 'netter'} · trykk
+                            for å legge inn navn
+                          </span>
+                        </>
+                      ) : (
+                        <>
+                          <span className="v2-hotel-row-name">
+                            Ingen hotell ennå
+                          </span>
+                          <span className="v2-hotel-row-addr">
+                            Trykk her eller + Hotell for å legge til
+                          </span>
+                        </>
+                      )}
+                    </span>
+                  </button>
                 </div>
-              </div>
+              )}
+
+              {editingHotel && (
+                <div className="v2-hotel-card-body form-grid">
+                  <label>
+                    Hotell
+                    <input
+                      value={stay.hotelName || ''}
+                      disabled={disabled}
+                      placeholder="Hotellnavn"
+                      autoFocus
+                      onChange={(e) =>
+                        onChange({
+                          ...stop,
+                          stay: {
+                            ...stay,
+                            nights: stay.nights || 1,
+                            hotelName: e.target.value,
+                          },
+                        })
+                      }
+                      onBlur={(e) =>
+                        patchStay(
+                          { hotelName: e.target.value },
+                          true,
+                          { immediate: true },
+                        )
+                      }
+                    />
+                  </label>
+                  <label>
+                    Antall netter
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      disabled={disabled}
+                      value={String(stay.nights || '')}
+                      onChange={(e) => {
+                        const raw = e.target.value
+                        if (raw !== '' && !/^\d+$/.test(raw)) return
+                        const n = raw === '' ? 0 : Number(raw)
+                        onChange({
+                          ...stop,
+                          stay: {
+                            ...stay,
+                            nights: n,
+                          },
+                        })
+                      }}
+                      onBlur={(e) => {
+                        const n = Math.max(
+                          1,
+                          Number(e.target.value.replace(/[^\d]/g, '') || '1'),
+                        )
+                        const nextStay = {
+                          ...stay,
+                          nights: n,
+                          hotelName: (stay.hotelName || '').trim(),
+                          address: (stay.address || '').trim(),
+                          price: (stay.price || '').trim(),
+                        }
+                        onChange(
+                          {
+                            ...stop,
+                            stay: nextStay,
+                            sights: normalizeSights(stop.sights),
+                            purpose: nextStay.hotelName
+                              ? 'visit'
+                              : stop.purpose,
+                          },
+                          {
+                            immediate: true,
+                            nightsDelta: n - nightsAtEditStart.current,
+                          },
+                        )
+                        nightsAtEditStart.current = n
+                      }}
+                    />
+                  </label>
+                  <label>
+                    Adresse
+                    <input
+                      value={stay.address || ''}
+                      disabled={disabled}
+                      placeholder="Gateadresse"
+                      onChange={(e) =>
+                        onChange({
+                          ...stop,
+                          stay: {
+                            ...stay,
+                            nights: stay.nights || 1,
+                            address: e.target.value,
+                          },
+                        })
+                      }
+                      onBlur={(e) =>
+                        patchStay(
+                          { address: e.target.value },
+                          true,
+                          { immediate: true },
+                        )
+                      }
+                    />
+                  </label>
+                  <label>
+                    Pris
+                    <input
+                      value={stay.price || ''}
+                      disabled={disabled}
+                      placeholder="4500 kr"
+                      inputMode="decimal"
+                      onChange={(e) =>
+                        onChange({
+                          ...stop,
+                          stay: {
+                            ...stay,
+                            nights: stay.nights || 1,
+                            price: e.target.value,
+                          },
+                        })
+                      }
+                      onBlur={(e) =>
+                        patchStay(
+                          { price: e.target.value },
+                          true,
+                          { immediate: true },
+                        )
+                      }
+                    />
+                  </label>
+                  {(hotel || hasStay) && (
+                    <div className="v2-hotel-remove-row">
+                      <button
+                        type="button"
+                        className="v2-chip-btn is-danger"
+                        disabled={disabled}
+                        title="Fjern hotell / overnatting fra byen"
+                        onClick={removeHotel}
+                      >
+                        Fjern hotell
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+            </>
             )}
-            <SightList
-              sights={stop.sights}
-              disabled={disabled}
-              onChange={(sights) => patchStop({ sights })}
-            />
+
+            {daysInCity.length === 0 && (
+              <SightList
+                sights={stop.sights}
+                disabled={disabled}
+                heading="Aktiviteter"
+                suggestCountry={stop.country}
+                onChange={(sights) =>
+                  patchStop({ sights }, { immediate: true })
+                }
+              />
+            )}
           </div>
         </div>
       )}
@@ -1016,7 +1472,9 @@ function GapMarker({
   const prefill = gapFillPrefill(from, to)
   const packLabel = isPackageStop(to)
     ? packageTypeLabel(to.kind)
-    : to.city || 'neste stopp'
+    : to.kind === 'home'
+      ? to.address?.trim() || to.city || 'hjem'
+      : to.city || 'neste stopp'
 
   return (
     <div className="v2-gap-marker">
@@ -1089,10 +1547,20 @@ function TransportBlock({
   const summary = filled
     ? summarizeTransport(draft)
     : isPackageStop(from)
-      ? `Transport etter ${packageTypeLabel(from.kind).toLowerCase()} til ${to.city || 'neste sted'}`
-      : `Transport til ${to.city || 'hovedmål'}`
+      ? `Transport etter ${packageTypeLabel(from.kind).toLowerCase()} til ${
+          to.kind === 'home'
+            ? to.address?.trim() || to.city || 'hjem'
+            : to.city || 'neste sted'
+        }`
+      : `Transport til ${
+          to.kind === 'home'
+            ? to.address?.trim() || to.city || 'hjem'
+            : to.city || 'hovedmål'
+        }`
   const showWarn = warn || missingModes
-  const goalName = to.city.trim() || 'Hovedmål'
+  const homeAddress = to.kind === 'home' ? (to.address || '').trim() : ''
+  const goalName =
+    (to.kind === 'home' && homeAddress) || to.city.trim() || 'Hovedmål'
   const persistTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const latestSegs = useRef(segments)
   latestSegs.current = segments
@@ -1116,6 +1584,8 @@ function TransportBlock({
               gate: flight ? (o.gate || '').trim() : '',
               minutes: walk ? (o.minutes || '').trim() : '',
               info: modeIsOther(o.mode) ? (o.info || '').trim() : '',
+              price: (o.price || '').trim(),
+              actualPrice: (o.actualPrice || '').trim(),
               departures: [] as string[],
             }
           })
@@ -1128,7 +1598,9 @@ function TransportBlock({
               o.platform ||
               o.gate ||
               o.minutes ||
-              o.info,
+              o.info ||
+              o.price ||
+              o.actualPrice,
           )
         const flight = opts.find((o) => o.mode === 'flight')
         if (flight) opts = [flight]
@@ -1139,6 +1611,7 @@ function TransportBlock({
             title: (v.title || '').trim(),
             country: (v.country || '').trim(),
             sights: normalizeSights(v.sights),
+            purpose: viaPurpose(v),
             sortOrder: i,
           },
           opts,
@@ -1160,7 +1633,7 @@ function TransportBlock({
     persistTimer.current = setTimeout(() => {
       persistTimer.current = null
       onChange(withTransportSegments(leg, cleanSegments(list)))
-    }, 350)
+    }, 450)
   }
 
   useEffect(() => {
@@ -1199,9 +1672,11 @@ function TransportBlock({
   function addPlace(asGoal = false) {
     setOpen(true)
     const place = newJourneyVia(segments.length)
-    if (asGoal && to.city.trim()) {
-      place.title = to.city
+    if (asGoal && (to.city.trim() || homeAddress)) {
+      place.title = homeAddress || to.city
       place.country = to.country || ''
+      place.latitude = to.latitude
+      place.longitude = to.longitude
     }
     setSegments([...segments, place], true)
     // Nytt by-steg åpnes alene.
@@ -1323,8 +1798,10 @@ function TransportBlock({
 
   function isGoal(seg: JourneyVia): boolean {
     const t = seg.title.trim().toLowerCase()
+    if (!t) return false
     const g = to.city.trim().toLowerCase()
-    return !!g && t === g
+    const addr = homeAddress.toLowerCase()
+    return (!!g && t === g) || (!!addr && t === addr)
   }
 
   return (
@@ -1538,6 +2015,9 @@ function TransportBlock({
                               {seg.title.trim() ||
                                 (goal ? 'Hovedmål' : `Sted ${idx + 1}`)}
                               {goal ? ' ★' : ''}
+                              {viaPurpose(seg) === 'transfer'
+                                ? ' · bytte'
+                                : ' · besøk'}
                             </span>
                             {missingRide && (
                               <span
@@ -1589,6 +2069,13 @@ function TransportBlock({
                       {expanded && (
                         <div className="v2-seg-fields">
                           <div className="v2-seg-place">
+                            <PurposeToggle
+                              value={viaPurpose(seg)}
+                              disabled={disabled}
+                              onChange={(purpose) =>
+                                updateSegment(idx, { purpose }, true)
+                              }
+                            />
                             <CitySuggestFields
                               city={seg.title}
                               country={seg.country || ''}
@@ -1601,17 +2088,23 @@ function TransportBlock({
                               showCountry={false}
                               hideHint
                               onCityChange={(city) =>
-                                updateSegment(idx, { title: city })
+                                updateSegment(idx, {
+                                  title: city,
+                                  latitude: undefined,
+                                  longitude: undefined,
+                                })
                               }
                               onCountryChange={(country) =>
                                 updateSegment(idx, { country })
                               }
-                              onSelectPlace={(city, country) => {
+                              onSelectPlace={(city, country, place) => {
                                 updateSegment(
                                   idx,
                                   {
                                     title: city,
                                     country: country || '',
+                                    latitude: place?.latitude,
+                                    longitude: place?.longitude,
                                   },
                                   true,
                                 )
@@ -1757,121 +2250,125 @@ function TransportBlock({
                                   </label>
                                 ) : (
                                   <>
-                                    <input
-                                      value={opt.title || ''}
-                                      disabled={disabled}
-                                      placeholder={
-                                        isFlight
-                                          ? 'Flightnr'
-                                          : isOther
-                                            ? 'Type'
-                                            : 'Linje / nr'
-                                      }
-                                      onChange={(e) =>
-                                        updateOption(idx, oi, {
-                                          title: e.target.value,
-                                        })
-                                      }
-                                      aria-label={
-                                        isFlight
-                                          ? 'Flightnummer'
-                                          : isOther
-                                            ? 'Type'
-                                            : 'Linje / nr'
-                                      }
-                                    />
-                                    {isOther && (
+                                    <div className="v2-hop-opt-row is-main">
                                       <input
-                                        className="v2-hop-info"
-                                        value={opt.info || ''}
+                                        value={opt.title || ''}
                                         disabled={disabled}
-                                        placeholder="Info"
+                                        placeholder={
+                                          isFlight
+                                            ? 'Flightnr'
+                                            : isOther
+                                              ? 'Type'
+                                              : 'Linje / nr'
+                                        }
                                         onChange={(e) =>
                                           updateOption(idx, oi, {
-                                            info: e.target.value,
+                                            title: e.target.value,
                                           })
                                         }
-                                        aria-label="Info"
+                                        aria-label={
+                                          isFlight
+                                            ? 'Flightnummer'
+                                            : isOther
+                                              ? 'Type'
+                                              : 'Linje / nr'
+                                        }
                                       />
-                                    )}
-                                    {isFlight && (
+                                      {isOther && (
+                                        <input
+                                          className="v2-hop-info"
+                                          value={opt.info || ''}
+                                          disabled={disabled}
+                                          placeholder="Info"
+                                          onChange={(e) =>
+                                            updateOption(idx, oi, {
+                                              info: e.target.value,
+                                            })
+                                          }
+                                          aria-label="Info"
+                                        />
+                                      )}
+                                      {isFlight && (
+                                        <input
+                                          className="v2-hop-gate"
+                                          value={opt.gate || ''}
+                                          disabled={disabled}
+                                          placeholder="Gate"
+                                          onChange={(e) =>
+                                            updateOption(idx, oi, {
+                                              gate: e.target.value,
+                                            })
+                                          }
+                                          aria-label="Gate"
+                                        />
+                                      )}
+                                      {showPlatform && (
+                                        <input
+                                          className="v2-hop-platform"
+                                          value={opt.platform || ''}
+                                          disabled={disabled}
+                                          placeholder="Perong"
+                                          onChange={(e) =>
+                                            updateOption(idx, oi, {
+                                              platform: e.target.value,
+                                            })
+                                          }
+                                          aria-label="Perong"
+                                        />
+                                      )}
                                       <input
-                                        className="v2-hop-gate"
-                                        value={opt.gate || ''}
+                                        inputMode="numeric"
+                                        placeholder="Avgang"
+                                        value={opt.startTime || ''}
                                         disabled={disabled}
-                                        placeholder="Gate"
                                         onChange={(e) =>
                                           updateOption(idx, oi, {
-                                            gate: e.target.value,
+                                            startTime: e.target.value,
+                                            departures: [],
                                           })
                                         }
-                                        aria-label="Gate"
+                                        onBlur={() => resortOptions(idx)}
                                       />
-                                    )}
-                                    <input
-                                      inputMode="numeric"
-                                      placeholder="Avgang"
-                                      value={opt.startTime || ''}
-                                      disabled={disabled}
-                                      onChange={(e) =>
-                                        updateOption(idx, oi, {
-                                          startTime: e.target.value,
-                                          departures: [],
-                                        })
-                                      }
-                                      onBlur={() => resortOptions(idx)}
-                                    />
-                                    <input
-                                      inputMode="numeric"
-                                      placeholder="Ankomst"
-                                      value={opt.endTime || ''}
-                                      disabled={disabled}
-                                      onChange={(e) =>
-                                        updateOption(idx, oi, {
-                                          endTime: e.target.value,
-                                        })
-                                      }
-                                    />
-                                    <input
-                                      className="v2-hop-price"
-                                      inputMode="decimal"
-                                      placeholder="Forv. pris"
-                                      value={opt.price || ''}
-                                      disabled={disabled}
-                                      title="Forventet pris"
-                                      onChange={(e) =>
-                                        updateOption(idx, oi, {
-                                          price: e.target.value,
-                                        })
-                                      }
-                                    />
-                                    <input
-                                      className="v2-hop-price"
-                                      inputMode="decimal"
-                                      placeholder="Faktisk"
-                                      value={opt.actualPrice || ''}
-                                      disabled={disabled}
-                                      title="Faktisk kostnad"
-                                      onChange={(e) =>
-                                        updateOption(idx, oi, {
-                                          actualPrice: e.target.value,
-                                        })
-                                      }
-                                    />
-                                    {showPlatform && (
                                       <input
-                                        className="v2-hop-platform"
-                                        value={opt.platform || ''}
+                                        inputMode="numeric"
+                                        placeholder="Ankomst"
+                                        value={opt.endTime || ''}
                                         disabled={disabled}
-                                        placeholder="Perong"
                                         onChange={(e) =>
                                           updateOption(idx, oi, {
-                                            platform: e.target.value,
+                                            endTime: e.target.value,
                                           })
                                         }
-                                        aria-label="Perong"
                                       />
-                                    )}
+                                    </div>
+                                    <div className="v2-hop-opt-row is-prices">
+                                      <input
+                                        className="v2-hop-price"
+                                        inputMode="decimal"
+                                        placeholder="Forv. pris"
+                                        value={opt.price || ''}
+                                        disabled={disabled}
+                                        title="Forventet pris"
+                                        onChange={(e) =>
+                                          updateOption(idx, oi, {
+                                            price: e.target.value,
+                                          })
+                                        }
+                                      />
+                                      <input
+                                        className="v2-hop-price"
+                                        inputMode="decimal"
+                                        placeholder="Faktisk"
+                                        value={opt.actualPrice || ''}
+                                        disabled={disabled}
+                                        title="Faktisk kostnad"
+                                        onChange={(e) =>
+                                          updateOption(idx, oi, {
+                                            actualPrice: e.target.value,
+                                          })
+                                        }
+                                      />
+                                    </div>
                                   </>
                                 )}
                               </div>
@@ -1911,6 +2408,7 @@ function TransportBlock({
                           sights={seg.sights}
                           compact
                           disabled={disabled}
+                          suggestCountry={seg.country || to.country}
                           onChange={(sights) =>
                             updateSegment(idx, { sights }, true)
                           }
@@ -2098,6 +2596,7 @@ function StopWizard({
   stopId,
   insertBeforeId,
   gapFromId,
+  fromStopId,
   tripStartDate = '',
   homePlace,
   saving,
@@ -2110,6 +2609,7 @@ function StopWizard({
   stopId?: string
   insertBeforeId?: string
   gapFromId?: string
+  fromStopId?: string
   tripStartDate?: string
   homePlace: HomePlace
   saving: boolean
@@ -2131,21 +2631,25 @@ function StopWizard({
     : undefined
   const gapPrefill =
     gapFrom && gapTo ? gapFillPrefill(gapFrom, gapTo) : null
+  const dateFromId = fromStopId || gapFromId
 
   const initialStop: JourneyStop = useMemo(() => {
     if (existing) return { ...existing, stay: existing.stay ? { ...existing.stay } : null }
     if (kind === 'home') {
-      return {
-        id: newStopId(),
-        city: homePlace.city,
-        country: homePlace.country,
-        address: homePlace.address,
-        arriveDate: suggestNextArriveDate(journey, tripStartDate),
-        kind: 'home',
-        stay: null,
-        notes: '',
-        sortOrder: journey.stops.length,
-      }
+      return applyRegisteredHome(
+        {
+          id: newStopId(),
+          city: '',
+          country: '',
+          address: '',
+          arriveDate: suggestNextArriveDate(journey, tripStartDate, dateFromId),
+          kind: 'home' as const,
+          stay: null,
+          notes: '',
+          sortOrder: journey.stops.length,
+        },
+        homePlace,
+      )
     }
     if (gapPrefill) {
       return {
@@ -2171,16 +2675,15 @@ function StopWizard({
       city: '',
       country: '',
       address: '',
-      arriveDate: suggestNextArriveDate(journey, tripStartDate),
+      arriveDate: suggestNextArriveDate(journey, tripStartDate, dateFromId),
       kind: 'place',
       stay: null,
       notes: '',
       sortOrder: journey.stops.length,
     }
-  }, [existing, kind, homePlace, journey, tripStartDate, gapPrefill])
+  }, [existing, kind, homePlace, journey, tripStartDate, gapPrefill, dateFromId])
 
   const [stop, setStop] = useState<JourneyStop>(initialStop)
-  const [wantStay, setWantStay] = useState(!!initialStop.stay)
   const [stay, setStay] = useState<JourneyStay>(() =>
     initialStop.stay || {
       nights: 1,
@@ -2190,14 +2693,20 @@ function StopWizard({
       checkOutTime: '11:00',
     },
   )
+  const hasHotel = !!(stay.hotelName || '').trim()
+  const [wantStay, setWantStay] = useState(
+    () => hasHotel || !!initialStop.stay,
+  )
 
+  useEffect(() => {
+    if (hasHotel) setWantStay(true)
+  }, [hasHotel])
+
+  const isGoingHome =
+    kind === 'home' || (kind === 'edit' && existing?.kind === 'home')
   const steps = wizardSteps(
     settings,
-    kind === 'home' || (kind === 'edit' && existing?.kind === 'home')
-      ? 'home'
-      : kind === 'edit'
-        ? 'onward'
-        : kind,
+    isGoingHome ? 'home' : kind === 'edit' ? 'onward' : kind,
   )
   const [stepIndex, setStepIndex] = useState(0)
   const step = steps[stepIndex] || 'destination'
@@ -2216,13 +2725,13 @@ function StopWizard({
       if (di >= 0) setStepIndex(di)
       return
     }
-    const nextStop: JourneyStop = {
+    const drafted: JourneyStop = {
       ...stop,
       city: stop.city.trim(),
       country: stop.country.trim(),
       address: (stop.address || '').trim(),
       stay:
-        kind === 'home' || !wantStay
+        isGoingHome || !wantStay
           ? null
           : {
               ...stay,
@@ -2230,8 +2739,12 @@ function StopWizard({
               hotelName: (stay.hotelName || '').trim(),
               address: (stay.address || '').trim(),
             },
-      notes: (stop.notes || '').trim(),
+      notes: compactNoteHtml(stop.notes || ''),
+      docs: compactCityDocs(cityDocsOf(stop)),
     }
+    const nextStop: JourneyStop = isGoingHome
+      ? applyRegisteredHome(drafted, homePlace)
+      : drafted
     try {
       // Transport between cities is edited in the thread via-block, not here.
       await onSave(nextStop, null)
@@ -2308,20 +2821,40 @@ function StopWizard({
 
         {localError && <p className="v2-error">{localError}</p>}
 
-        {step === 'destination' && (
+        {step === 'destination' && isGoingHome && (
+          <div className="form-grid">
+            <p className="v2-meta" style={{ margin: 0 }}>
+              Adresse hentes fra innstillinger.
+            </p>
+            <p className="v2-home-register">
+              <strong>{formatHomePlace(homePlace) || 'Hjem'}</strong>
+            </p>
+          </div>
+        )}
+
+        {step === 'destination' && !isGoingHome && (
           <div className="form-grid">
             <CitySuggestFields
               city={stop.city}
               country={stop.country}
-              cityLabel={kind === 'home' ? 'Hjem' : 'Hvor skal du?'}
+              cityLabel="Hvor skal du?"
               autoFocus={kind === 'onward'}
-              onCityChange={(city) => setStop((p) => ({ ...p, city }))}
+              onCityChange={(city) =>
+                setStop((p) => ({
+                  ...p,
+                  city,
+                  latitude: undefined,
+                  longitude: undefined,
+                }))
+              }
               onCountryChange={(country) => setStop((p) => ({ ...p, country }))}
-              onSelectPlace={(city, country) =>
+              onSelectPlace={(city, country, place) =>
                 setStop((p) => ({
                   ...p,
                   city,
                   country: country || p.country,
+                  latitude: place?.latitude,
+                  longitude: place?.longitude,
                 }))
               }
             />
@@ -2352,8 +2885,12 @@ function StopWizard({
             <label className="v2-check-row">
               <input
                 type="checkbox"
-                checked={wantStay}
-                onChange={(e) => setWantStay(e.target.checked)}
+                checked={wantStay || hasHotel}
+                disabled={hasHotel}
+                onChange={(e) => {
+                  if (hasHotel) return
+                  setWantStay(e.target.checked)
+                }}
               />
               Jeg har overnatting her
             </label>
@@ -2405,8 +2942,8 @@ function StopWizard({
             )}
             {!wantStay && (
               <p className="v2-meta">
-                Greit å hoppe over — stoppet får et ! til du legger til hotell
-                (styres i Innstillinger).
+                Greit å hoppe over — du kan legge til hotell senere under byen
+                (Hotell / Overnatting → + Hotell).
               </p>
             )}
           </div>
@@ -2414,16 +2951,19 @@ function StopWizard({
 
         {step === 'notes' && (
           <div className="form-grid">
-            <label>
-              Notater
-              <textarea
+            <div className="v2-note-field">
+              <span>Notater</span>
+              <NoteEditor
                 value={stop.notes || ''}
-                onChange={(e) =>
-                  setStop((p) => ({ ...p, notes: e.target.value }))
-                }
                 placeholder="Tips, møtested, billetter…"
+                onChange={(html) =>
+                  setStop((p) => ({ ...p, notes: html }))
+                }
+                onBlur={(html) =>
+                  setStop((p) => ({ ...p, notes: compactNoteHtml(html) }))
+                }
               />
-            </label>
+            </div>
           </div>
         )}
 
@@ -2463,7 +3003,7 @@ function StopWizard({
               disabled={saving}
               title="Hopp over dette steget"
               onClick={() => {
-                if (step === 'stay') setWantStay(false)
+                if (step === 'stay' && !hasHotel) setWantStay(false)
                 setStepIndex((i) => i + 1)
               }}
             >
@@ -2478,7 +3018,7 @@ function StopWizard({
               disabled={saving}
               title="Lagre uten dette"
               onClick={() => {
-                if (step === 'stay') setWantStay(false)
+                if (step === 'stay' && !hasHotel) setWantStay(false)
                 void finish()
               }}
             >

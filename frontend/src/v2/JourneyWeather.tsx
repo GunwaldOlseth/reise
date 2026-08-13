@@ -6,6 +6,7 @@ import {
   type WeatherDay,
   type WeatherReport,
 } from '../api'
+import { localizeCity, localizeCountry } from '../placeNames'
 import {
   addDaysIso,
   formatDateNO,
@@ -270,7 +271,7 @@ function SpotWeatherCard({
           <strong>{formatDateNO(spot.date)}</strong>
           <span className="v2-meta">
             {' '}
-            · {city}
+            · {localizeCity(city) || city}
             {spot.note ? ` · ${spot.note}` : ''}
           </span>
         </div>
@@ -294,11 +295,17 @@ function SpotWeatherCard({
                   type="button"
                   className="btn btn-soft btn-sm"
                   onClick={() => {
-                    setCity(place.name)
-                    setCountry(place.country || country)
+                    setCity(localizeCity(place.name) || place.name)
+                    setCountry(
+                      localizeCountry(place.country) || place.country || country,
+                    )
                   }}
                 >
-                  {[place.name, place.admin1, place.country]
+                  {[
+                    localizeCity(place.name),
+                    localizeCity(place.admin1),
+                    localizeCountry(place.country),
+                  ]
                     .filter(Boolean)
                     .join(', ')}
                 </button>

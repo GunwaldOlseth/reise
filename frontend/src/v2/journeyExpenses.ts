@@ -6,7 +6,10 @@ import {
   type TripExpenseSummary,
 } from '../api'
 import {
+  compactLive,
   isPackageStop,
+  liveKindLabel,
+  packageFreeDayLabel,
   packageOf,
   packageTypeLabel,
   stayNights,
@@ -21,6 +24,7 @@ function emptySummary(): TripExpenseSummary {
     cruise: { total: 0, days: 0, avgPerDay: 0, lines: [] },
     hotel: { total: 0, lines: [] },
     transport: { total: 0, lines: [] },
+    live: { total: 0, lines: [] },
     byDay: [],
     total: 0,
     pricedCount: 0,
@@ -48,6 +52,7 @@ export function journeyExpenseSummary(journey: Journey): TripExpenseSummary {
   const cruiseLines: ExpenseLine[] = []
   const hotelLines: ExpenseLine[] = []
   const transportLines: ExpenseLine[] = []
+  const liveLines: ExpenseLine[] = []
   let cruiseDays = 0
   let unparsedCount = 0
   let pricedCount = 0
@@ -56,18 +61,21 @@ export function journeyExpenseSummary(journey: Journey): TripExpenseSummary {
     cruise: number
     hotel: number
     transport: number
+    live: number
     lines: ExpenseLine[]
     place: string
+    ship: string
   }
   const byDate = new Map<string, DayAcc>()
 
-  function dayAcc(date: string, place: string): DayAcc {
+  function dayAcc(date: string, place: string, ship = ''): DayAcc {
     let acc = byDate.get(date)
     if (!acc) {
-      acc = { cruise: 0, hotel: 0, transport: 0, lines: [], place }
+      acc = { cruise: 0, hotel: 0, transport: 0, live: 0, lines: [], place, ship }
       byDate.set(date, acc)
-    } else if (!acc.place && place) {
-      acc.place = place
+    } else {
+      if (!acc.place && place) acc.place = place
+      if (!acc.ship && ship) acc.ship = ship
     }
     return acc
   }
@@ -75,14 +83,41 @@ export function journeyExpenseSummary(journey: Journey): TripExpenseSummary {
   function addShare(
     date: string,
     place: string,
-    category: 'cruise' | 'hotel' | 'transport',
+    category: 'cruise' | 'hotel' | 'transport' | 'live',
     share: number,
     line: ExpenseLine,
+    ship = '',
   ) {
     if (!date) return
-    const acc = dayAcc(date, place)
+    const acc = dayAcc(date, place, ship)
+    if (category === 'cruise') {
+      // Cruise day place/ship is more specific than hotel/transport fallbacks.
+      if (place) acc.place = place
+      if (ship) acc.ship = ship
+    }
     acc[category] += share
     acc.lines.push(line)
+  }
+
+  function packageDayPlace(
+    stop: JourneyStop,
+    dayOffset: number,
+  ): { place: string; ship: string } {
+    const pack = packageOf(stop)
+    const ship = (pack?.title || '').trim()
+    const day = (pack?.days || []).find((d) => d.offset === dayOffset)
+    if (day?.atSea) {
+      return {
+        place: packageFreeDayLabel(stop.kind),
+        ship,
+      }
+    }
+    const place =
+      day?.city?.trim() ||
+      (dayOffset === 0
+        ? pack?.basePlace?.trim() || stop.city || ''
+        : stop.city || pack?.basePlace?.trim() || '')
+    return { place, ship }
   }
 
   function takeAmount(
@@ -121,22 +156,32 @@ export function journeyExpenseSummary(journey: Journey): TripExpenseSummary {
       const share = resolved.amount / nights
       for (let i = 0; i < nights; i++) {
         const date = addDaysIso(stop.arriveDate, i)
-        addShare(date, stop.city, 'cruise', share, {
-          ...line,
-          id: `${line.id}:${date}`,
+        const ctx = packageDayPlace(stop, i)
+        addShare(
           date,
-          amount: share,
-          title: `${title} (andel)`,
-        })
+          ctx.place,
+          'cruise',
+          share,
+          {
+            ...line,
+            id: `${line.id}:${date}`,
+            date,
+            amount: share,
+            title: `${title} (andel)`,
+          },
+          ctx.ship,
+        )
       }
       return
     }
+    const ctx = packageDayPlace(stop, 0)
     addShare(
       stop.arriveDate,
-      stop.city,
+      ctx.place || stop.city,
       'cruise',
       resolved.amount,
       line,
+      ctx.ship,
     )
   }
 
@@ -164,13 +209,21 @@ export function journeyExpenseSummary(journey: Journey): TripExpenseSummary {
           const share = ticket.amount / nights
           for (let i = 0; i < nights; i++) {
             const date = addDaysIso(stop.arriveDate, i)
-            addShare(date, stop.city, 'cruise', share, {
-              ...line,
-              id: `${line.id}:${date}`,
+            const ctx = packageDayPlace(stop, i)
+            addShare(
               date,
-              amount: share,
-              title: `${title} (andel)`,
-            })
+              ctx.place,
+              'cruise',
+              share,
+              {
+                ...line,
+                id: `${line.id}:${date}`,
+                date,
+                amount: share,
+                title: `${title} (andel)`,
+              },
+              ctx.ship,
+            )
           }
         }
       }
@@ -196,6 +249,8 @@ export function journeyExpenseSummary(journey: Journey): TripExpenseSummary {
           date: stop.arriveDate,
           rawPrice: resolved.raw,
           amount: resolved.amount,
+          nights: Math.max(1, nights || 1),
+          place: stop.city?.trim() || undefined,
         }
         hotelLines.push(line)
         if (nights >= 1 && stop.arriveDate) {
@@ -266,19 +321,48 @@ export function journeyExpenseSummary(journey: Journey): TripExpenseSummary {
     }
   }
 
+  for (const entry of compactLive(journey.live)) {
+    const resolved = takeAmount(entry.price || '')
+    if (resolved === 'empty') continue
+    if (resolved === 'unparsed') {
+      unparsedCount += 1
+      continue
+    }
+    pricedCount += 1
+    const kind = liveKindLabel(entry.kind)
+    const title = entry.title.trim()
+      ? `${kind} · ${entry.title.trim()}`
+      : kind
+    const place =
+      [...byDate.entries()].find(([d]) => d === entry.date)?.[1].place || ''
+    const line: ExpenseLine = {
+      id: entry.id,
+      title,
+      date: entry.date,
+      rawPrice: resolved.raw,
+      amount: resolved.amount,
+      isActual: true,
+    }
+    liveLines.push(line)
+    addShare(entry.date, place, 'live', resolved.amount, line)
+  }
+
   const cruiseTotal = cruiseLines.reduce((s, l) => s + l.amount, 0)
   const hotelTotal = hotelLines.reduce((s, l) => s + l.amount, 0)
   const transportTotal = transportLines.reduce((s, l) => s + l.amount, 0)
+  const liveTotal = liveLines.reduce((s, l) => s + l.amount, 0)
 
   const byDay: DayExpenseSummary[] = [...byDate.entries()]
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([date, acc]) => ({
       date,
       place: acc.place,
+      ship: acc.ship || undefined,
       cruise: acc.cruise,
       hotel: acc.hotel,
       transport: acc.transport,
-      total: acc.cruise + acc.hotel + acc.transport,
+      live: acc.live,
+      total: acc.cruise + acc.hotel + acc.transport + acc.live,
       lines: acc.lines,
     }))
 
@@ -291,8 +375,9 @@ export function journeyExpenseSummary(journey: Journey): TripExpenseSummary {
     },
     hotel: { total: hotelTotal, lines: hotelLines },
     transport: { total: transportTotal, lines: transportLines },
+    live: { total: liveTotal, lines: liveLines },
     byDay,
-    total: cruiseTotal + hotelTotal + transportTotal,
+    total: cruiseTotal + hotelTotal + transportTotal + liveTotal,
     pricedCount,
     unparsedCount,
   }

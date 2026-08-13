@@ -76,3 +76,17 @@ bash scripts/deploy-cloud-run.sh
 Tjenester: `reise-backend`, `reise-frontend`. Backend bruker Application Default Credentials med `FIREBASE_PROJECT_ID=homey-376215`.
 
 Valgfritt: `VITE_GOOGLE_CLIENT_ID=... bash scripts/deploy-cloud-run.sh`
+
+## Sikkerhetskopi (Cloud Storage + Scheduler)
+
+Ingen nye tabeller. Firestore dumpes som JSON-filer til `gs://homey-376215-reise-backups/backups/` kl. **08, 14 og 19** (Europe/Oslo).
+
+```bash
+bash scripts/setup-backup-scheduler.sh
+```
+
+Scriptet lager bucket, setter `BACKUP_BUCKET`, `BACKUP_CRON_SECRET` og `ADMIN_PASSWORD` på `reise-backend`, og oppretter tre Cloud Scheduler-jobber.
+
+Lokalt (uten bucket): sett `ADMIN_PASSWORD` og ta backup til mappen `backend/api/backups`.
+
+I appen: **Innstillinger → Admin · sikkerhetskopi** — logg inn med admin-passordet og hent en kopi tilbake.

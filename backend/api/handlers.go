@@ -2,11 +2,13 @@ package main
 
 import (
 	"context"
+	"crypto/subtle"
 	"encoding/json"
 	"fmt"
 	"io"
 	"log"
 	"net/http"
+	"os"
 	"sort"
 	"strings"
 	"time"
@@ -34,7 +36,7 @@ func respondWithJSON(w http.ResponseWriter, code int, payload interface{}) {
 		w.Write([]byte(`{"error": "Failed to serialize response"}`))
 		return
 	}
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(code)
 	w.Write(response)
 }
@@ -43,7 +45,7 @@ func corsMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Backup-Secret, X-Admin-Token, X-Delete-Password")
 
 		if r.Method == "OPTIONS" {
 			w.WriteHeader(http.StatusOK)
@@ -56,6 +58,24 @@ func corsMiddleware(next http.Handler) http.Handler {
 
 func healthCheck(w http.ResponseWriter, r *http.Request) {
 	respondWithJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
+func normalizeTravelers(list []string) []string {
+	seen := map[string]bool{}
+	out := make([]string, 0, len(list))
+	for _, raw := range list {
+		name := strings.TrimSpace(raw)
+		if name == "" {
+			continue
+		}
+		key := strings.ToLower(name)
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		out = append(out, name)
+	}
+	return out
 }
 
 func decodeJSON(r *http.Request, dst interface{}) error {
@@ -291,6 +311,7 @@ func createTrip(w http.ResponseWriter, r *http.Request) {
 	if trip.ColorByCountry == nil {
 		trip.ColorByCountry = map[string]string{}
 	}
+	trip.Travelers = normalizeTravelers(trip.Travelers)
 
 	now := time.Now().UTC()
 	trip.CreatedAt = now
@@ -326,6 +347,7 @@ func updateTrip(w http.ResponseWriter, r *http.Request) {
 	if trip.ColorByCountry == nil {
 		trip.ColorByCountry = map[string]string{}
 	}
+	trip.Travelers = normalizeTravelers(trip.Travelers)
 
 	doc, err := db.Collection(tripsCollection).Doc(id).Get(ctx)
 	if err != nil {
@@ -351,7 +373,35 @@ func updateTrip(w http.ResponseWriter, r *http.Request) {
 	respondWithJSON(w, http.StatusOK, trip)
 }
 
+func deleteTripPassword() string {
+	if p := strings.TrimSpace(os.Getenv("DELETE_TRIP_PASSWORD")); p != "" {
+		return p
+	}
+	return "123"
+}
+
+func requireDeleteTripPassword(w http.ResponseWriter, r *http.Request) bool {
+	want := deleteTripPassword()
+	got := strings.TrimSpace(r.Header.Get("X-Delete-Password"))
+	if got == "" {
+		var body struct {
+			Password string `json:"password"`
+		}
+		if err := decodeJSON(r, &body); err == nil {
+			got = strings.TrimSpace(body.Password)
+		}
+	}
+	if subtle.ConstantTimeCompare([]byte(got), []byte(want)) != 1 {
+		respondWithError(w, http.StatusUnauthorized, "Feil passord")
+		return false
+	}
+	return true
+}
+
 func deleteTrip(w http.ResponseWriter, r *http.Request) {
+	if !requireDeleteTripPassword(w, r) {
+		return
+	}
 	ctx := context.Background()
 	id := r.PathValue("id")
 	if id == "" {

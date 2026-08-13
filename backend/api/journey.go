@@ -22,6 +22,7 @@ func emptyJourney(tripID string) Journey {
 		TripID:    tripID,
 		Stops:     []JourneyStop{},
 		Legs:      []JourneyLeg{},
+		Live:      []JourneyLiveEntry{},
 		CreatedAt: now,
 		UpdatedAt: now,
 	}
@@ -29,6 +30,54 @@ func emptyJourney(tripID string) Journey {
 
 func newJourneyID(prefix string) string {
 	return fmt.Sprintf("%s_%d", prefix, time.Now().UnixNano())
+}
+
+func normalizePurpose(value string) string {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "transfer":
+		return "transfer"
+	case "visit":
+		return "visit"
+	default:
+		return ""
+	}
+}
+
+func normalizeSights(sights []JourneySight) {
+	for i := range sights {
+		sights[i].Purpose = normalizePurpose(sights[i].Purpose)
+	}
+}
+
+func normalizeCityDocs(stop *JourneyStop) {
+	if stop == nil {
+		return
+	}
+	kept := make([]JourneyCityDoc, 0, len(stop.Docs))
+	for _, d := range stop.Docs {
+		d.Title = strings.TrimSpace(d.Title)
+		d.Body = strings.TrimSpace(d.Body)
+		if d.Title == "" && d.Body == "" {
+			continue
+		}
+		if d.ID == "" || d.ID == "notes" {
+			d.ID = newJourneyID("doc")
+		}
+		d.SortOrder = len(kept)
+		kept = append(kept, d)
+	}
+	if len(kept) == 0 && stop.Notes != "" {
+		kept = append(kept, JourneyCityDoc{
+			ID:        newJourneyID("doc"),
+			Title:     "Om byen",
+			Body:      stop.Notes,
+			SortOrder: 0,
+		})
+	}
+	if len(kept) > 0 && stop.Notes == "" {
+		stop.Notes = kept[0].Body
+	}
+	stop.Docs = kept
 }
 
 func isPackageKind(kind string) bool {
@@ -99,6 +148,37 @@ func normalizeJourney(j *Journey) {
 	if j.Legs == nil {
 		j.Legs = []JourneyLeg{}
 	}
+	if j.Live == nil {
+		j.Live = []JourneyLiveEntry{}
+	}
+	for i := range j.Live {
+		j.Live[i].SortOrder = i
+		j.Live[i].Date = strings.TrimSpace(j.Live[i].Date)
+		j.Live[i].Title = strings.TrimSpace(j.Live[i].Title)
+		j.Live[i].Price = strings.TrimSpace(j.Live[i].Price)
+		j.Live[i].Notes = strings.TrimSpace(j.Live[i].Notes)
+		j.Live[i].Time = strings.TrimSpace(j.Live[i].Time)
+		switch strings.ToLower(j.Live[i].Kind) {
+		case "food", "drink", "shop":
+			j.Live[i].Kind = strings.ToLower(j.Live[i].Kind)
+		default:
+			j.Live[i].Kind = "other"
+		}
+		if j.Live[i].ID == "" {
+			j.Live[i].ID = newJourneyID("live")
+		}
+	}
+	kept := make([]JourneyLiveEntry, 0, len(j.Live))
+	for _, e := range j.Live {
+		if e.Date == "" {
+			continue
+		}
+		if e.Title == "" && e.Price == "" && e.Notes == "" {
+			continue
+		}
+		kept = append(kept, e)
+	}
+	j.Live = kept
 	sort.SliceStable(j.Stops, func(i, k int) bool {
 		if j.Stops[i].SortOrder != j.Stops[k].SortOrder {
 			return j.Stops[i].SortOrder < j.Stops[k].SortOrder
@@ -115,6 +195,8 @@ func normalizeJourney(j *Journey) {
 		j.Stops[i].Address = strings.TrimSpace(j.Stops[i].Address)
 		j.Stops[i].ArriveDate = strings.TrimSpace(j.Stops[i].ArriveDate)
 		j.Stops[i].Notes = strings.TrimSpace(j.Stops[i].Notes)
+		normalizeCityDocs(&j.Stops[i])
+		j.Stops[i].Purpose = normalizePurpose(j.Stops[i].Purpose)
 		if j.Stops[i].Kind == "" {
 			j.Stops[i].Kind = "place"
 		}
@@ -127,6 +209,7 @@ func normalizeJourney(j *Journey) {
 			}
 		}
 		normalizePackageStop(&j.Stops[i])
+		normalizeSights(j.Stops[i].Sights)
 	}
 	byPair := map[string]JourneyLeg{}
 	for _, leg := range j.Legs {
@@ -148,6 +231,8 @@ func normalizeJourney(j *Journey) {
 			}
 			for vi := range existing.Vias {
 				existing.Vias[vi].SortOrder = vi
+				existing.Vias[vi].Purpose = normalizePurpose(existing.Vias[vi].Purpose)
+				normalizeSights(existing.Vias[vi].Sights)
 				if existing.Vias[vi].ID == "" {
 					existing.Vias[vi].ID = newJourneyID("via")
 				}

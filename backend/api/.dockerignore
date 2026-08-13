@@ -4,3 +4,4 @@ service-account.json
 !service-account-template.json
 .tmp
 .git
+backups/

@@ -145,8 +145,28 @@ export interface Trip {
   endDate: string;
   colorByCountry?: Record<string, string>;
   features?: TripFeatures;
+  /** People on the trip (display names). */
+  travelers?: string[];
   createdAt?: string;
   updatedAt?: string;
+}
+
+export function normalizeTravelers(list?: string[] | null): string[] {
+  const seen = new Set<string>()
+  const out: string[] = []
+  for (const raw of list || []) {
+    const name = raw.trim()
+    if (!name) continue
+    const key = name.toLowerCase()
+    if (seen.has(key)) continue
+    seen.add(key)
+    out.push(name)
+  }
+  return out
+}
+
+export function formatTravelers(list?: string[] | null): string {
+  return normalizeTravelers(list).join(' · ')
 }
 
 export function emptyTripFeatures(): TripFeatures {
@@ -483,6 +503,10 @@ export type ExpenseLine = {
   date?: string;
   rawPrice: string;
   amount: number;
+  /** Hotel nights — for per-night stats when amount is the full stay. */
+  nights?: number;
+  /** City / place for hotel (and similar) stats labels. */
+  place?: string;
   /** When set, amount comes from actual cost (transport). */
   isActual?: boolean;
   expectedRaw?: string;
@@ -491,9 +515,12 @@ export type ExpenseLine = {
 export type DayExpenseSummary = {
   date: string;
   place: string;
+  /** Ship / package title when the day includes cruise share. */
+  ship?: string;
   cruise: number;
   hotel: number;
   transport: number;
+  live: number;
   total: number;
   lines: ExpenseLine[];
 };
@@ -502,6 +529,7 @@ export type TripExpenseSummary = {
   cruise: { total: number; days: number; avgPerDay: number; lines: ExpenseLine[] };
   hotel: { total: number; lines: ExpenseLine[] };
   transport: { total: number; lines: ExpenseLine[] };
+  live: { total: number; lines: ExpenseLine[] };
   byDay: DayExpenseSummary[];
   total: number;
   pricedCount: number;
@@ -555,6 +583,7 @@ export function tripExpenseSummary(days: TripDay[]): TripExpenseSummary {
     cruise: number;
     hotel: number;
     transport: number;
+    live: number;
     lines: ExpenseLine[];
   };
   const byDate = new Map<string, DayAcc>();
@@ -562,7 +591,7 @@ export function tripExpenseSummary(days: TripDay[]): TripExpenseSummary {
   function dayAcc(date: string): DayAcc {
     let acc = byDate.get(date);
     if (!acc) {
-      acc = { cruise: 0, hotel: 0, transport: 0, lines: [] };
+      acc = { cruise: 0, hotel: 0, transport: 0, live: 0, lines: [] };
       byDate.set(date, acc);
     }
     return acc;
@@ -748,7 +777,8 @@ export function tripExpenseSummary(days: TripDay[]): TripExpenseSummary {
       cruise: acc.cruise,
       hotel: acc.hotel,
       transport: acc.transport,
-      total: acc.cruise + acc.hotel + acc.transport,
+      live: acc.live,
+      total: acc.cruise + acc.hotel + acc.transport + acc.live,
       lines: acc.lines,
     }))
     .filter((d) => d.total > 0);
@@ -762,6 +792,7 @@ export function tripExpenseSummary(days: TripDay[]): TripExpenseSummary {
     },
     hotel: { total: hotelTotal, lines: hotelLines },
     transport: { total: transportTotal, lines: transportLines },
+    live: { total: 0, lines: [] },
     byDay,
     total: cruiseTotal + hotelTotal + transportTotal,
     pricedCount,
@@ -1456,8 +1487,11 @@ export const api = {
     request<Trip>('/trips', { method: 'POST', body: JSON.stringify(trip) }),
   updateTrip: (id: string, trip: TripInput) =>
     request<Trip>(`/trips/${id}`, { method: 'PUT', body: JSON.stringify(trip) }),
-  deleteTrip: (id: string) =>
-    request<{ message: string }>(`/trips/${id}`, { method: 'DELETE' }),
+  deleteTrip: (id: string, password: string) =>
+    request<{ message: string }>(`/trips/${id}`, {
+      method: 'DELETE',
+      body: JSON.stringify({ password: password.trim() }),
+    }),
   /** Direct download URL for .ics (Gmail, Outlook, Apple Kalender, …). */
   tripCalendarUrl: (id: string) => `${API_BASE}/trips/${encodeURIComponent(id)}/calendar.ics`,
 
@@ -1489,6 +1523,36 @@ export const api = {
       `/trips/${encodeURIComponent(tripId)}/journey`,
       { method: 'PUT', body: JSON.stringify(journey) },
     ),
+
+  adminLogin: (password: string) =>
+    request<{ token: string; expiresAt: string }>('/admin/login', {
+      method: 'POST',
+      body: JSON.stringify({ password }),
+    }),
+  adminListBackups: (token: string) =>
+    request<{ backups: BackupMeta[] }>('/admin/backups', {
+      headers: { Authorization: `Bearer ${token}` },
+    }),
+  adminCreateBackup: (token: string) =>
+    request<BackupMeta>('/admin/backups', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+    }),
+  adminRestoreBackup: (token: string, id: string) =>
+    request<{ message: string }>('/admin/backups/restore', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ id }),
+    }),
+};
+
+export type BackupMeta = {
+  id: string;
+  createdAt: string;
+  trips?: number;
+  days?: number;
+  journeys?: number;
+  bytes?: number;
 };
 
 export function emptyDay(tripId: string, date = '', sortOrder = 0): TripDayInput {
@@ -2490,6 +2554,9 @@ export type TripMapStop = {
   key: string
   /** Seconds from midnight when known — used for ordering/numbering. */
   timeKey?: number
+  /** Cached coordinates — map skips geocode when set. */
+  latitude?: number
+  longitude?: number
 }
 
 /** Effective sort time for a via stop (prefer leg ankomst/avgang). */

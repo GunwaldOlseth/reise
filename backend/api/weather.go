@@ -11,6 +11,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -172,7 +173,7 @@ func geoResultsToSuggestions(geo geoResult) []placeSuggestion {
 			continue
 		}
 		seen[key] = true
-		out = append(out, placeSuggestion{
+		out = append(out, localizePlace(placeSuggestion{
 			Name:        r.Name,
 			Country:     r.Country,
 			Admin1:      r.Admin1,
@@ -180,7 +181,7 @@ func geoResultsToSuggestions(geo geoResult) []placeSuggestion {
 			Longitude:   r.Longitude,
 			Population:  r.Population,
 			FeatureCode: r.FeatureCode,
-		})
+		}))
 	}
 	sort.SliceStable(out, func(i, j int) bool {
 		si, sj := placeRank(out[i]), placeRank(out[j])
@@ -238,6 +239,9 @@ func countriesLooselyMatch(a, b string) bool {
 	if a == "" || b == "" {
 		return false
 	}
+	if localizeCountry(a) != "" && localizeCountry(a) == localizeCountry(b) {
+		return true
+	}
 	if a == b || strings.Contains(a, b) || strings.Contains(b, a) {
 		return true
 	}
@@ -281,8 +285,9 @@ func mergePlaceSuggestions(lists ...[]placeSuggestion) []placeSuggestion {
 	out := []placeSuggestion{}
 	for _, list := range lists {
 		for _, p := range list {
-			// Dedupe by coordinates across languages (same place, different country label).
-			key := fmt.Sprintf("%s|%.3f|%.3f", strings.ToLower(p.Name), p.Latitude, p.Longitude)
+			p = localizePlace(p)
+			// Same coordinates = same place; first list wins (Norwegian first).
+			key := fmt.Sprintf("%.3f|%.3f|%s", p.Latitude, p.Longitude, p.FeatureCode)
 			if seen[key] {
 				continue
 			}
@@ -319,7 +324,7 @@ func resolvePlace(city, country string) (place placeSuggestion, suggestions []pl
 
 	// Exact-ish hit: use first result from the full query.
 	if len(primary) > 0 {
-		return primary[0], nil, nil
+		return localizePlace(primary[0]), nil, nil
 	}
 
 	// Broader search without country / with prefix — return as choices.
@@ -439,7 +444,7 @@ func searchNominatim(q string) ([]placeSuggestion, error) {
 		return nil, err
 	}
 	req.Header.Set("User-Agent", "ReiseTravelPlanner/1.0 (homey-376215)")
-	req.Header.Set("Accept-Language", "nb,en")
+	req.Header.Set("Accept-Language", "nb")
 
 	client := &http.Client{Timeout: 8 * time.Second}
 	res, err := client.Do(req)
@@ -520,7 +525,7 @@ func searchNominatim(q string) ([]placeSuggestion, error) {
 		if row.Class == "aeroway" || row.Type == "aerodrome" {
 			fc = "AIRP"
 		}
-		out = append(out, placeSuggestion{
+		out = append(out, localizePlace(placeSuggestion{
 			Name:        name,
 			Country:     country,
 			Admin1:      admin1,
@@ -528,7 +533,7 @@ func searchNominatim(q string) ([]placeSuggestion, error) {
 			Longitude:   lon,
 			Population:  0,
 			FeatureCode: fc,
-		})
+		}))
 	}
 	return out, nil
 }
@@ -555,16 +560,37 @@ func getPlaces(w http.ResponseWriter, r *http.Request) {
 
 	streetQuery := looksLikeStreetAddress(q)
 
-	// Search several languages — Open-Meteo "nb" often omits major cities (e.g. Roma).
-	byCityEn, err := searchPlaces(q, "en", 10)
-	if err != nil {
-		log.Printf("[Places] search %q: %v", q, err)
-		respondWithError(w, http.StatusBadGateway, err.Error())
+	// Search several languages in parallel — Open-Meteo "nb" often omits
+	// major cities (e.g. Roma), and serial calls make /places feel slow.
+	type placeBatch struct {
+		places []placeSuggestion
+		err    error
+	}
+	var byCityEn, byCityNb, byCityIt placeBatch
+	var langWG sync.WaitGroup
+	langWG.Add(3)
+	go func() {
+		defer langWG.Done()
+		p, e := searchPlaces(q, "en", 10)
+		byCityEn = placeBatch{p, e}
+	}()
+	go func() {
+		defer langWG.Done()
+		p, e := searchPlaces(q, "nb", 10)
+		byCityNb = placeBatch{p, e}
+	}()
+	go func() {
+		defer langWG.Done()
+		p, e := searchPlaces(q, "it", 10)
+		byCityIt = placeBatch{p, e}
+	}()
+	langWG.Wait()
+	if byCityEn.err != nil {
+		log.Printf("[Places] search %q: %v", q, byCityEn.err)
+		respondWithError(w, http.StatusBadGateway, byCityEn.err.Error())
 		return
 	}
-	byCityNb, _ := searchPlaces(q, "nb", 10)
-	byCityIt, _ := searchPlaces(q, "it", 10)
-	primary := mergePlaceSuggestions(byCityEn, byCityIt, byCityNb)
+	primary := mergePlaceSuggestions(byCityNb.places, byCityEn.places, byCityIt.places)
 	sort.SliceStable(primary, func(i, j int) bool {
 		si, sj := placeRank(primary[i]), placeRank(primary[j])
 		if si != sj {
@@ -574,9 +600,21 @@ func getPlaces(w http.ResponseWriter, r *http.Request) {
 	})
 
 	if country != "" && !streetQuery {
-		withCountryEn, _ := searchPlaces(q+", "+country, "en", 8)
-		withCountryNb, _ := searchPlaces(q+", "+country, "nb", 8)
-		primary = mergePlaceSuggestions(withCountryEn, withCountryNb, primary)
+		var withCountryEn, withCountryNb placeBatch
+		var countryWG sync.WaitGroup
+		countryWG.Add(2)
+		go func() {
+			defer countryWG.Done()
+			p, e := searchPlaces(q+", "+country, "en", 8)
+			withCountryEn = placeBatch{p, e}
+		}()
+		go func() {
+			defer countryWG.Done()
+			p, e := searchPlaces(q+", "+country, "nb", 8)
+			withCountryNb = placeBatch{p, e}
+		}()
+		countryWG.Wait()
+		primary = mergePlaceSuggestions(withCountryNb.places, withCountryEn.places, primary)
 		sort.SliceStable(primary, func(i, j int) bool {
 			si, sj := placeRank(primary[i]), placeRank(primary[j])
 			if si != sj {
@@ -633,7 +671,7 @@ func getPlaces(w http.ResponseWriter, r *http.Request) {
 	}
 
 	respondWithJSON(w, http.StatusOK, map[string]interface{}{
-		"places": primary,
+		"places": localizePlaces(primary),
 	})
 }
 
@@ -684,8 +722,8 @@ func getWeather(w http.ResponseWriter, r *http.Request) {
 	todayDay, forecast, days := buildWeatherDays(data)
 
 	out := weatherResponse{
-		City:             place.Name,
-		Country:          place.Country,
+		City:             localizeCity(place.Name),
+		Country:          localizeCountry(place.Country),
 		Latitude:         place.Latitude,
 		Longitude:        place.Longitude,
 		Today:            todayDay,

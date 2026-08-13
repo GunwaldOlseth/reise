@@ -17,7 +17,7 @@ gcloud run deploy "$BACKEND_SERVICE" \
   --source "$ROOT/backend/api" \
   --region "$REGION" \
   --allow-unauthenticated \
-  --set-env-vars="FIREBASE_PROJECT_ID=${PROJECT}" \
+  --update-env-vars="FIREBASE_PROJECT_ID=${PROJECT}" \
   --quiet
 
 BACKEND_URL="$(gcloud run services describe "$BACKEND_SERVICE" --region "$REGION" --format='value(status.url)')"
@@ -33,4 +33,5 @@ gcloud run deploy "$FRONTEND_SERVICE" \
 
 FRONTEND_URL="$(gcloud run services describe "$FRONTEND_SERVICE" --region "$REGION" --format='value(status.url)')"
 echo "==> Frontend URL: $FRONTEND_URL"
+echo "Backup-scheduler (08/14/19 Europe/Oslo): bash scripts/setup-backup-scheduler.sh"
 echo "Done."
