@@ -1,4 +1,6 @@
-import { useState, type ReactNode } from 'react'
+import { useMemo, useState, type ReactNode } from 'react'
+import { HolidayCountdown } from './HolidayCountdown'
+import { todayIsoOslo } from './journeyModel'
 import {
   emptyTripFeatures,
   formatTravelers,
@@ -69,6 +71,12 @@ export function HomePage({
 }) {
   const [deleteTrip, setDeleteTrip] = useState<Trip | null>(null)
   const [editTrip, setEditTrip] = useState<Trip | null>(null)
+  const nextTrip = useMemo(() => {
+    const today = todayIsoOslo()
+    return [...trips]
+      .filter((t) => (t.startDate || '').trim() > today)
+      .sort((a, b) => a.startDate.localeCompare(b.startDate))[0]
+  }, [trips])
 
   return (
     <div className="v2-shell v2-home">
@@ -113,6 +121,13 @@ export function HomePage({
           <p className="v2-meta v2-home-homeplace">
             Hjem: {formatHomePlace(homePlace)}
           </p>
+        )}
+        {nextTrip && (
+          <HolidayCountdown
+            startDate={nextTrip.startDate}
+            detail={nextTrip.name}
+            onOpen={() => onOpenTrip(nextTrip.id)}
+          />
         )}
       </section>
 

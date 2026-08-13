@@ -38,9 +38,11 @@ func main() {
 	mux.HandleFunc("DELETE /api/days/{id}", deleteDay)
 
 	mux.HandleFunc("GET /api/weather", getWeather)
+	mux.HandleFunc("GET /api/weather/history", getWeatherHistory)
 	mux.HandleFunc("GET /api/places", getPlaces)
 
 	mux.HandleFunc("POST /api/internal/backup", runScheduledBackup)
+	mux.HandleFunc("POST /api/internal/weather-refresh", runScheduledWeatherRefresh)
 	mux.HandleFunc("POST /api/admin/login", adminLogin)
 	mux.HandleFunc("GET /api/admin/backups", adminListBackups)
 	mux.HandleFunc("POST /api/admin/backups", adminCreateBackup)

@@ -60,12 +60,13 @@ gcloud run services update "$BACKEND_SERVICE" \
 create_job() {
   local name="$1"
   local schedule="$2"
+  local path="$3"
   if gcloud scheduler jobs describe "$name" --location="$SCHEDULER_LOCATION" >/dev/null 2>&1; then
     gcloud scheduler jobs update http "$name" \
       --location="$SCHEDULER_LOCATION" \
       --schedule="$schedule" \
       --time-zone="$TZ_NAME" \
-      --uri="${BACKEND_URL}/api/internal/backup" \
+      --uri="${BACKEND_URL}${path}" \
       --http-method=POST \
       --headers="X-Backup-Secret=${SECRET}" \
       --quiet
@@ -74,7 +75,7 @@ create_job() {
       --location="$SCHEDULER_LOCATION" \
       --schedule="$schedule" \
       --time-zone="$TZ_NAME" \
-      --uri="${BACKEND_URL}/api/internal/backup" \
+      --uri="${BACKEND_URL}${path}" \
       --http-method=POST \
       --headers="X-Backup-Secret=${SECRET}" \
       --quiet
@@ -82,9 +83,11 @@ create_job() {
 }
 
 echo "==> Scheduler jobs (Europe/Oslo)..."
-create_job reise-backup-08 "0 8 * * *"
-create_job reise-backup-14 "0 14 * * *"
-create_job reise-backup-19 "0 19 * * *"
+create_job reise-backup-08 "0 8 * * *" "/api/internal/backup"
+create_job reise-backup-14 "0 14 * * *" "/api/internal/backup"
+create_job reise-backup-19 "0 19 * * *" "/api/internal/backup"
+create_job reise-weather-08 "10 8 * * *" "/api/internal/weather-refresh"
+create_job reise-weather-19 "10 19 * * *" "/api/internal/weather-refresh"
 
 echo "Done. Backups: gs://$BUCKET/backups/"
 echo "Admin login: Innstillinger → Admin · sikkerhetskopi"

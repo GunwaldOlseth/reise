@@ -21,7 +21,7 @@ import { DeleteTripSheet } from './DeleteTripSheet'
 import { JourneyLive } from './JourneyLive'
 import { JourneyOverview } from './JourneyOverview'
 import { JourneyPlanner } from './JourneyPlanner'
-import { JourneyWeatherView } from './JourneyWeather'
+import { enqueueJourneyWeather, JourneyWeatherView } from './JourneyWeather'
 import './v2.css'
 
 export type TripHubTab =
@@ -128,6 +128,11 @@ export function TripHub({
       cancelled = true
     }
   }, [tripId, journeyTick])
+
+  useEffect(() => {
+    if (!journeyReady) return
+    enqueueJourneyWeather(journey)
+  }, [journey, journeyReady])
 
   const mapStops = useMemo(
     () => journeyMapStopsInOrder(journey),

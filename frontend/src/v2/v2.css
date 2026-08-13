@@ -4,8 +4,8 @@ html,
 html[data-theme='skog'] {
   color-scheme: dark;
   --v2-scheme: dark;
-  --v2-bg: #0f1c1a;
-  --v2-panel: #152623;
+  --v2-bg: #162422;
+  --v2-panel: #1d302c;
   --v2-ink: #e8f4f2;
   --v2-muted: rgba(232, 244, 242, 0.68);
   --v2-label: rgba(232, 244, 242, 0.92);
@@ -14,23 +14,23 @@ html[data-theme='skog'] {
   --v2-warn: #d4a84a;
   --v2-danger: #e86a5c;
   --v2-line: rgba(232, 244, 242, 0.14);
-  --v2-field: #0a1513;
+  --v2-field: #121c1a;
   --v2-option-bg: #f3faf7;
   --v2-option-ink: #10241f;
-  --v2-glow-1: rgba(61, 190, 165, 0.18);
-  --v2-glow-2: rgba(212, 168, 74, 0.08);
-  --v2-scrim: rgba(15, 28, 26, 0.98);
-  --v2-scrim-mid: rgba(15, 28, 26, 0.9);
-  --v2-nav: rgba(15, 28, 26, 0.92);
-  --v2-shade: rgba(0, 0, 0, 0.16);
+  --v2-glow-1: rgba(61, 190, 165, 0.16);
+  --v2-glow-2: rgba(212, 168, 74, 0.07);
+  --v2-scrim: rgba(22, 36, 34, 0.98);
+  --v2-scrim-mid: rgba(22, 36, 34, 0.9);
+  --v2-nav: rgba(22, 36, 34, 0.92);
+  --v2-shade: rgba(0, 0, 0, 0.14);
   --v2-hover: #d7efe8;
 }
 
 html[data-theme='kyst'] {
   color-scheme: dark;
   --v2-scheme: dark;
-  --v2-bg: #121820;
-  --v2-panel: #1a222c;
+  --v2-bg: #1a222c;
+  --v2-panel: #232c38;
   --v2-ink: #e6eef2;
   --v2-muted: rgba(230, 238, 242, 0.68);
   --v2-label: rgba(230, 238, 242, 0.92);
@@ -39,23 +39,23 @@ html[data-theme='kyst'] {
   --v2-warn: #c9b07a;
   --v2-danger: #d48a82;
   --v2-line: rgba(230, 238, 242, 0.14);
-  --v2-field: #0d1218;
+  --v2-field: #151c24;
   --v2-option-bg: #eef4f6;
   --v2-option-ink: #152028;
-  --v2-glow-1: rgba(122, 168, 184, 0.16);
-  --v2-glow-2: rgba(160, 176, 196, 0.08);
-  --v2-scrim: rgba(18, 24, 32, 0.98);
-  --v2-scrim-mid: rgba(18, 24, 32, 0.9);
-  --v2-nav: rgba(18, 24, 32, 0.92);
-  --v2-shade: rgba(0, 0, 0, 0.16);
+  --v2-glow-1: rgba(122, 168, 184, 0.14);
+  --v2-glow-2: rgba(160, 176, 196, 0.07);
+  --v2-scrim: rgba(26, 34, 44, 0.98);
+  --v2-scrim-mid: rgba(26, 34, 44, 0.9);
+  --v2-nav: rgba(26, 34, 44, 0.92);
+  --v2-shade: rgba(0, 0, 0, 0.14);
   --v2-hover: #d8e6ec;
 }
 
 html[data-theme='sand'] {
   color-scheme: dark;
   --v2-scheme: dark;
-  --v2-bg: #1c1814;
-  --v2-panel: #26201a;
+  --v2-bg: #24201a;
+  --v2-panel: #2e2820;
   --v2-ink: #f3ebe0;
   --v2-muted: rgba(243, 235, 224, 0.68);
   --v2-label: rgba(243, 235, 224, 0.92);
@@ -64,23 +64,23 @@ html[data-theme='sand'] {
   --v2-warn: #c9a06a;
   --v2-danger: #d08a78;
   --v2-line: rgba(243, 235, 224, 0.14);
-  --v2-field: #14110e;
+  --v2-field: #1c1814;
   --v2-option-bg: #f6f0e6;
   --v2-option-ink: #2a2218;
-  --v2-glow-1: rgba(196, 165, 116, 0.16);
-  --v2-glow-2: rgba(180, 140, 100, 0.08);
-  --v2-scrim: rgba(28, 24, 20, 0.98);
-  --v2-scrim-mid: rgba(28, 24, 20, 0.9);
-  --v2-nav: rgba(28, 24, 20, 0.92);
-  --v2-shade: rgba(0, 0, 0, 0.16);
+  --v2-glow-1: rgba(196, 165, 116, 0.14);
+  --v2-glow-2: rgba(180, 140, 100, 0.07);
+  --v2-scrim: rgba(36, 32, 26, 0.98);
+  --v2-scrim-mid: rgba(36, 32, 26, 0.9);
+  --v2-nav: rgba(36, 32, 26, 0.92);
+  --v2-shade: rgba(0, 0, 0, 0.14);
   --v2-hover: #efe4d2;
 }
 
 html[data-theme='lavendel'] {
   color-scheme: dark;
   --v2-scheme: dark;
-  --v2-bg: #16141c;
-  --v2-panel: #201c28;
+  --v2-bg: #1e1c26;
+  --v2-panel: #282430;
   --v2-ink: #eee8f2;
   --v2-muted: rgba(238, 232, 242, 0.68);
   --v2-label: rgba(238, 232, 242, 0.92);
@@ -89,23 +89,23 @@ html[data-theme='lavendel'] {
   --v2-warn: #c4b48a;
   --v2-danger: #d4928c;
   --v2-line: rgba(238, 232, 242, 0.14);
-  --v2-field: #100e16;
+  --v2-field: #18161e;
   --v2-option-bg: #f3eef6;
   --v2-option-ink: #221e28;
-  --v2-glow-1: rgba(168, 155, 184, 0.16);
-  --v2-glow-2: rgba(196, 180, 210, 0.08);
-  --v2-scrim: rgba(22, 20, 28, 0.98);
-  --v2-scrim-mid: rgba(22, 20, 28, 0.9);
-  --v2-nav: rgba(22, 20, 28, 0.92);
-  --v2-shade: rgba(0, 0, 0, 0.16);
+  --v2-glow-1: rgba(168, 155, 184, 0.14);
+  --v2-glow-2: rgba(196, 180, 210, 0.07);
+  --v2-scrim: rgba(30, 28, 38, 0.98);
+  --v2-scrim-mid: rgba(30, 28, 38, 0.9);
+  --v2-nav: rgba(30, 28, 38, 0.92);
+  --v2-shade: rgba(0, 0, 0, 0.14);
   --v2-hover: #e8e0f0;
 }
 
 html[data-theme='stein'] {
   color-scheme: dark;
   --v2-scheme: dark;
-  --v2-bg: #141414;
-  --v2-panel: #1c1c1c;
+  --v2-bg: #1c1c1c;
+  --v2-panel: #252525;
   --v2-ink: #eceae6;
   --v2-muted: rgba(236, 234, 230, 0.68);
   --v2-label: rgba(236, 234, 230, 0.92);
@@ -114,141 +114,141 @@ html[data-theme='stein'] {
   --v2-warn: #c4b090;
   --v2-danger: #c89088;
   --v2-line: rgba(236, 234, 230, 0.14);
-  --v2-field: #0e0e0e;
+  --v2-field: #161616;
   --v2-option-bg: #f2f0ec;
   --v2-option-ink: #1c1c1a;
-  --v2-glow-1: rgba(184, 176, 164, 0.14);
-  --v2-glow-2: rgba(160, 156, 148, 0.07);
-  --v2-scrim: rgba(20, 20, 20, 0.98);
-  --v2-scrim-mid: rgba(20, 20, 20, 0.9);
-  --v2-nav: rgba(20, 20, 20, 0.92);
-  --v2-shade: rgba(0, 0, 0, 0.16);
+  --v2-glow-1: rgba(184, 176, 164, 0.12);
+  --v2-glow-2: rgba(160, 156, 148, 0.06);
+  --v2-scrim: rgba(28, 28, 28, 0.98);
+  --v2-scrim-mid: rgba(28, 28, 28, 0.9);
+  --v2-nav: rgba(28, 28, 28, 0.92);
+  --v2-shade: rgba(0, 0, 0, 0.14);
   --v2-hover: #e6e4de;
 }
 
 html[data-theme='skog-lys'] {
   color-scheme: light;
   --v2-scheme: light;
-  --v2-bg: #e8f0ed;
-  --v2-panel: #f4f8f6;
-  --v2-ink: #1a2e2a;
-  --v2-muted: rgba(26, 46, 42, 0.76);
-  --v2-label: rgba(26, 46, 42, 0.92);
-  --v2-accent: #2a8f7a;
-  --v2-accent-ink: #f4faf8;
-  --v2-warn: #9a7428;
-  --v2-danger: #c45a4e;
-  --v2-line: rgba(26, 46, 42, 0.12);
-  --v2-field: #ffffff;
-  --v2-option-bg: #ffffff;
-  --v2-option-ink: #1a2e2a;
-  --v2-glow-1: rgba(42, 143, 122, 0.12);
-  --v2-glow-2: rgba(196, 168, 100, 0.08);
-  --v2-scrim: rgba(232, 240, 237, 0.96);
-  --v2-scrim-mid: rgba(232, 240, 237, 0.88);
-  --v2-nav: rgba(232, 240, 237, 0.92);
-  --v2-shade: rgba(26, 46, 42, 0.06);
-  --v2-hover: #d7ebe4;
+  --v2-bg: #d4ddd8;
+  --v2-panel: #e2e8e5;
+  --v2-ink: #2a3834;
+  --v2-muted: rgba(42, 56, 52, 0.72);
+  --v2-label: rgba(42, 56, 52, 0.88);
+  --v2-accent: #3d7a6c;
+  --v2-accent-ink: #e8eeeb;
+  --v2-warn: #8a6e38;
+  --v2-danger: #b05a50;
+  --v2-line: rgba(42, 56, 52, 0.14);
+  --v2-field: #ecefec;
+  --v2-option-bg: #ecefec;
+  --v2-option-ink: #2a3834;
+  --v2-glow-1: rgba(61, 122, 108, 0.1);
+  --v2-glow-2: rgba(160, 140, 90, 0.06);
+  --v2-scrim: rgba(212, 221, 216, 0.96);
+  --v2-scrim-mid: rgba(212, 221, 216, 0.88);
+  --v2-nav: rgba(212, 221, 216, 0.92);
+  --v2-shade: rgba(42, 56, 52, 0.07);
+  --v2-hover: #c8d4ce;
 }
 
 html[data-theme='kyst-lys'] {
   color-scheme: light;
   --v2-scheme: light;
-  --v2-bg: #e6eef2;
-  --v2-panel: #f2f6f8;
-  --v2-ink: #1a242c;
-  --v2-muted: rgba(26, 36, 44, 0.76);
-  --v2-label: rgba(26, 36, 44, 0.92);
-  --v2-accent: #4a7a8c;
-  --v2-accent-ink: #f4f8fa;
-  --v2-warn: #9a7a38;
-  --v2-danger: #c45a4e;
-  --v2-line: rgba(26, 36, 44, 0.12);
-  --v2-field: #ffffff;
-  --v2-option-bg: #ffffff;
-  --v2-option-ink: #1a242c;
-  --v2-glow-1: rgba(74, 122, 140, 0.12);
-  --v2-glow-2: rgba(140, 160, 180, 0.08);
-  --v2-scrim: rgba(230, 238, 242, 0.96);
-  --v2-scrim-mid: rgba(230, 238, 242, 0.88);
-  --v2-nav: rgba(230, 238, 242, 0.92);
-  --v2-shade: rgba(26, 36, 44, 0.06);
-  --v2-hover: #d6e4ea;
+  --v2-bg: #d2dbe1;
+  --v2-panel: #e0e6ea;
+  --v2-ink: #2a343c;
+  --v2-muted: rgba(42, 52, 60, 0.72);
+  --v2-label: rgba(42, 52, 60, 0.88);
+  --v2-accent: #547888;
+  --v2-accent-ink: #e6ecee;
+  --v2-warn: #8a7038;
+  --v2-danger: #b05a50;
+  --v2-line: rgba(42, 52, 60, 0.14);
+  --v2-field: #eaeef0;
+  --v2-option-bg: #eaeef0;
+  --v2-option-ink: #2a343c;
+  --v2-glow-1: rgba(84, 120, 136, 0.1);
+  --v2-glow-2: rgba(120, 140, 160, 0.06);
+  --v2-scrim: rgba(210, 219, 225, 0.96);
+  --v2-scrim-mid: rgba(210, 219, 225, 0.88);
+  --v2-nav: rgba(210, 219, 225, 0.92);
+  --v2-shade: rgba(42, 52, 60, 0.07);
+  --v2-hover: #c6d2d8;
 }
 
 html[data-theme='sand-lys'] {
   color-scheme: light;
   --v2-scheme: light;
-  --v2-bg: #f3ebe0;
-  --v2-panel: #faf6ef;
-  --v2-ink: #2a2218;
-  --v2-muted: rgba(42, 34, 24, 0.76);
-  --v2-label: rgba(42, 34, 24, 0.92);
-  --v2-accent: #9a7a4a;
-  --v2-accent-ink: #faf6ef;
-  --v2-warn: #9a7428;
-  --v2-danger: #c45a4e;
-  --v2-line: rgba(42, 34, 24, 0.12);
-  --v2-field: #ffffff;
-  --v2-option-bg: #ffffff;
-  --v2-option-ink: #2a2218;
-  --v2-glow-1: rgba(154, 122, 74, 0.12);
-  --v2-glow-2: rgba(180, 140, 100, 0.08);
-  --v2-scrim: rgba(243, 235, 224, 0.96);
-  --v2-scrim-mid: rgba(243, 235, 224, 0.88);
-  --v2-nav: rgba(243, 235, 224, 0.92);
-  --v2-shade: rgba(42, 34, 24, 0.06);
-  --v2-hover: #efe4d2;
+  --v2-bg: #e2d6c6;
+  --v2-panel: #ebe2d4;
+  --v2-ink: #3a3228;
+  --v2-muted: rgba(58, 50, 40, 0.72);
+  --v2-label: rgba(58, 50, 40, 0.88);
+  --v2-accent: #8a7048;
+  --v2-accent-ink: #eee6da;
+  --v2-warn: #8a6e38;
+  --v2-danger: #b05a50;
+  --v2-line: rgba(58, 50, 40, 0.14);
+  --v2-field: #f0e8dc;
+  --v2-option-bg: #f0e8dc;
+  --v2-option-ink: #3a3228;
+  --v2-glow-1: rgba(138, 112, 72, 0.1);
+  --v2-glow-2: rgba(160, 130, 90, 0.06);
+  --v2-scrim: rgba(226, 214, 198, 0.96);
+  --v2-scrim-mid: rgba(226, 214, 198, 0.88);
+  --v2-nav: rgba(226, 214, 198, 0.92);
+  --v2-shade: rgba(58, 50, 40, 0.07);
+  --v2-hover: #d8ccba;
 }
 
 html[data-theme='lavendel-lys'] {
   color-scheme: light;
   --v2-scheme: light;
-  --v2-bg: #eee8f2;
-  --v2-panel: #f6f3f8;
-  --v2-ink: #221e28;
-  --v2-muted: rgba(34, 30, 40, 0.76);
-  --v2-label: rgba(34, 30, 40, 0.92);
-  --v2-accent: #7a6a90;
-  --v2-accent-ink: #f6f3f8;
-  --v2-warn: #9a7a38;
-  --v2-danger: #c45a4e;
-  --v2-line: rgba(34, 30, 40, 0.12);
-  --v2-field: #ffffff;
-  --v2-option-bg: #ffffff;
-  --v2-option-ink: #221e28;
-  --v2-glow-1: rgba(122, 106, 144, 0.12);
-  --v2-glow-2: rgba(180, 160, 196, 0.08);
-  --v2-scrim: rgba(238, 232, 242, 0.96);
-  --v2-scrim-mid: rgba(238, 232, 242, 0.88);
-  --v2-nav: rgba(238, 232, 242, 0.92);
-  --v2-shade: rgba(34, 30, 40, 0.06);
-  --v2-hover: #e6deee;
+  --v2-bg: #dcd6e2;
+  --v2-panel: #e6e1ea;
+  --v2-ink: #322e38;
+  --v2-muted: rgba(50, 46, 56, 0.72);
+  --v2-label: rgba(50, 46, 56, 0.88);
+  --v2-accent: #6e6480;
+  --v2-accent-ink: #ece8f0;
+  --v2-warn: #8a7038;
+  --v2-danger: #b05a50;
+  --v2-line: rgba(50, 46, 56, 0.14);
+  --v2-field: #eeeaf0;
+  --v2-option-bg: #eeeaf0;
+  --v2-option-ink: #322e38;
+  --v2-glow-1: rgba(110, 100, 128, 0.1);
+  --v2-glow-2: rgba(150, 136, 168, 0.06);
+  --v2-scrim: rgba(220, 214, 226, 0.96);
+  --v2-scrim-mid: rgba(220, 214, 226, 0.88);
+  --v2-nav: rgba(220, 214, 226, 0.92);
+  --v2-shade: rgba(50, 46, 56, 0.07);
+  --v2-hover: #d0c8d8;
 }
 
 html[data-theme='stein-lys'] {
   color-scheme: light;
   --v2-scheme: light;
-  --v2-bg: #eceae6;
-  --v2-panel: #f6f5f2;
-  --v2-ink: #1c1c1a;
-  --v2-muted: rgba(28, 28, 26, 0.76);
-  --v2-label: rgba(28, 28, 26, 0.92);
-  --v2-accent: #7a7468;
-  --v2-accent-ink: #f6f5f2;
-  --v2-warn: #9a7a38;
-  --v2-danger: #c45a4e;
-  --v2-line: rgba(28, 28, 26, 0.12);
-  --v2-field: #ffffff;
-  --v2-option-bg: #ffffff;
-  --v2-option-ink: #1c1c1a;
-  --v2-glow-1: rgba(122, 116, 104, 0.1);
-  --v2-glow-2: rgba(160, 156, 148, 0.07);
-  --v2-scrim: rgba(236, 234, 230, 0.96);
-  --v2-scrim-mid: rgba(236, 234, 230, 0.88);
-  --v2-nav: rgba(236, 234, 230, 0.92);
-  --v2-shade: rgba(28, 28, 26, 0.06);
-  --v2-hover: #e4e2dc;
+  --v2-bg: #d8d4ce;
+  --v2-panel: #e4e0da;
+  --v2-ink: #2e2c28;
+  --v2-muted: rgba(46, 44, 40, 0.72);
+  --v2-label: rgba(46, 44, 40, 0.88);
+  --v2-accent: #6e6a60;
+  --v2-accent-ink: #eceae6;
+  --v2-warn: #8a7038;
+  --v2-danger: #b05a50;
+  --v2-line: rgba(46, 44, 40, 0.14);
+  --v2-field: #eceae4;
+  --v2-option-bg: #eceae4;
+  --v2-option-ink: #2e2c28;
+  --v2-glow-1: rgba(110, 106, 96, 0.08);
+  --v2-glow-2: rgba(140, 136, 128, 0.05);
+  --v2-scrim: rgba(216, 212, 206, 0.96);
+  --v2-scrim-mid: rgba(216, 212, 206, 0.88);
+  --v2-nav: rgba(216, 212, 206, 0.92);
+  --v2-shade: rgba(46, 44, 40, 0.07);
+  --v2-hover: #ccc8c0;
 }
 
 html {
@@ -1035,6 +1035,47 @@ html {
   margin-bottom: 0.45rem;
 }
 
+.v2-weather-card-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.15rem 0.2rem;
+  min-width: 0;
+}
+
+.v2-weather-refresh {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.28rem;
+  margin-left: 0.35rem;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  border: 1px solid var(--v2-line-strong);
+  background: var(--v2-field);
+  color: var(--v2-ink);
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 650;
+  line-height: 1.2;
+  cursor: pointer;
+}
+
+.v2-weather-refresh.is-needed {
+  border-color: var(--v2-accent);
+  background: color-mix(in srgb, var(--v2-accent) 16%, var(--v2-field));
+}
+
+.v2-weather-refresh:hover:not(:disabled),
+.v2-weather-refresh:focus-visible {
+  border-color: var(--v2-accent);
+}
+
+.v2-weather-refresh:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
 .v2-weather-range {
   font-size: 0.72rem;
   color: var(--v2-muted);
@@ -1045,6 +1086,127 @@ html {
   display: flex;
   align-items: center;
   gap: 0.75rem;
+}
+
+.v2-weather-spark {
+  appearance: none;
+  margin-left: auto;
+  padding: 0.15rem 0.2rem;
+  border: 1px solid var(--v2-line);
+  border-radius: 0.45rem;
+  background: var(--v2-field);
+  color: inherit;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.v2-weather-spark:hover,
+.v2-weather-spark:focus-visible {
+  border-color: var(--v2-accent);
+}
+
+.v2-weather-spark-line {
+  stroke: var(--v2-accent);
+  stroke-width: 1.6;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.v2-weather-spark-dot {
+  fill: var(--v2-muted);
+}
+
+.v2-weather-spark-dot.is-on {
+  fill: var(--v2-accent);
+}
+
+.v2-weather-detail-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+  background: rgba(0, 0, 0, 0.5);
+  padding: env(safe-area-inset-top, 0px) 0.6rem 0.6rem;
+}
+
+.v2-weather-detail {
+  width: min(40rem, 100%);
+  max-height: min(88dvh, 40rem);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: 1rem 1rem 0.6rem 0.6rem;
+  border: 1px solid var(--v2-line-strong);
+  background: var(--v2-panel);
+  color: var(--v2-ink);
+}
+
+.v2-weather-detail-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.85rem 0.85rem 0.65rem 1rem;
+  border-bottom: 1px solid var(--v2-line);
+}
+
+.v2-weather-detail-head h3 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.v2-weather-detail-head .v2-meta {
+  margin: 0.2rem 0 0;
+}
+
+.v2-weather-detail-body {
+  overflow: auto;
+  padding: 0.85rem 1rem 1.1rem;
+}
+
+.v2-weather-detail-days {
+  list-style: none;
+  margin: 0 0 1rem;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.v2-weather-detail-days li {
+  display: grid;
+  grid-template-columns: 3.4rem 4.6rem 1fr auto;
+  gap: 0.4rem;
+  align-items: baseline;
+  padding: 0.35rem 0.45rem;
+  border-radius: 0.45rem;
+}
+
+.v2-weather-detail-days li.is-on {
+  background: color-mix(in srgb, var(--v2-accent) 14%, transparent);
+}
+
+.v2-weather-detail-body h4 {
+  margin: 0 0 0.4rem;
+  font-size: 0.88rem;
+}
+
+.v2-weather-history-svg {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+
+@media (min-width: 720px) {
+  .v2-weather-detail-layer {
+    align-items: center;
+  }
+
+  .v2-weather-detail {
+    border-radius: 0.9rem;
+  }
 }
 
 .v2-weather-glyph {
@@ -1068,6 +1230,109 @@ html {
   flex-wrap: wrap;
   gap: 0.35rem;
   margin-top: 0.4rem;
+}
+
+.v2-weather-chart {
+  margin: 0 0 0.35rem;
+  padding: 0.7rem 0.75rem 0.55rem;
+  border-radius: 0.75rem;
+  border: 1px solid var(--v2-line);
+  background: var(--v2-panel);
+}
+
+.v2-weather-chart figcaption {
+  margin: 0 0 0.4rem;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.v2-weather-chart-scroll {
+  width: 100%;
+  overflow: hidden;
+}
+
+.v2-weather-chart svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.v2-weather-chart-grid {
+  stroke: var(--v2-line);
+  stroke-width: 1;
+}
+
+.v2-weather-chart-tick,
+.v2-weather-chart-city,
+.v2-weather-chart-date {
+  fill: var(--v2-muted);
+  font-size: 9px;
+}
+
+.v2-weather-chart-city {
+  fill: var(--v2-ink);
+  font-size: 10px;
+  font-weight: 650;
+}
+
+.v2-weather-chart-max {
+  stroke: var(--v2-accent);
+  stroke-width: 2.2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.v2-weather-chart-min {
+  stroke: var(--v2-muted);
+  stroke-width: 1.6;
+  stroke-dasharray: 4 3;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.v2-weather-chart-dot-max {
+  fill: var(--v2-accent);
+}
+
+.v2-weather-chart-dot-min {
+  fill: var(--v2-muted);
+}
+
+.v2-weather-chart-legend {
+  display: flex;
+  gap: 0.55rem;
+  margin: 0.35rem 0 0;
+  font-size: 0.75rem;
+  color: var(--v2-muted);
+}
+
+.v2-weather-chart-legend button {
+  appearance: none;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  border: 1px solid var(--v2-line-strong);
+  background: var(--v2-field);
+  font: inherit;
+  font-size: 0.75rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.v2-weather-chart-legend .is-max {
+  color: var(--v2-accent);
+  border-color: color-mix(in srgb, var(--v2-accent) 45%, var(--v2-line));
+}
+
+.v2-weather-chart-legend .is-min {
+  color: var(--v2-ink);
+  font-weight: 650;
+}
+
+.v2-weather-chart-legend button.is-off {
+  color: var(--v2-muted);
+  border-color: var(--v2-line);
+  background: transparent;
+  text-decoration: line-through;
 }
 
 .v2-top {
@@ -3887,6 +4152,67 @@ html {
   flex-direction: column;
   gap: 1.1rem;
   padding: 0.15rem 0 1.5rem;
+}
+
+.v2-live-countdown {
+  margin: 0;
+  padding: 0.95rem 1rem 1rem;
+  border-radius: 0.9rem;
+  border: 1px solid color-mix(in srgb, var(--v2-accent) 40%, var(--v2-line));
+  background: color-mix(in srgb, var(--v2-accent) 12%, var(--v2-panel));
+  text-align: center;
+}
+
+.v2-live-countdown-kicker {
+  margin: 0 0 0.45rem;
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--v2-label);
+}
+
+.v2-live-countdown-units {
+  display: flex;
+  justify-content: center;
+  gap: 0.7rem;
+  flex-wrap: wrap;
+}
+
+.v2-live-countdown-unit {
+  min-width: 3.4rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.v2-live-countdown-unit strong {
+  font-size: 1.7rem;
+  font-weight: 800;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+
+.v2-live-countdown-unit span {
+  font-size: 0.72rem;
+  color: var(--v2-muted);
+}
+
+.v2-live-countdown .v2-meta {
+  margin: 0.55rem 0 0;
+}
+
+.v2-live-countdown.is-button {
+  appearance: none;
+  width: 100%;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  text-align: center;
+}
+
+.v2-home-hero .v2-live-countdown {
+  margin-top: 1rem;
 }
 
 .v2-live-head {

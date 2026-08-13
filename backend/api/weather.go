@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -754,6 +755,16 @@ func getWeather(w http.ResponseWriter, r *http.Request) {
 				break
 			}
 		}
+	}
+
+	if len(days) >= 2 {
+		snapDays := append([]weatherDay(nil), days...)
+		var snapCurrent *weatherCurrent
+		if out.Current != nil {
+			c := *out.Current
+			snapCurrent = &c
+		}
+		go saveWeatherSnapshot(context.Background(), out.City, out.Country, snapDays, snapCurrent)
 	}
 
 	respondWithJSON(w, http.StatusOK, out)

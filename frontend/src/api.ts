@@ -1459,6 +1459,20 @@ export interface WeatherReport {
   source: string;
 }
 
+export interface WeatherSnapshot {
+  fetchedAt: string;
+  days: WeatherDay[];
+  current?: WeatherCurrent;
+}
+
+export interface WeatherHistory {
+  city: string;
+  country: string;
+  latest?: WeatherSnapshot;
+  snapshots: WeatherSnapshot[];
+  resolution: string;
+}
+
 export const api = {
   health: () => request<{ status: string }>('/health'),
 
@@ -1472,6 +1486,12 @@ export const api = {
     if (opts?.week) qs.set('week', '1');
     if (opts?.date?.trim()) qs.set('date', opts.date.trim());
     return request<WeatherReport>(`/weather?${qs.toString()}`);
+  },
+
+  getWeatherHistory: (city: string, country = '') => {
+    const qs = new URLSearchParams({ city });
+    if (country.trim()) qs.set('country', country.trim());
+    return request<WeatherHistory>(`/weather/history?${qs.toString()}`);
   },
 
   /** Place suggestions for city spelling / map geocoding (Open-Meteo). */

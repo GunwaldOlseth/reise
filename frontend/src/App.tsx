@@ -32,6 +32,7 @@ import {
   type Journey,
 } from './v2/journeyModel'
 import { localizeJourneyPlaces } from './placeNames'
+import { enqueueJourneyWeather } from './v2/JourneyWeather'
 import './v2/v2.css'
 
 function GoogleLoginButton() {
@@ -507,13 +508,13 @@ export default function App() {
         list.map(async (trip) => {
           try {
             const journey = await api.getJourney(trip.id)
-            counts[trip.id] = journeyListStats(
-              localizeJourneyPlaces({
-                ...emptyJourney(trip.id),
-                ...journey,
-                tripId: trip.id,
-              }),
-            )
+            const localized = localizeJourneyPlaces({
+              ...emptyJourney(trip.id),
+              ...journey,
+              tripId: trip.id,
+            })
+            counts[trip.id] = journeyListStats(localized)
+            enqueueJourneyWeather(localized)
           } catch {
             counts[trip.id] = { dayCount: 0, countryCount: 0, cityCount: 0 }
           }

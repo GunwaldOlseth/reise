@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react'
-import {
-  api,
-  ApiError,
-  type PlaceSuggestion,
-  type WeatherDay,
-  type WeatherReport,
-} from '../api'
+import { type WeatherDay, type WeatherReport } from '../api'
 import { localizeCity, localizeCountry } from '../placeNames'
+import {
+  enqueueWeatherPlaces,
+  refreshWeatherPlace,
+  useWeatherPlace,
+} from './weatherPrefetch'
+import { WeatherTempChart } from './WeatherTempChart'
+import { WeatherDaySpark } from './WeatherCityDetail'
 import {
   addDaysIso,
   formatDateNO,
@@ -92,6 +93,41 @@ export function journeyWeatherSpots(journey: Journey): JourneyWeatherSpot[] {
   }
 
   return out
+}
+
+function uniqueWeatherPlaces(journey: Journey) {
+  const byKey = new Map<
+    string,
+    { city: string; country: string; week: boolean; date: string }
+  >()
+  for (const spot of journeyWeatherSpots(journey)) {
+    const key = `${spot.city.trim().toLowerCase()}|${spot.country.trim().toLowerCase()}`
+    const week = isWithinNext7Days(spot.date)
+    const prev = byKey.get(key)
+    if (!prev) {
+      byKey.set(key, {
+        city: spot.city,
+        country: spot.country,
+        week,
+        date: spot.date,
+      })
+      continue
+    }
+    byKey.set(key, {
+      ...prev,
+      week: prev.week || week,
+      date: prev.date < spot.date ? prev.date : spot.date,
+    })
+  }
+  return [...byKey.values()].sort((a, b) => {
+    if (a.week !== b.week) return a.week ? -1 : 1
+    return a.date.localeCompare(b.date)
+  })
+}
+
+/** Start sequential weather fetch for unique cities on a journey. */
+export function enqueueJourneyWeather(journey: Journey) {
+  enqueueWeatherPlaces(uniqueWeatherPlaces(journey))
 }
 
 function isWithinNext7Days(iso: string): boolean {
@@ -199,63 +235,54 @@ function pickDisplayDay(
   )
 }
 
+function RefreshIcon({ size = 14 }: { size?: number }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <path d="M21 12a9 9 0 1 1-2.4-6.1" />
+      <path d="M21 4v6h-6" />
+    </svg>
+  )
+}
+
 function SpotWeatherCard({
   spot,
 }: {
   spot: JourneyWeatherSpot
 }) {
-  const [weather, setWeather] = useState<WeatherReport | null>(null)
-  const [status, setStatus] = useState<'idle' | 'loading' | 'error'>('idle')
-  const [error, setError] = useState('')
-  const [suggestions, setSuggestions] = useState<PlaceSuggestion[]>([])
   const [city, setCity] = useState(spot.city)
   const [country, setCountry] = useState(spot.country)
   const inRange = isWithinNext7Days(spot.date)
+  const entry = useWeatherPlace(city, country)
+  const weather = entry.weather || null
+  const status = entry.status
+  const error = entry.error || ''
+  const suggestions = entry.suggestions
 
   useEffect(() => {
     setCity(spot.city)
     setCountry(spot.country)
   }, [spot.city, spot.country, spot.key])
 
-  useEffect(() => {
-    if (!city.trim()) {
-      setWeather(null)
-      setStatus('idle')
-      return
-    }
-    let cancelled = false
-    const timer = window.setTimeout(() => {
-      setStatus('loading')
-      setError('')
-      setSuggestions([])
-      void api
-        .getWeather(city.trim(), country.trim(), {
-          week: inRange,
-          date: spot.date.trim() || undefined,
-        })
-        .then((result) => {
-          if (cancelled) return
-          setWeather(result)
-          setStatus('idle')
-        })
-        .catch((err: unknown) => {
-          if (cancelled) return
-          setWeather(null)
-          setStatus('error')
-          if (err instanceof ApiError) {
-            setError(err.message)
-            setSuggestions(err.suggestions)
-          } else {
-            setError(err instanceof Error ? err.message : 'Kunne ikke hente vær')
-            setSuggestions([])
-          }
-        })
-    }, 280)
-    return () => {
-      cancelled = true
-      window.clearTimeout(timer)
-    }
-  }, [city, country, spot.date, inRange])
+  function load(nextCity = city, nextCountry = country) {
+    const place = nextCity.trim()
+    if (!place) return
+    refreshWeatherPlace({
+      city: place,
+      country: nextCountry,
+      week: inRange,
+      date: spot.date.trim() || undefined,
+    })
+  }
 
   const display = weather ? pickDisplayDay(weather, spot.date) : null
   const showingNow = !!(
@@ -263,17 +290,33 @@ function SpotWeatherCard({
     display &&
     isTodayISO(spot.date)
   )
+  const missing = !weather && status !== 'loading'
 
   return (
     <article className="v2-weather-card">
       <header className="v2-weather-card-head">
-        <div>
+        <div className="v2-weather-card-title">
           <strong>{formatDateNO(spot.date)}</strong>
           <span className="v2-meta">
             {' '}
             · {localizeCity(city) || city}
             {spot.note ? ` · ${spot.note}` : ''}
           </span>
+          <button
+            type="button"
+            className={`v2-weather-refresh${missing ? ' is-needed' : ''}`}
+            disabled={status === 'loading' || !city.trim()}
+            title={weather ? 'Oppdater vær' : 'Hent vær'}
+            aria-label={
+              weather
+                ? `Oppdater vær for ${localizeCity(city) || city}`
+                : `Hent vær for ${localizeCity(city) || city}`
+            }
+            onClick={() => load()}
+          >
+            <RefreshIcon />
+            {status === 'loading' ? 'Henter' : 'Oppdater'}
+          </button>
         </div>
         {!inRange && (
           <span className="v2-weather-range" title="Utenfor 7-dagersprognose">
@@ -295,10 +338,12 @@ function SpotWeatherCard({
                   type="button"
                   className="btn btn-soft btn-sm"
                   onClick={() => {
-                    setCity(localizeCity(place.name) || place.name)
-                    setCountry(
-                      localizeCountry(place.country) || place.country || country,
-                    )
+                    const nextCity = localizeCity(place.name) || place.name
+                    const nextCountry =
+                      localizeCountry(place.country) || place.country || country
+                    setCity(nextCity)
+                    setCountry(nextCountry)
+                    load(nextCity, nextCountry)
                   }}
                 >
                   {[
@@ -315,7 +360,7 @@ function SpotWeatherCard({
         </div>
       )}
 
-      {status === 'idle' && display && (
+      {status === 'ready' && display && (
         <div className="v2-weather-body">
           <span className="v2-weather-glyph" title={display.summary}>
             <WeatherIcon icon={display.icon} size={22} />
@@ -336,13 +381,24 @@ function SpotWeatherCard({
               </span>
             )}
           </div>
+          <WeatherDaySpark
+            days={weather.days || []}
+            highlight={spot.date}
+            city={localizeCity(city) || city}
+            country={country}
+            weather={weather}
+          />
         </div>
       )}
 
-      {status === 'idle' && weather && !display && (
+      {status === 'ready' && weather && !display && (
         <p className="v2-meta">
           Ingen prognose for {formatDateNO(spot.date)} ennå.
         </p>
+      )}
+
+      {status === 'idle' && !weather && (
+        <p className="v2-meta">Ikke hentet ennå.</p>
       )}
     </article>
   )
@@ -361,8 +417,10 @@ export function JourneyWeatherView({ journey }: { journey: Journey }) {
   return (
     <div className="v2-weather-list">
       <p className="v2-meta" style={{ marginTop: 0 }}>
-        Prognose for stedene på reisen (inntil 7 dager frem).
+        Prognose for stedene på reisen (inntil 7 dager frem). Backend lagrer
+        vær to ganger om dagen. Trykk den lille grafen for detaljer.
       </p>
+      <WeatherTempChart spots={spots} />
       {spots.map((spot) => (
         <SpotWeatherCard key={spot.key} spot={spot} />
       ))}

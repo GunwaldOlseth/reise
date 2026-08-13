@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { localizeCity } from '../placeNames'
 import { CityInfoTip } from './CityInfoTip'
+import { HolidayCountdown } from './HolidayCountdown'
 import {
   activitiesForDay,
   activityKindLabel,
@@ -28,6 +29,12 @@ import {
   type JourneyVia,
 } from './journeyModel'
 import { TrashIcon, TransportModeIcon } from '../TransportModeIcon'
+
+function firstStopOnDate(journey: Journey, date: string): JourneyStop | undefined {
+  return [...(journey.stops || [])]
+    .sort((a, b) => a.sortOrder - b.sortOrder)
+    .find((s) => (s.arriveDate || '').trim() === date)
+}
 
 const LIVE_KINDS: { kind: JourneyLiveKind; label: string }[] = [
   { kind: 'food', label: 'Mat' },
@@ -283,9 +290,20 @@ export function JourneyLive({
   }, [journey, date, today])
 
   const where = places.map((p) => localizeCity(p.city) || p.city).filter(Boolean)
+  const beforeStart = !!(span && today < span.start)
+  const firstCity = useMemo(() => {
+    if (!span) return ''
+    const stop = firstStopOnDate(journey, span.start)
+    if (!stop) return ''
+    const name = stop.kind === 'home' ? stop.city || 'Hjem' : stop.city
+    return localizeCity(name) || name
+  }, [journey, span])
 
   return (
     <div className="v2-live">
+      {beforeStart && span && (
+        <HolidayCountdown startDate={span.start} detail={firstCity} />
+      )}
       <header className="v2-live-head">
         <button
           type="button"
