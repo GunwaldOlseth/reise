@@ -378,7 +378,7 @@ export function modeIsOther(mode?: string): boolean {
   return mode === 'other'
 }
 
-/** Walk only needs a duration in minutes. */
+/** Walk is a complete last-stretch choice; minutes are optional. */
 export function modeIsWalk(mode?: string): boolean {
   return mode === 'walk'
 }
@@ -1744,7 +1744,7 @@ export function isTransportOptionFilled(
   o?: JourneyTransportOption | null,
 ): boolean {
   if (!o) return false
-  if (modeIsWalk(o.mode)) return !!(o.minutes || '').trim()
+  if (modeIsWalk(o.mode)) return true
   return !!(
     o.mode?.trim() ||
     o.title?.trim() ||
@@ -1753,6 +1753,58 @@ export function isTransportOptionFilled(
     o.info?.trim() ||
     (o.departures || []).length > 0
   )
+}
+
+function normalizePlaceName(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[.,]/g, ' ')
+    .replace(/\s+/g, ' ')
+}
+
+/** «Lille Øvregaten» matches «Lille Øvregaten 10» and the same street with extra city text. */
+export function samePlaceName(a: string, b: string): boolean {
+  const na = normalizePlaceName(a)
+  const nb = normalizePlaceName(b)
+  if (!na || !nb) return false
+  if (na === nb) return true
+  const [shorter, longer] = na.length <= nb.length ? [na, nb] : [nb, na]
+  if (shorter.length < 5) return false
+  return longer.startsWith(`${shorter} `)
+}
+
+export type StopGoalRef = Pick<JourneyStop, 'city' | 'address' | 'kind'>
+
+export function stopGoalNames(to?: StopGoalRef | null): string[] {
+  if (!to) return []
+  const names = [to.city, to.address]
+    .map((s) => (s || '').trim())
+    .filter(Boolean)
+  return [...new Set(names)]
+}
+
+export function viaReachesGoal(
+  via: Pick<JourneyVia, 'title'>,
+  to?: StopGoalRef | null,
+): boolean {
+  const title = via.title.trim()
+  if (!title) return false
+  return stopGoalNames(to).some((g) => samePlaceName(title, g))
+}
+
+function lastViaIsWalk(segs: JourneyVia[]): boolean {
+  const last = segs[segs.length - 1]
+  if (!last) return false
+  return viaTransportOptions(last).some((o) => modeIsWalk(o.mode))
+}
+
+function goalDisplayName(to?: StopGoalRef | null): string {
+  if (!to) return 'mål'
+  if (to.kind === 'home') {
+    return (to.address || '').trim() || (to.city || '').trim() || 'hjem'
+  }
+  return (to.city || '').trim() || 'mål'
 }
 
 /** One via place has at least one usable departure/mode. */
@@ -1780,7 +1832,7 @@ export interface TransportGap {
  */
 export function legTransportGaps(
   leg: JourneyLeg | null | undefined,
-  to?: Pick<JourneyStop, 'city'> | null,
+  to?: StopGoalRef | null,
   options?: { requireTransportMode?: boolean },
 ): TransportGap[] {
   const requireMode = options?.requireTransportMode !== false
@@ -1799,15 +1851,14 @@ export function legTransportGaps(
     }
   }
 
-  const goal = (to?.city || '').trim().toLowerCase()
-  if (goal) {
-    const reachesGoal = segs.some(
-      (s) => s.title.trim().toLowerCase() === goal,
-    )
+  const goalNames = stopGoalNames(to)
+  if (goalNames.length) {
+    const reachesGoal =
+      segs.some((s) => viaReachesGoal(s, to)) || lastViaIsWalk(segs)
     if (!reachesGoal) {
       gaps.push({
         kind: 'missing_goal',
-        label: to?.city?.trim() || 'mål',
+        label: goalDisplayName(to),
       })
     }
   }
@@ -1817,7 +1868,7 @@ export function legTransportGaps(
 
 export function isLegFilled(
   leg?: JourneyLeg | null,
-  to?: Pick<JourneyStop, 'city'> | null,
+  to?: StopGoalRef | null,
   options?: { requireTransportMode?: boolean },
 ): boolean {
   if (!leg) return false

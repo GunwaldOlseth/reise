@@ -3,6 +3,8 @@ import { createPortal } from 'react-dom'
 import { cityDocsOf, type JourneyCityDoc } from './journeyModel'
 import { noteHasContent, sanitizeNoteHtml } from './noteHtml'
 
+const MOBILE_MQ = '(max-width: 720px)'
+
 function InfoIcon({ size = 16 }: { size?: number }) {
   return (
     <svg
@@ -23,7 +25,38 @@ function InfoIcon({ size = 16 }: { size?: number }) {
   )
 }
 
+function CloseIcon({ size = 18 }: { size?: number }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.2"
+      strokeLinecap="round"
+      aria-hidden
+    >
+      <path d="M6 6l12 12M18 6L6 18" />
+    </svg>
+  )
+}
+
 type PopPos = { top: number; left: number; width: number }
+
+function useMobileSheet() {
+  const [mobile, setMobile] = useState(() =>
+    typeof window !== 'undefined' ? window.matchMedia(MOBILE_MQ).matches : false,
+  )
+  useEffect(() => {
+    const mq = window.matchMedia(MOBILE_MQ)
+    const onChange = () => setMobile(mq.matches)
+    onChange()
+    mq.addEventListener('change', onChange)
+    return () => mq.removeEventListener('change', onChange)
+  }, [])
+  return mobile
+}
 
 function visibleDocs(
   text?: string | null,
@@ -38,6 +71,28 @@ function visibleDocs(
     .filter((d) => noteHasContent(d.html))
 }
 
+function DocList({
+  items,
+  many,
+}: {
+  items: { title: string; html: string }[]
+  many: boolean
+}) {
+  return (
+    <>
+      {items.map((item, i) => (
+        <section key={`${item.title}:${i}`} className="v2-city-info-doc">
+          {many || item.title !== 'Om byen' ? <h4>{item.title}</h4> : null}
+          <div
+            className="v2-note-html"
+            dangerouslySetInnerHTML={{ __html: item.html }}
+          />
+        </section>
+      ))}
+    </>
+  )
+}
+
 export function CityInfoTip({
   text,
   docs,
@@ -49,22 +104,24 @@ export function CityInfoTip({
 }) {
   const items = visibleDocs(text, docs)
   const stamp = items.map((d) => d.html).join('|')
+  const mobile = useMobileSheet()
   const [open, setOpen] = useState(false)
   const [pos, setPos] = useState<PopPos | null>(null)
   const root = useRef<HTMLDivElement>(null)
   const btn = useRef<HTMLButtonElement>(null)
   const pop = useRef<HTMLDivElement>(null)
+  const closeBtn = useRef<HTMLButtonElement>(null)
 
   useLayoutEffect(() => {
-    if (!open || !btn.current) return
+    if (!open || mobile || !btn.current) return
 
     function place() {
       const el = btn.current
       if (!el) return
       const r = el.getBoundingClientRect()
       const width = Math.min(
-        items.length > 1 ? 340 : 288,
-        Math.max(198, window.innerWidth - 24),
+        items.length > 1 ? 480 : 420,
+        Math.max(280, window.innerWidth - 32),
       )
       const margin = 12
       let left = r.right - width
@@ -94,7 +151,7 @@ export function CityInfoTip({
       window.removeEventListener('resize', place)
       window.removeEventListener('scroll', place, true)
     }
-  }, [open, stamp, items.length])
+  }, [open, mobile, stamp, items.length])
 
   useEffect(() => {
     if (!open) return
@@ -108,15 +165,73 @@ export function CityInfoTip({
     }
     document.addEventListener('mousedown', onDoc)
     document.addEventListener('keydown', onKey)
+    const prev = document.body.style.overflow
+    if (mobile) {
+      document.body.style.overflow = 'hidden'
+      closeBtn.current?.focus()
+    }
     return () => {
+      document.body.style.overflow = prev
       document.removeEventListener('mousedown', onDoc)
       document.removeEventListener('keydown', onKey)
     }
-  }, [open])
+  }, [open, mobile])
 
   if (!items.length) return null
 
   const many = items.length > 1
+  const heading = many
+    ? 'Om byen'
+    : items[0]?.title && items[0].title !== 'Om byen'
+      ? items[0].title
+      : 'Om byen'
+
+  const popover = mobile ? (
+    <div className="v2-city-info-layer" onClick={() => setOpen(false)}>
+      <div
+        ref={pop}
+        className={`v2-city-info-pop is-sheet${many ? ' is-many' : ''}`}
+        role="dialog"
+        aria-modal="true"
+        aria-label={heading}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="v2-city-info-pop-head">
+          <h3>{heading}</h3>
+          <button
+            ref={closeBtn}
+            type="button"
+            className="v2-city-info-close"
+            aria-label="Lukk"
+            title="Lukk"
+            onClick={() => setOpen(false)}
+          >
+            <CloseIcon />
+          </button>
+        </div>
+        <div className="v2-city-info-pop-body">
+          <DocList items={items} many={many} />
+        </div>
+      </div>
+    </div>
+  ) : (
+    <div
+      ref={pop}
+      className={`v2-city-info-pop${many ? ' is-many' : ''}`}
+      role="dialog"
+      style={
+        pos
+          ? {
+              top: pos.top,
+              left: pos.left,
+              width: pos.width,
+            }
+          : undefined
+      }
+    >
+      <DocList items={items} many={many} />
+    </div>
+  )
 
   return (
     <div className={`v2-city-info${open ? ' is-open' : ''}`} ref={root}>
@@ -126,6 +241,7 @@ export function CityInfoTip({
         className={`v2-city-info-btn${open ? ' is-on' : ''}`}
         disabled={disabled}
         aria-expanded={open}
+        aria-haspopup="dialog"
         aria-label="Informasjon om byen"
         title={
           many
@@ -140,36 +256,7 @@ export function CityInfoTip({
       >
         <InfoIcon />
       </button>
-      {open &&
-        createPortal(
-          <div
-            ref={pop}
-            className={`v2-city-info-pop${many ? ' is-many' : ''}`}
-            role="dialog"
-            style={
-              pos
-                ? {
-                    top: pos.top,
-                    left: pos.left,
-                    width: pos.width,
-                  }
-                : undefined
-            }
-          >
-            {items.map((item, i) => (
-              <section key={`${item.title}:${i}`} className="v2-city-info-doc">
-                {many || item.title !== 'Om byen' ? (
-                  <h4>{item.title}</h4>
-                ) : null}
-                <div
-                  className="v2-note-html"
-                  dangerouslySetInnerHTML={{ __html: item.html }}
-                />
-              </section>
-            ))}
-          </div>,
-          document.body,
-        )}
+      {open && createPortal(popover, document.body)}
     </div>
   )
 }

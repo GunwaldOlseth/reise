@@ -3040,7 +3040,8 @@ html {
   font-weight: 650;
 }
 
-.v2-city-info-pop.is-many {
+.v2-city-info-pop.is-many,
+.v2-city-info-pop.is-many .v2-city-info-pop-body {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
@@ -3051,10 +3052,6 @@ html {
   font-size: 0.78rem;
   letter-spacing: 0.02em;
   color: var(--v2-label);
-}
-
-.v2-city-info-pop {
-  max-height: min(22rem, calc(100dvh - 2rem));
 }
 
 .v2-note-editor {
@@ -3211,19 +3208,98 @@ html {
 .v2-city-info-pop {
   position: fixed;
   z-index: 80;
-  max-width: calc(100vw - 1.5rem);
-  max-height: min(16rem, calc(100dvh - 2rem));
+  max-width: calc(100vw - 2rem);
+  max-height: min(36rem, calc(100dvh - 3rem));
   overflow: auto;
-  padding: 0.7rem 0.8rem;
-  border-radius: 0.7rem;
+  padding: 0.95rem 1.1rem 1.1rem;
+  border-radius: 0.85rem;
   border: 1px solid var(--v2-line-strong);
   background: var(--v2-panel);
   color: var(--v2-ink);
   box-shadow: 0 12px 28px rgba(0, 0, 0, 0.45);
-  font-size: 0.88rem;
+  font-size: 0.95rem;
   font-weight: 500;
-  line-height: 1.4;
+  line-height: 1.5;
   white-space: normal;
+}
+
+.v2-city-info-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: flex;
+  justify-content: center;
+  align-items: stretch;
+  background: rgba(0, 0, 0, 0.5);
+  padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px)
+    env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
+}
+
+.v2-city-info-pop.is-sheet {
+  position: relative;
+  top: auto;
+  left: auto;
+  width: min(40rem, 100%);
+  height: 100%;
+  max-width: none;
+  max-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.4);
+  font-size: 1rem;
+  line-height: 1.5;
+}
+
+.v2-city-info-pop-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-shrink: 0;
+  padding: 0.7rem 0.7rem 0.65rem 1.05rem;
+  border-bottom: 1px solid var(--v2-line);
+}
+
+.v2-city-info-pop-head h3 {
+  margin: 0;
+  min-width: 0;
+  font-size: 1.1rem;
+  font-weight: 750;
+  line-height: 1.25;
+}
+
+.v2-city-info-close {
+  appearance: none;
+  width: 2.4rem;
+  height: 2.4rem;
+  padding: 0;
+  flex-shrink: 0;
+  border-radius: 999px;
+  border: 1px solid var(--v2-line-strong);
+  background: var(--v2-field);
+  color: var(--v2-ink);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.v2-city-info-close:hover,
+.v2-city-info-close:focus-visible {
+  border-color: var(--v2-accent);
+  background: color-mix(in srgb, var(--v2-accent) 16%, var(--v2-field));
+}
+
+.v2-city-info-pop-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 1rem 1.05rem 1.25rem;
+  -webkit-overflow-scrolling: touch;
 }
 
 .v2-day-list {

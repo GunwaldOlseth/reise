@@ -50,6 +50,7 @@ import {
   modeIsOther,
   modeIsWalk,
   sortTransportOptionsByTime,
+  samePlaceName,
   scheduleWarnings,
   shiftStopsAfter,
   stayNights,
@@ -1797,11 +1798,12 @@ function TransportBlock({
   }
 
   function isGoal(seg: JourneyVia): boolean {
-    const t = seg.title.trim().toLowerCase()
+    const t = seg.title.trim()
     if (!t) return false
-    const g = to.city.trim().toLowerCase()
-    const addr = homeAddress.toLowerCase()
-    return (!!g && t === g) || (!!addr && t === addr)
+    return (
+      samePlaceName(t, to.city) ||
+      (!!homeAddress && samePlaceName(t, homeAddress))
+    )
   }
 
   return (
