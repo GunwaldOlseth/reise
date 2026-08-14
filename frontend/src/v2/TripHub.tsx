@@ -16,7 +16,9 @@ import {
 import { journeyExpenseSummary } from './journeyExpenses'
 import { journeyMapRouteKey, journeyMapStopsInOrder } from './journeyMap'
 import { localizeJourneyPlaces } from '../placeNames'
-import { compactLive, emptyJourney, type Journey } from './journeyModel'
+import { compactLive, emptyJourney, formatDateNO, type Journey } from './journeyModel'
+import { shareOrCopy, sharePageUrl } from './shareItinerary'
+import { downloadItineraryPdf } from './itineraryPdf'
 import { DeleteTripSheet } from './DeleteTripSheet'
 import { JourneyLive } from './JourneyLive'
 import { JourneyOverview } from './JourneyOverview'
@@ -68,6 +70,7 @@ export function TripHub({
   initialTab = 'plan',
   onBack,
   onOpenSettings,
+  onOpenLinks,
   onTripDeleted,
   onTripUpdated,
 }: {
@@ -80,6 +83,7 @@ export function TripHub({
   initialTab?: TripHubTab
   onBack: () => void
   onOpenSettings: () => void
+  onOpenLinks: () => void
   onTripDeleted: () => void
   trip?: Trip | null
   onTripUpdated: (trip: Trip) => void
@@ -88,6 +92,8 @@ export function TripHub({
   const [menuOpen, setMenuOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [editOpen, setEditOpen] = useState(false)
+  const [shareBusy, setShareBusy] = useState(false)
+  const [shareHint, setShareHint] = useState('')
   const [journey, setJourney] = useState<Journey>(() => emptyJourney(tripId))
   const [journeyTick, setJourneyTick] = useState(0)
   /** False until first successful/failed journey fetch for this trip. */
@@ -196,6 +202,29 @@ export function TripHub({
     }
   }, [tripId])
 
+  useEffect(() => {
+    if (!shareHint) return
+    const t = window.setTimeout(() => setShareHint(''), 2500)
+    return () => window.clearTimeout(t)
+  }, [shareHint])
+
+  async function handleShare() {
+    setMenuOpen(false)
+    setShareBusy(true)
+    setShareHint('')
+    try {
+      const { token } = await api.ensureShare(tripId)
+      const url = sharePageUrl(token)
+      const result = await shareOrCopy(url, tripName || 'Reise')
+      setShareHint(result === 'copied' ? 'Lenke kopiert' : '')
+    } catch (err) {
+      if (err instanceof Error && err.name === 'AbortError') return
+      setShareHint('Kunne ikke dele')
+    } finally {
+      setShareBusy(false)
+    }
+  }
+
   return (
     <div className="v2-shell v2-hub">
       <header className="v2-hub-top">
@@ -217,6 +246,26 @@ export function TripHub({
           </div>
         </div>
         <div className="v2-hub-actions">
+          <button
+            type="button"
+            className="btn btn-soft btn-sm"
+            title="Del en kort liste med byer og transport"
+            disabled={shareBusy}
+            onClick={() => void handleShare()}
+          >
+            {shareBusy ? 'Deler…' : shareHint || 'Del'}
+          </button>
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm"
+            title="Last ned PDF med kort oversikt og fullversjon"
+            disabled={!trip}
+            onClick={() => {
+              if (trip) downloadItineraryPdf(trip, journey)
+            }}
+          >
+            PDF
+          </button>
           <div className="v2-hub-menu-wrap">
             <button
               type="button"
@@ -253,6 +302,34 @@ export function TripHub({
                   }}
                 >
                   Innstillinger
+                </button>
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    setMenuOpen(false)
+                    onOpenLinks()
+                  }}
+                >
+                  Nyttige lenker
+                </button>
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => void handleShare()}
+                >
+                  Del liste…
+                </button>
+                <button
+                  type="button"
+                  role="menuitem"
+                  disabled={!trip}
+                  onClick={() => {
+                    setMenuOpen(false)
+                    if (trip) downloadItineraryPdf(trip, journey)
+                  }}
+                >
+                  Last ned PDF
                 </button>
                 {!hasHomePlace(homePlace) && (
                   <button
@@ -452,7 +529,7 @@ function JourneyExpensesView({
                 <span className="expense-line-title">
                   {line.title}
                   {showDate && line.date ? (
-                    <span className="meta"> · {line.date}</span>
+                    <span className="meta"> · {formatDateNO(line.date)}</span>
                   ) : null}
                   {line.isActual ? (
                     <span className="meta">
@@ -589,11 +666,9 @@ function JourneyExpensesView({
       />
 
       {summary.byDay.length > 0 && (
-        <div className="expense-category">
-          <div className="expense-category-head">
-            <h3>Per dag</h3>
-          </div>
-          <ul className="expense-lines">
+        <div className="expense-by-day">
+          <h3 className="expense-by-day-title">Per dag</h3>
+          <ul className="expense-day-list">
             {summary.byDay.map((d) => {
               const cruiseLabel =
                 d.cruise > 0
@@ -601,17 +676,44 @@ function JourneyExpensesView({
                   : ''
               const placeLabel =
                 cruiseLabel || d.place || (d.ship ? d.ship : '')
+              const rows = [
+                d.hotel > 0
+                  ? { label: 'Overnatting', amount: d.hotel }
+                  : null,
+                d.transport > 0
+                  ? { label: 'Transport', amount: d.transport }
+                  : null,
+                d.cruise > 0
+                  ? { label: 'Pakke', amount: d.cruise }
+                  : null,
+                d.live > 0
+                  ? { label: 'Underveis', amount: d.live }
+                  : null,
+              ].filter(Boolean) as { label: string; amount: number }[]
               return (
-                <li key={d.date}>
-                  <span className="expense-line-title">
-                    {d.date}
-                    {placeLabel ? (
-                      <span className="meta"> · {placeLabel}</span>
-                    ) : null}
-                  </span>
-                  <span className="expense-line-amount">
-                    {formatExpenseAmount(d.total)}
-                  </span>
+                <li key={d.date} className="expense-day-row">
+                  <div className="expense-day-main">
+                    <div className="expense-day-head">
+                      <span className="expense-day-date">
+                        {formatDateNO(d.date)}
+                        {placeLabel ? (
+                          <span className="meta"> · {placeLabel}</span>
+                        ) : null}
+                      </span>
+                    </div>
+                    <ul className="expense-day-lines">
+                      {rows.map((row) => (
+                        <li key={row.label}>
+                          <span>{row.label}</span>
+                          <span>{formatExpenseAmount(row.amount)}</span>
+                        </li>
+                      ))}
+                      <li className="is-sum">
+                        <span>Døgnsum</span>
+                        <span>{formatExpenseAmount(d.total)}</span>
+                      </li>
+                    </ul>
+                  </div>
                 </li>
               )
             })}

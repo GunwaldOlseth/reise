@@ -1,4 +1,4 @@
-import type { PlacePurpose } from './journeyModel'
+import type { PlacePurpose, RideConnection } from './journeyModel'
 
 export function PurposeToggle({
   value,
@@ -31,6 +31,39 @@ export function PurposeToggle({
         onClick={() => onChange('transfer')}
       >
         {compact ? 'Bytte' : 'Bare bytte'}
+      </button>
+    </div>
+  )
+}
+
+export function ConnectionToggle({
+  value,
+  disabled,
+  onChange,
+}: {
+  value: RideConnection
+  disabled?: boolean
+  onChange: (next: RideConnection) => void
+}) {
+  return (
+    <div className="v2-purpose" role="group" aria-label="Direkte eller med bytte">
+      <button
+        type="button"
+        className={`v2-purpose-btn${value === 'direct' ? ' is-on' : ''}`}
+        disabled={disabled}
+        title="Rett frem uten bytte"
+        onClick={() => onChange('direct')}
+      >
+        Direkte
+      </button>
+      <button
+        type="button"
+        className={`v2-purpose-btn${value === 'change' ? ' is-on' : ''}`}
+        disabled={disabled}
+        title="Reise med bytte underveis"
+        onClick={() => onChange('change')}
+      >
+        Med bytte
       </button>
     </div>
   )

@@ -147,6 +147,7 @@ export interface Trip {
   features?: TripFeatures;
   /** People on the trip (display names). */
   travelers?: string[];
+  shareToken?: string;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -1153,9 +1154,36 @@ export function normalizeClockTime(raw: string): string {
   return t;
 }
 
+/**
+ * Format a finished clock time only. Leaves in-progress input like "18:2"
+ * or "182" unchanged so lists do not jump while typing 18:25.
+ */
+export function normalizeCompleteClockTime(raw: string): string {
+  const t = (raw || '').trim();
+  if (!t) return '';
+  const colon = t.match(/^(\d{1,2})[:.](\d{2})$/);
+  if (colon) {
+    const h = Number(colon[1]);
+    const min = Number(colon[2]);
+    if (h <= 23 && min <= 59) {
+      return `${String(h).padStart(2, '0')}:${String(min).padStart(2, '0')}`;
+    }
+    return t;
+  }
+  const digits = t.replace(/\D/g, '');
+  if (digits.length === 4) {
+    const h = Number(digits.slice(0, 2));
+    const min = Number(digits.slice(2, 4));
+    if (h <= 23 && min <= 59) {
+      return `${digits.slice(0, 2)}:${digits.slice(2, 4)}`;
+    }
+  }
+  return t;
+}
+
 /** Minutes from midnight for HH:mm / HH:mm:ss; empty/invalid sorts last. */
 export function arriveTimeSortKey(time?: string): number {
-  const t = normalizeClockTime(time || '');
+  const t = normalizeCompleteClockTime(time || '');
   if (!t) return Number.POSITIVE_INFINITY;
   // Accept dirty fields like "07:40 07:45" — use the first clock time.
   const m = t.match(/(\d{1,2})[:.](\d{2})(?::(\d{2}))?/);
@@ -1544,6 +1572,15 @@ export const api = {
     request<import('./v2/journeyModel').Journey>(
       `/trips/${encodeURIComponent(tripId)}/journey`,
       { method: 'PUT', body: JSON.stringify(journey) },
+    ),
+  ensureShare: (tripId: string) =>
+    request<{ token: string }>(
+      `/trips/${encodeURIComponent(tripId)}/share`,
+      { method: 'POST' },
+    ),
+  getShare: (token: string) =>
+    request<import('./v2/shareItinerary').ShareItinerary>(
+      `/share/${encodeURIComponent(token)}`,
     ),
 
   adminLogin: (password: string) =>

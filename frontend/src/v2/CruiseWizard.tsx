@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { ClockTimeInput } from './ClockTimeInput'
 import { CitySuggestFields } from '../CitySuggest'
 import {
   addDaysIso,
@@ -535,15 +536,14 @@ export function PackageWizard({
                             over. Ingen ankomst — skipet starter her.
                           </p>
                           <div className="v2-cruise-times">
-                            <input
-                              inputMode="numeric"
+                            <ClockTimeInput
                               placeholder="Avg."
                               aria-label="Avgang"
                               value={day.leaveTime || ''}
-                              onChange={(e) =>
+                              onChange={(value) =>
                                 updateDay(day.id, {
                                   arriveTime: '',
-                                  leaveTime: e.target.value,
+                                  leaveTime: value,
                                 })
                               }
                             />
@@ -601,27 +601,25 @@ export function PackageWizard({
                                 (day.city || '').trim().toLowerCase() ===
                                   homePort.toLowerCase()
                               ) && (
-                                <input
-                                  inputMode="numeric"
+                                <ClockTimeInput
                                   placeholder="Ank."
                                   aria-label="Ankomst"
                                   value={day.arriveTime || ''}
-                                  onChange={(e) =>
+                                  onChange={(value) =>
                                     updateDay(day.id, {
-                                      arriveTime: e.target.value,
+                                      arriveTime: value,
                                     })
                                   }
                                 />
                               )}
                               {!(type === 'cruise' && isLast) && (
-                                <input
-                                  inputMode="numeric"
+                                <ClockTimeInput
                                   placeholder="Avg."
                                   aria-label="Avgang"
                                   value={day.leaveTime || ''}
-                                  onChange={(e) =>
+                                  onChange={(value) =>
                                     updateDay(day.id, {
-                                      leaveTime: e.target.value,
+                                      leaveTime: value,
                                     })
                                   }
                                 />

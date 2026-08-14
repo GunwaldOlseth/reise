@@ -486,6 +486,13 @@ html {
   box-shadow: 0 0 0 1px var(--v2-accent);
 }
 
+.v2-hop-sort {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 0.15rem 0 0.15rem;
+}
+
 .v2-overview-list {
   list-style: none;
   margin: 0.75rem 0 0;
@@ -877,6 +884,7 @@ html {
 }
 
 .v2-settings-card input:not([type='checkbox']),
+.v2-settings-card select,
 .v2-settings-card .city-suggest input {
   appearance: none;
   width: 100%;
@@ -891,6 +899,7 @@ html {
 }
 
 .v2-settings-card input:not([type='checkbox']):focus,
+.v2-settings-card select:focus,
 .v2-settings-card .city-suggest input:focus {
   outline: 2px solid rgba(61, 190, 165, 0.45);
   border-color: rgba(61, 190, 165, 0.7);
@@ -1545,6 +1554,40 @@ html {
   min-width: 0;
 }
 
+.v2-transport-duration,
+.v2-hop-duration {
+  flex-shrink: 0;
+  font-size: 0.82rem;
+  font-weight: 650;
+  color: var(--v2-accent);
+  white-space: nowrap;
+}
+
+.v2-hop-duration {
+  margin: 0;
+  padding: 0 0.1rem;
+}
+
+.v2-hop-arrive {
+  display: flex;
+  align-items: center;
+  gap: 0.28rem;
+  min-width: 0;
+}
+
+.v2-hop-arrive input {
+  flex: 1;
+  width: 100%;
+}
+
+.v2-day-plus {
+  flex-shrink: 0;
+  font-size: 0.78rem;
+  font-weight: 750;
+  color: var(--v2-accent);
+  letter-spacing: 0.02em;
+}
+
 .v2-transport.is-warn .v2-transport-label {
   color: var(--v2-warn);
 }
@@ -1851,6 +1894,43 @@ html {
   color: var(--v2-ink);
 }
 
+.v2-change-time {
+  display: flex;
+  flex-direction: column;
+  gap: 0.28rem;
+  font-size: 0.82rem;
+  font-weight: 650;
+  color: var(--v2-label);
+}
+
+.v2-change-time-row {
+  display: grid;
+  grid-template-columns: minmax(5.5rem, 8rem);
+  gap: 0.35rem;
+  align-items: center;
+}
+
+.v2-change-time-row.has-place {
+  grid-template-columns: minmax(0, 1.2fr) minmax(5.5rem, 0.7fr);
+}
+
+.v2-change-time-row > input {
+  appearance: none;
+  border: 1px solid var(--v2-line-strong);
+  background-color: var(--v2-field);
+  color: var(--v2-ink);
+  border-radius: 0.55rem;
+  padding: 0.55rem 0.65rem;
+  font: inherit;
+  font-size: 0.95rem;
+  min-height: 2.5rem;
+  min-width: 0;
+}
+
+.v2-change-time .v2-hop-minutes {
+  min-width: 0;
+}
+
 /* Full-width departure row: mode under ↑/↓ column, fields to the right. */
 .v2-hop-row {
   grid-column: 1 / -1;
@@ -1935,7 +2015,36 @@ html {
 }
 
 .v2-hop-opt-row.is-prices {
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto auto;
+}
+
+.v2-hop-taken,
+.v2-hop-ticket {
+  appearance: none;
+  border: 1px solid var(--v2-line-strong);
+  background: var(--v2-panel);
+  color: var(--v2-ink);
+  border-radius: 999px;
+  padding: 0.4rem 0.7rem;
+  min-height: 2.5rem;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 650;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.v2-hop-taken.is-on,
+.v2-hop-ticket.is-on,
+.v2-live-taken.is-on {
+  border-color: var(--v2-accent);
+  background: color-mix(in srgb, var(--v2-accent) 18%, var(--v2-panel));
+  box-shadow: 0 0 0 1px var(--v2-accent);
+}
+
+.v2-hop-row.is-taken .v2-hop-opt,
+.v2-live-ride-opt.is-taken {
+  border-color: color-mix(in srgb, var(--v2-accent) 55%, var(--v2-line));
 }
 
 .v2-hop-opt-fields.is-walk {
@@ -2094,7 +2203,8 @@ html {
 }
 
 .v2-hop-opt-row select,
-.v2-hop-opt-row > input {
+.v2-hop-opt-row > input,
+.v2-hop-arrive input {
   appearance: none;
   border: 1px solid var(--v2-line-strong);
   background-color: var(--v2-field);
@@ -2105,6 +2215,24 @@ html {
   font-size: 0.95rem;
   min-height: 2.5rem;
   min-width: 0;
+}
+
+/* Native clock: tap anywhere on the field to open the picker. */
+.v2-clock-input[type='time'] {
+  position: relative;
+  min-width: 0;
+}
+
+.v2-clock-input[type='time']::-webkit-calendar-picker-indicator {
+  position: absolute;
+  inset: 0;
+  width: auto;
+  height: auto;
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  opacity: 0;
+  cursor: pointer;
 }
 
 .v2-hop-opt-fields.is-walk > .v2-hop-minutes,
@@ -2317,6 +2445,15 @@ html {
 
   .v2-hop-opt-fields.is-walk {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .v2-hop-opt-row.is-prices {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .v2-hop-taken,
+  .v2-hop-ticket {
+    grid-column: auto;
   }
 
   .v2-cruise-cost-row {
@@ -4149,7 +4286,24 @@ html {
 
 .v2-shell .expense-line-title,
 .v2-shell .expense-day-date {
+  color: var(--v2-label);
+}
+
+.v2-shell .expense-day-date .meta {
   color: var(--v2-muted);
+  font-weight: 500;
+}
+
+.v2-shell .expense-day-lines li {
+  color: var(--v2-muted);
+}
+
+.v2-shell .expense-day-lines .is-sum {
+  color: var(--v2-accent);
+  font-weight: 700;
+  margin-top: 0.12rem;
+  padding-top: 0.28rem;
+  border-top: 1px solid var(--v2-line);
 }
 
 .v2-shell .expense-total-card,
@@ -4225,6 +4379,45 @@ html {
 
 .v2-home-hero .v2-live-countdown {
   margin-top: 1rem;
+}
+
+.v2-live-ride-countdowns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.45rem;
+  margin: 0 0 0.7rem;
+}
+
+.v2-live-ride-countdowns:has(:only-child) {
+  grid-template-columns: 1fr;
+}
+
+.v2-live-countdown.is-compact {
+  padding: 0.7rem 0.75rem 0.8rem;
+  text-align: left;
+}
+
+.v2-live-countdown.is-compact .v2-live-countdown-units {
+  justify-content: flex-start;
+  gap: 0.55rem;
+}
+
+.v2-live-countdown.is-compact .v2-live-countdown-unit {
+  min-width: 2.6rem;
+}
+
+.v2-live-countdown.is-compact .v2-live-countdown-unit strong {
+  font-size: 1.35rem;
+}
+
+.v2-live-countdown.is-compact .v2-meta {
+  margin: 0.4rem 0 0;
+}
+
+@media (max-width: 520px) {
+  .v2-live-ride-countdowns {
+    grid-template-columns: 1fr;
+  }
 }
 
 .v2-live-head {
@@ -4338,6 +4531,49 @@ html {
   min-width: 0;
 }
 
+.v2-live-ride-opts {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.v2-live-rides .v2-live-ride-opt {
+  padding: 0.45rem 0.5rem;
+  border-radius: 0.55rem;
+  background: rgba(0, 0, 0, 0.14);
+  border: 1px solid rgba(232, 244, 242, 0.1);
+}
+
+.v2-live-ride-opt-main {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.v2-live-ride-opt-main .v2-meta {
+  flex: 1;
+  min-width: 8rem;
+}
+
+.v2-live-taken {
+  appearance: none;
+  border: 1px solid var(--v2-line-strong);
+  background: var(--v2-panel);
+  color: var(--v2-ink);
+  border-radius: 999px;
+  padding: 0.35rem 0.65rem;
+  min-height: 2.1rem;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 650;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
 .v2-live-prices {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -4420,3 +4656,194 @@ html {
   }
 
 }
+
+.v2-share-page {
+  padding: 1.25rem 1.15rem 2rem;
+  min-height: 100dvh;
+}
+
+.v2-share-view {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.v2-share-head h1 {
+  margin: 0;
+  font-size: 1.45rem;
+  line-height: 1.2;
+}
+
+.v2-share-head .v2-meta {
+  margin: 0.25rem 0 0;
+}
+
+.v2-share-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.v2-share-list > li > strong {
+  display: block;
+  font-size: 1.12rem;
+  font-weight: 700;
+}
+
+.v2-share-hops {
+  list-style: none;
+  margin: 0.2rem 0 0;
+  padding: 0 0 0 1.15rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.12rem;
+}
+
+.v2-share-hops li {
+  color: var(--v2-muted);
+  font-size: 0.98rem;
+  line-height: 1.35;
+}
+
+.v2-share-preview {
+  margin-top: 0.15rem;
+  padding: 0.95rem 1rem 1.05rem;
+  border-radius: 0.9rem;
+  border: 1px solid var(--v2-line);
+  background: var(--v2-bg);
+}
+
+.v2-share-preview .v2-share-head h1 {
+  font-size: 1.2rem;
+}
+
+.v2-alert-minutes {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+}
+
+.v2-alert-minutes input {
+  max-width: 6.5rem;
+}
+
+.v2-alert-minutes span {
+  font-weight: 500;
+  color: var(--v2-muted);
+}
+
+.v2-time-alert {
+  position: fixed;
+  z-index: 40;
+  left: 0.75rem;
+  right: 0.75rem;
+  bottom: calc(0.75rem + env(safe-area-inset-bottom, 0px));
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem 0.75rem;
+  padding: 0.85rem 1rem;
+  border-radius: 0.9rem;
+  border: 1px solid var(--v2-accent);
+  background: var(--v2-panel);
+  color: var(--v2-ink);
+  box-shadow: 0 10px 30px var(--v2-shade);
+}
+
+.v2-time-alert strong {
+  font-size: 0.98rem;
+}
+
+.v2-time-alert span {
+  flex: 1;
+  min-width: 10rem;
+  color: var(--v2-muted);
+}
+
+@media (min-width: 720px) {
+  .v2-time-alert {
+    left: auto;
+    right: auto;
+    width: min(40rem, calc(100% - 1.5rem));
+    margin: 0 auto;
+  }
+}
+
+.v2-link-edit-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.v2-link-edit-row {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.45rem;
+  padding: 0.7rem 0.75rem;
+  border: 1px solid var(--v2-line);
+  border-radius: 0.85rem;
+  background: var(--v2-bg);
+}
+
+.v2-link-edit-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  justify-content: flex-end;
+}
+
+.v2-link-add {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.v2-useful-link-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.v2-useful-link-list a {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding: 0.85rem 0.95rem;
+  border-radius: 0.9rem;
+  border: 1px solid var(--v2-line);
+  background: var(--v2-panel);
+  color: inherit;
+  text-decoration: none;
+}
+
+.v2-useful-link-list a:hover,
+.v2-useful-link-list a:focus-visible {
+  border-color: var(--v2-accent);
+  box-shadow: 0 0 0 1px var(--v2-accent);
+}
+
+.v2-useful-link-list strong {
+  font-size: 1.05rem;
+  font-weight: 650;
+}
+
+@media (min-width: 560px) {
+  .v2-link-edit-row {
+    grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.2fr) auto;
+    align-items: end;
+  }
+
+  .v2-link-add {
+    grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.2fr) auto;
+    align-items: end;
+  }
+}
+

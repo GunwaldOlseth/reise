@@ -1,6 +1,7 @@
 import { arriveTimeSortKey, AT_SEA_LABEL, type TripMapStop } from '../api'
 import {
   addDaysIso,
+  chosenTransportOption,
   geoCoordsOf,
   isPackageStop,
   packageFreeDayLabel,
@@ -32,7 +33,7 @@ export function journeyMapStopsInOrder(journey: Journey): TripMapStop[] {
       for (const via of vias) {
         const title = via.title?.trim()
         if (!title) continue
-        const opt = (via.options || [])[0]
+        const opt = chosenTransportOption(via)
         const timeRaw = opt?.startTime || via.startTime || via.endTime || ''
         const timeKey = arriveTimeSortKey(timeRaw)
         const coords = geoCoordsOf(via.latitude, via.longitude)

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { ClockTimeInput } from './ClockTimeInput'
 import { CitySuggestFields } from '../CitySuggest'
 import { TrashIcon } from '../TransportModeIcon'
 import {
@@ -339,26 +340,26 @@ export function SightList({
                   <div className="v2-activity-times">
                     <label>
                       Fra
-                      <input
-                        type="time"
+                      <ClockTimeInput
                         value={sight.startTime || ''}
                         disabled={disabled}
+                        placeholder="08:00"
                         title="Fra klokkeslett"
-                        onChange={(e) =>
-                          update(idx, { startTime: e.target.value })
+                        onChange={(value) =>
+                          update(idx, { startTime: value })
                         }
                         onBlur={() => emit(draftRef.current, true)}
                       />
                     </label>
                     <label>
                       Til
-                      <input
-                        type="time"
+                      <ClockTimeInput
                         value={sight.endTime || ''}
                         disabled={disabled}
+                        placeholder="16:00"
                         title="Til klokkeslett"
-                        onChange={(e) =>
-                          update(idx, { endTime: e.target.value })
+                        onChange={(value) =>
+                          update(idx, { endTime: value })
                         }
                         onBlur={() => emit(draftRef.current, true)}
                       />

@@ -1,13 +1,16 @@
 import { useEffect, useMemo, useState } from 'react'
 import { localizeCity } from '../placeNames'
 import { CityInfoTip } from './CityInfoTip'
-import { HolidayCountdown } from './HolidayCountdown'
+import { CountdownCard, HolidayCountdown, osloWallTimeMs } from './HolidayCountdown'
 import {
   activitiesForDay,
   activityKindLabel,
   addDaysIso,
   cityStayDays,
+  clockMinutesFromMidnight,
   formatDateNO,
+  formatDurationHM,
+  formatChangeTimeLabel,
   isPackageStop,
   journeyDateSpan,
   liveHotelAlertText,
@@ -15,11 +18,19 @@ import {
   liveMissingHotelAlerts,
   newLiveEntry,
   normalizeLive,
+  optionIsTaken,
   packageOf,
   stopDepartDate,
+  rideConnectionLabel,
+  optionDurationMinutes,
+  optionHasTicket,
+  optionIsOvernight,
   todayIsoOslo,
   transportSegments,
+  viaConnection,
   viaTransportOptions,
+  sortTransportOptions,
+  withTakenTransportOption,
   type Journey,
   type JourneyActivity,
   type JourneyLiveEntry,
@@ -53,9 +64,10 @@ type DayPlace = {
 
 type DayRide = {
   via: JourneyVia
-  option: JourneyTransportOption
+  options: JourneyTransportOption[]
   fromLabel: string
   toLabel: string
+  markOvernight: boolean
 }
 
 function placeLabel(place: JourneyStop | JourneyVia): string {
@@ -76,6 +88,109 @@ function dayOffsetOn(stop: JourneyStop, date: string): number {
   return Math.round((b - a) / 86_400_000)
 }
 
+function osloMinutesNow(): number {
+  const stamp = new Date().toLocaleTimeString('en-GB', {
+    timeZone: 'Europe/Oslo',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  })
+  return clockMinutesFromMidnight(stamp) ?? 0
+}
+
+function optionClockMinutes(option: JourneyTransportOption): number | null {
+  return (
+    clockMinutesFromMidnight(option.startTime) ??
+    clockMinutesFromMidnight(option.endTime)
+  )
+}
+
+/**
+ * Kvittert ride stays. Otherwise the next departure that has not passed yet;
+ * if all times have passed, the last one.
+ */
+function pickLiveOption(
+  options: JourneyTransportOption[],
+  isToday: boolean,
+  nowMins: number,
+): JourneyTransportOption | undefined {
+  if (!options.length) return undefined
+  const taken = options.find(optionIsTaken)
+  if (taken) return taken
+  if (!isToday) return options[0]
+  const next = options.find((option) => {
+    const at = optionClockMinutes(option)
+    if (at == null) return true
+    return at >= nowMins
+  })
+  return next ?? options[options.length - 1]
+}
+
+function NextRideCountdowns({
+  rides,
+  date,
+}: {
+  rides: DayRide[]
+  date: string
+}) {
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    const id = window.setInterval(() => setNow(Date.now()), 1000)
+    return () => window.clearInterval(id)
+  }, [])
+
+  const items = useMemo(() => {
+    const out: {
+      id: string
+      from: string
+      to: string
+      time: string
+      atMs: number
+    }[] = []
+    for (const ride of rides) {
+      const taken = ride.options.find(optionIsTaken)
+      const candidates = taken ? [taken] : ride.options
+      for (const opt of candidates) {
+        const time = (opt.startTime || '').trim()
+        if (!time) continue
+        const atMs = osloWallTimeMs(date, time)
+        if (!Number.isFinite(atMs) || atMs <= now) continue
+        out.push({
+          id: `${ride.via.id}:${opt.id}`,
+          from: ride.fromLabel,
+          to: ride.toLabel,
+          time,
+          atMs,
+        })
+      }
+    }
+    out.sort((a, b) => a.atMs - b.atMs)
+    return out.slice(0, 2)
+  }, [rides, date, now])
+
+  if (items.length === 0) return null
+
+  return (
+    <section
+      className="v2-live-ride-countdowns"
+      aria-label="Nedtelling til neste avganger"
+    >
+      {items.map((item, i) => (
+        <CountdownCard
+          key={item.id}
+          compact
+          now={now}
+          kicker={i === 0 ? 'Neste avgang' : 'Deretter'}
+          atMs={item.atMs}
+          detail={`${localizeCity(item.from) || item.from} → ${
+            localizeCity(item.to) || item.to
+          } · ${item.time}`}
+        />
+      ))}
+    </section>
+  )
+}
+
 function ridesOnDate(journey: Journey, date: string): DayRide[] {
   const stops = [...(journey.stops || [])].sort(
     (a, b) => a.sortOrder - b.sortOrder,
@@ -94,16 +209,15 @@ function ridesOnDate(journey: Journey, date: string): DayRide[] {
     for (let s = 0; s < segs.length; s++) {
       const via = segs[s]
       const prev = s === 0 ? from : segs[s - 1]
-      const opts = viaTransportOptions(via)
-      if (!opts.length) continue
-      for (const option of opts) {
-        out.push({
-          via,
-          option,
-          fromLabel: placeLabel(prev),
-          toLabel: via.title || to.city || 'Neste',
-        })
-      }
+      const options = sortTransportOptions(viaTransportOptions(via))
+      if (!options.length) continue
+      out.push({
+        via,
+        options,
+        fromLabel: placeLabel(prev),
+        toLabel: via.title || to.city || 'Neste',
+        markOvernight: from.kind !== 'cruise' && to.kind !== 'cruise',
+      })
     }
   }
   return out
@@ -201,6 +315,7 @@ export function JourneyLive({
     return span.end
   })
 
+  const [nowMins, setNowMins] = useState(osloMinutesNow)
   const places = useMemo(() => placesOnDate(journey, date), [journey, date])
   const rides = useMemo(() => ridesOnDate(journey, date), [journey, date])
   const sights = useMemo(() => sightsOnDate(places, date), [places, date])
@@ -223,6 +338,13 @@ export function JourneyLive({
     return [...byDate.entries()].sort(([a], [b]) => b.localeCompare(a))
   }, [journey.live, date])
   const isToday = date === today
+
+  useEffect(() => {
+    if (!isToday) return
+    setNowMins(osloMinutesNow())
+    const timer = window.setInterval(() => setNowMins(osloMinutesNow()), 30_000)
+    return () => window.clearInterval(timer)
+  }, [isToday])
 
   function patchJourney(next: Journey) {
     onChange({ ...next, live: normalizeLive(next.live) })
@@ -266,6 +388,26 @@ export function JourneyLive({
                 ...via,
                 options: viaTransportOptions(via).map((opt) =>
                   opt.id === optionId ? { ...opt, ...partial } : opt,
+                ),
+              },
+        ),
+      })),
+    })
+  }
+
+  function markTaken(viaId: string, optionId: string) {
+    patchJourney({
+      ...journey,
+      legs: (journey.legs || []).map((leg) => ({
+        ...leg,
+        vias: (leg.vias || []).map((via) =>
+          via.id !== viaId
+            ? via
+            : {
+                ...via,
+                options: withTakenTransportOption(
+                  viaTransportOptions(via),
+                  optionId,
                 ),
               },
         ),
@@ -399,63 +541,136 @@ export function JourneyLive({
       {rides.length > 0 && (
         <section className="v2-live-block">
           <h3>Transport i dag</h3>
+          <NextRideCountdowns rides={rides} date={date} />
           <ul className="v2-live-rides">
             {rides.map((ride) => {
-              const mode = ride.option.mode || 'other'
-              const time = [ride.option.startTime, ride.option.endTime]
-                .filter(Boolean)
-                .join('–')
+              const focus = pickLiveOption(ride.options, isToday, nowMins)
               return (
-                <li key={`${ride.via.id}:${ride.option.id}`}>
+                <li key={ride.via.id}>
                   <div className="v2-live-ride-main">
-                    <TransportModeIcon mode={mode} size={18} />
                     <div>
                       <strong>
                         {localizeCity(ride.fromLabel)} →{' '}
                         {localizeCity(ride.toLabel)}
                       </strong>
                       <span className="v2-meta">
-                        {[
-                          ride.option.title,
-                          time,
-                          ride.option.platform
-                            ? `p. ${ride.option.platform}`
-                            : '',
-                          ride.option.gate ? `gate ${ride.option.gate}` : '',
-                        ]
-                          .filter(Boolean)
-                          .join(' · ')}
+                        {formatChangeTimeLabel(ride.via) ||
+                          rideConnectionLabel(viaConnection(ride.via))}
                       </span>
                     </div>
                   </div>
-                  <div className="v2-live-prices">
-                    <label>
-                      Forventet
-                      <input
-                        value={ride.option.price || ''}
-                        disabled={disabled}
-                        placeholder="0"
-                        onChange={(e) =>
-                          patchOption(ride.via.id, ride.option.id, {
-                            price: e.target.value,
-                          })
-                        }
-                      />
-                    </label>
-                    <label>
-                      Faktisk
-                      <input
-                        value={ride.option.actualPrice || ''}
-                        disabled={disabled}
-                        placeholder="Betalt"
-                        onChange={(e) =>
-                          patchOption(ride.via.id, ride.option.id, {
-                            actualPrice: e.target.value,
-                          })
-                        }
-                      />
-                    </label>
-                  </div>
+                  <ul className="v2-live-ride-opts">
+                    {ride.options.map((option) => {
+                      const mode = option.mode || 'other'
+                      const overnight =
+                        ride.markOvernight && optionIsOvernight(option)
+                      const time = [
+                        option.startTime,
+                        option.endTime
+                          ? `${option.endTime}${overnight ? ' +1' : ''}`
+                          : '',
+                      ]
+                        .filter(Boolean)
+                        .join('–')
+                      const durationMins = optionDurationMinutes(option)
+                      const selected = option.id === focus?.id
+                      const taken = optionIsTaken(option)
+                      const ticket = optionHasTicket(option)
+                      return (
+                        <li
+                          key={option.id}
+                          className={`v2-live-ride-opt${
+                            selected ? ' is-taken' : ''
+                          }`}
+                        >
+                          <div className="v2-live-ride-opt-main">
+                            <TransportModeIcon mode={mode} size={18} />
+                            <span className="v2-meta">
+                              {[
+                                option.title,
+                                time,
+                                durationMins != null
+                                  ? formatDurationHM(durationMins)
+                                  : '',
+                                option.platform
+                                  ? `p. ${option.platform}`
+                                  : '',
+                                option.gate ? `gate ${option.gate}` : '',
+                              ]
+                                .filter(Boolean)
+                                .join(' · ')}
+                            </span>
+                            <button
+                              type="button"
+                              className={`v2-live-taken${
+                                ticket ? ' is-on' : ''
+                              }`}
+                              disabled={disabled}
+                              title={
+                                ticket
+                                  ? 'Billett er kjøpt'
+                                  : 'Merk at billetten er kjøpt'
+                              }
+                              onClick={() =>
+                                patchOption(ride.via.id, option.id, {
+                                  ticket: !option.ticket,
+                                })
+                              }
+                            >
+                              {ticket ? 'Kjøpt' : 'Billett'}
+                            </button>
+                            <button
+                              type="button"
+                              className={`v2-live-taken${
+                                taken ? ' is-on' : ''
+                              }`}
+                              disabled={disabled}
+                              title={
+                                taken
+                                  ? 'Kvittert — denne telles i utgifter'
+                                  : 'Kvitter ut denne avgangen'
+                              }
+                              onClick={() =>
+                                markTaken(ride.via.id, option.id)
+                              }
+                            >
+                              {taken ? 'Kvittert' : 'Kvitter ut'}
+                            </button>
+                          </div>
+                          {selected ? (
+                            <div className="v2-live-prices">
+                              <label>
+                                Forventet
+                                <input
+                                  value={option.price || ''}
+                                  disabled={disabled}
+                                  placeholder="0"
+                                  onChange={(e) =>
+                                    patchOption(ride.via.id, option.id, {
+                                      price: e.target.value,
+                                    })
+                                  }
+                                />
+                              </label>
+                              <label>
+                                Faktisk
+                                <input
+                                  value={option.actualPrice || ''}
+                                  disabled={disabled}
+                                  placeholder="Betalt"
+                                  onChange={(e) =>
+                                    patchOption(ride.via.id, option.id, {
+                                      actualPrice: e.target.value,
+                                    })
+                                  }
+                                />
+                              </label>
+                            </div>
+                          ) : null}
+                        </li>
+                      )
+                    })}
+                  </ul>
                 </li>
               )
             })}

@@ -363,6 +363,7 @@ func updateTrip(w http.ResponseWriter, r *http.Request) {
 	_ = doc.DataTo(&existing)
 	trip.CreatedAt = existing.CreatedAt
 	trip.UpdatedAt = time.Now().UTC()
+	trip.ShareToken = existing.ShareToken
 
 	if _, err := db.Collection(tripsCollection).Doc(id).Set(ctx, trip); err != nil {
 		log.Printf("Error updating trip %s: %v", id, err)

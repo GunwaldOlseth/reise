@@ -3,6 +3,9 @@
 const HOME_KEY = 'reise.homePlace'
 const PLANNER_KEY = 'reise.plannerSettings'
 const THEME_KEY = 'reise.theme'
+const LINKS_KEY = 'reise.usefulLinks'
+const ALERTS_KEY = 'reise.timeAlerts'
+const TRANSPORT_SORT_KEY = 'reise.transportOptionSort'
 
 export const THEME_IDS = [
   'skog',
@@ -233,5 +236,177 @@ export function loadPlannerSettings(): PlannerSettings {
 export function savePlannerSettings(settings: PlannerSettings): PlannerSettings {
   const next = { ...defaultPlannerSettings(), ...settings }
   localStorage.setItem(PLANNER_KEY, JSON.stringify(next))
+  return next
+}
+
+export interface UsefulLink {
+  id: string
+  title: string
+  url: string
+}
+
+export function normalizeUsefulUrl(raw: string): string {
+  const trimmed = raw.trim()
+  if (!trimmed) return ''
+  if (/^https?:\/\//i.test(trimmed)) return trimmed
+  if (/^[a-z][a-z0-9+.-]*:/i.test(trimmed)) return ''
+  return `https://${trimmed}`
+}
+
+export function isSafeHttpUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url)
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:'
+  } catch {
+    return false
+  }
+}
+
+export function usefulLinkHref(link: Pick<UsefulLink, 'url'>): string {
+  return normalizeUsefulUrl(link.url)
+}
+
+export function usefulLinkTitle(link: Pick<UsefulLink, 'title' | 'url'>): string {
+  const titled = (link.title || '').trim()
+  if (titled) return titled
+  const href = usefulLinkHref(link)
+  try {
+    return new URL(href).hostname.replace(/^www\./, '')
+  } catch {
+    return (link.url || '').trim() || 'Lenke'
+  }
+}
+
+export function usefulLinkHost(link: Pick<UsefulLink, 'url'>): string {
+  try {
+    return new URL(usefulLinkHref(link)).hostname.replace(/^www\./, '')
+  } catch {
+    return ''
+  }
+}
+
+function readUsefulLink(raw: unknown): UsefulLink | null {
+  if (!raw || typeof raw !== 'object') return null
+  const item = raw as Partial<UsefulLink>
+  const title = String(item.title || '')
+  const url = String(item.url || '')
+  if (!title.trim() && !url.trim()) return null
+  return {
+    id: String(item.id || '').trim() || crypto.randomUUID(),
+    title,
+    url,
+  }
+}
+
+export function loadUsefulLinks(): UsefulLink[] {
+  try {
+    const raw = localStorage.getItem(LINKS_KEY)
+    if (!raw) return []
+    const parsed = JSON.parse(raw)
+    if (!Array.isArray(parsed)) return []
+    const seen = new Set<string>()
+    const out: UsefulLink[] = []
+    for (const item of parsed) {
+      const link = readUsefulLink(item)
+      if (!link || seen.has(link.id)) continue
+      seen.add(link.id)
+      out.push(link)
+    }
+    return out
+  } catch {
+    return []
+  }
+}
+
+export function saveUsefulLinks(links: UsefulLink[]): UsefulLink[] {
+  const next: UsefulLink[] = []
+  const seen = new Set<string>()
+  for (const item of links) {
+    const link = readUsefulLink(item)
+    if (!link || seen.has(link.id)) continue
+    seen.add(link.id)
+    next.push(link)
+  }
+  localStorage.setItem(LINKS_KEY, JSON.stringify(next))
+  return next
+}
+
+export function usableUsefulLinks(list?: UsefulLink[]): UsefulLink[] {
+  return (list ?? loadUsefulLinks()).filter((link) =>
+    isSafeHttpUrl(usefulLinkHref(link)),
+  )
+}
+
+export interface TimeAlertSettings {
+  /** Minutes before transport departure or arrival. 0 = off. */
+  travelMinutes: number
+  /** Minutes before cruise port departure. 0 = off. */
+  cruiseMinutes: number
+}
+
+export function defaultTimeAlertSettings(): TimeAlertSettings {
+  return { travelMinutes: 30, cruiseMinutes: 60 }
+}
+
+export function clampAlertMinutes(value: unknown): number {
+  const n = Math.floor(Number(value))
+  if (!Number.isFinite(n) || n <= 0) return 0
+  return Math.min(12 * 60, n)
+}
+
+export function loadTimeAlertSettings(): TimeAlertSettings {
+  const fallback = defaultTimeAlertSettings()
+  try {
+    const raw = localStorage.getItem(ALERTS_KEY)
+    if (!raw) return fallback
+    const parsed = JSON.parse(raw) as Partial<TimeAlertSettings>
+    return {
+      travelMinutes: clampAlertMinutes(
+        parsed.travelMinutes ?? fallback.travelMinutes,
+      ),
+      cruiseMinutes: clampAlertMinutes(
+        parsed.cruiseMinutes ?? fallback.cruiseMinutes,
+      ),
+    }
+  } catch {
+    return fallback
+  }
+}
+
+export function saveTimeAlertSettings(
+  settings: TimeAlertSettings,
+): TimeAlertSettings {
+  const next: TimeAlertSettings = {
+    travelMinutes: clampAlertMinutes(settings.travelMinutes),
+    cruiseMinutes: clampAlertMinutes(settings.cruiseMinutes),
+  }
+  localStorage.setItem(ALERTS_KEY, JSON.stringify(next))
+  return next
+}
+
+export const TRANSPORT_OPTION_SORTS = ['depart', 'arrive', 'duration'] as const
+export type TransportOptionSort = (typeof TRANSPORT_OPTION_SORTS)[number]
+
+export function isTransportOptionSort(
+  value: unknown,
+): value is TransportOptionSort {
+  return TRANSPORT_OPTION_SORTS.includes(value as TransportOptionSort)
+}
+
+export function loadTransportOptionSort(): TransportOptionSort {
+  try {
+    const raw = localStorage.getItem(TRANSPORT_SORT_KEY)
+    if (isTransportOptionSort(raw)) return raw
+  } catch {
+    /* ignore */
+  }
+  return 'depart'
+}
+
+export function saveTransportOptionSort(
+  by: TransportOptionSort,
+): TransportOptionSort {
+  const next = isTransportOptionSort(by) ? by : 'depart'
+  localStorage.setItem(TRANSPORT_SORT_KEY, next)
   return next
 }

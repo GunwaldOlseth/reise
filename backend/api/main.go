@@ -29,6 +29,8 @@ func main() {
 	mux.HandleFunc("DELETE /api/trips/{id}", deleteTrip)
 	mux.HandleFunc("GET /api/trips/{id}/journey", getJourney)
 	mux.HandleFunc("PUT /api/trips/{id}/journey", putJourney)
+	mux.HandleFunc("POST /api/trips/{id}/share", createTripShare)
+	mux.HandleFunc("GET /api/share/{token}", getSharedItinerary)
 
 	mux.HandleFunc("GET /api/days", listDays)
 	mux.HandleFunc("POST /api/days", createDay)

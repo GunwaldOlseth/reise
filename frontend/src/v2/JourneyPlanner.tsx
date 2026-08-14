@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { api } from '../api'
+import { api, normalizeCompleteClockTime } from '../api'
 import { CitySuggestFields } from '../CitySuggest'
 import { PlaceMetaIcon, TrashIcon, TransportModeIcon } from '../TransportModeIcon'
 import { PackageWizard, OnwardChoiceSheet } from './CruiseWizard'
@@ -7,8 +7,11 @@ import {
   applyRegisteredHome,
   formatHomePlace,
   hasHomePlace,
+  loadTransportOptionSort,
+  saveTransportOptionSort,
   type HomePlace,
   type PlannerSettings,
+  type TransportOptionSort,
 } from '../userSettings'
 import {
   activitiesForDay,
@@ -20,6 +23,7 @@ import {
   confirmShiftAfterNights,
   emptyJourney,
   formatDateNO,
+  formatDurationHM,
   freeDaysBetweenStops,
   gapFillPrefill,
   hasPlanGapBetween,
@@ -31,11 +35,17 @@ import {
   isViaHopFilled,
   legForGap,
   legModeLabel,
+  legTravelDurationMinutes,
   legTransportGaps,
   moveTransportSegment,
   newJourneyVia,
   newStopId,
   newTransportOption,
+  optionDurationMinutes,
+  optionHasTicket,
+  optionIsOvernight,
+  optionIsTaken,
+  parsePositiveMinutes,
   normalizeSights,
   packageFreeDayLabel,
   packageNightsOf,
@@ -49,7 +59,7 @@ import {
   modeIsFlight,
   modeIsOther,
   modeIsWalk,
-  sortTransportOptionsByTime,
+  sortTransportOptions,
   samePlaceName,
   scheduleWarnings,
   shiftStopsAfter,
@@ -64,10 +74,12 @@ import {
   syncJourneyLegs,
   transportSegments,
   upsertStop,
+  viaConnection,
   viaPurpose,
   viaTransportOptions,
   stopPurpose,
   warningsForStop,
+  withTakenTransportOption,
   withTransportSegments,
   withViaOptions,
   type Journey,
@@ -84,7 +96,8 @@ import { CityDocsEditor } from './CityDocsEditor'
 import { CityInfoTip } from './CityInfoTip'
 import { NoteEditor } from './NoteEditor'
 import { compactNoteHtml } from './noteHtml'
-import { PurposeToggle } from './PurposeToggle'
+import { ClockTimeInput } from './ClockTimeInput'
+import { ConnectionToggle, PurposeToggle } from './PurposeToggle'
 import { SightList, SightPreview, PlaceLinkedPreview } from './SightList'
 import './v2.css'
 
@@ -1535,18 +1548,22 @@ function TransportBlock({
   const [overSegId, setOverSegId] = useState<string | null>(null)
   /** Which departure-row mode menu is open (`placeIdx-optIdx`). */
   const [modeMenuKey, setModeMenuKey] = useState<string | null>(null)
+  const [optionSort, setOptionSort] = useState<TransportOptionSort>(() =>
+    loadTransportOptionSort(),
+  )
   const [draft, setDraft] = useState<JourneyLeg>(() =>
     withTransportSegments(leg, transportSegments(leg)),
   )
-  const segments = transportSegments(draft)
+  const segments = transportSegments(draft, { sort: false })
   const gaps = legTransportGaps(draft, to, { requireTransportMode })
   const filled = gaps.length === 0
   const missingModes =
     requireTransportMode &&
     (gaps.some((g) => g.kind === 'missing_ride') ||
       gaps.some((g) => g.kind === 'empty'))
+  const markOvernight = from.kind !== 'cruise' && to.kind !== 'cruise'
   const summary = filled
-    ? summarizeTransport(draft)
+    ? summarizeTransport(draft, markOvernight)
     : isPackageStop(from)
       ? `Transport etter ${packageTypeLabel(from.kind).toLowerCase()} til ${
           to.kind === 'home'
@@ -1558,6 +1575,9 @@ function TransportBlock({
             ? to.address?.trim() || to.city || 'hjem'
             : to.city || 'hovedmål'
         }`
+  const travelMins = legTravelDurationMinutes(draft)
+  const travelLabel =
+    travelMins != null ? formatDurationHM(travelMins) : ''
   const showWarn = warn || missingModes
   const homeAddress = to.kind === 'home' ? (to.address || '').trim() : ''
   const goalName =
@@ -1566,7 +1586,10 @@ function TransportBlock({
   const latestSegs = useRef(segments)
   latestSegs.current = segments
 
-  function cleanSegments(list: JourneyVia[]): JourneyVia[] {
+  function cleanSegments(
+    list: JourneyVia[],
+    by: TransportOptionSort = optionSort,
+  ): JourneyVia[] {
     return list
       .map((v, i) => {
         let opts: JourneyTransportOption[] = viaTransportOptions(v)
@@ -1576,8 +1599,12 @@ function TransportBlock({
             return {
               ...o,
               title: walk ? '' : (o.title || '').trim(),
-              startTime: walk ? '' : (o.startTime || '').trim(),
-              endTime: walk ? '' : (o.endTime || '').trim(),
+              startTime: walk
+                ? ''
+                : normalizeCompleteClockTime((o.startTime || '').trim()),
+              endTime: walk
+                ? ''
+                : normalizeCompleteClockTime((o.endTime || '').trim()),
               platform:
                 !walk && !flight && modeHasPlatform(o.mode)
                   ? (o.platform || '').trim()
@@ -1587,6 +1614,8 @@ function TransportBlock({
               info: modeIsOther(o.mode) ? (o.info || '').trim() : '',
               price: (o.price || '').trim(),
               actualPrice: (o.actualPrice || '').trim(),
+              taken: !!o.taken,
+              ticket: !!o.ticket,
               departures: [] as string[],
             }
           })
@@ -1601,11 +1630,13 @@ function TransportBlock({
               o.minutes ||
               o.info ||
               o.price ||
-              o.actualPrice,
+              o.actualPrice ||
+              o.taken ||
+              o.ticket,
           )
         const flight = opts.find((o) => o.mode === 'flight')
         if (flight) opts = [flight]
-        else opts = sortTransportOptionsByTime(opts)
+        else opts = sortTransportOptions(opts, by)
         return withViaOptions(
           {
             ...v,
@@ -1613,6 +1644,12 @@ function TransportBlock({
             country: (v.country || '').trim(),
             sights: normalizeSights(v.sights),
             purpose: viaPurpose(v),
+            connection: viaConnection(v),
+            changePlace: (v.changePlace || '').trim(),
+            changeMinutes: (() => {
+              const n = parsePositiveMinutes(v.changeMinutes)
+              return n != null ? String(n) : ''
+            })(),
             sortOrder: i,
           },
           opts,
@@ -1621,19 +1658,25 @@ function TransportBlock({
       .filter((v) => v.title.trim() || viaTransportOptions(v).length > 0)
   }
 
-  function persistNow(list: JourneyVia[]) {
+  function persistNow(
+    list: JourneyVia[],
+    by: TransportOptionSort = optionSort,
+  ) {
     if (persistTimer.current) {
       clearTimeout(persistTimer.current)
       persistTimer.current = null
     }
-    onChange(withTransportSegments(leg, cleanSegments(list)))
+    onChange(withTransportSegments(leg, cleanSegments(list, by)))
   }
 
-  function schedulePersist(list: JourneyVia[]) {
+  function schedulePersist(
+    list: JourneyVia[],
+    by: TransportOptionSort = optionSort,
+  ) {
     if (persistTimer.current) clearTimeout(persistTimer.current)
     persistTimer.current = setTimeout(() => {
       persistTimer.current = null
-      onChange(withTransportSegments(leg, cleanSegments(list)))
+      onChange(withTransportSegments(leg, cleanSegments(list, by)))
     }, 450)
   }
 
@@ -1741,7 +1784,7 @@ function TransportBlock({
     const modeChange = Object.prototype.hasOwnProperty.call(partial, 'mode')
     setOptions(
       placeIdx,
-      resort ? sortTransportOptionsByTime(next) : next,
+      resort ? sortTransportOptions(next, optionSort) : next,
       modeChange || resort,
     )
   }
@@ -1751,9 +1794,22 @@ function TransportBlock({
     if (!via) return
     setOptions(
       placeIdx,
-      sortTransportOptionsByTime(viaTransportOptions(via)),
+      sortTransportOptions(viaTransportOptions(via), optionSort),
       true,
     )
+  }
+
+  function applyOptionSort(by: TransportOptionSort) {
+    const next = saveTransportOptionSort(by)
+    setOptionSort(next)
+    const sorted = segments.map((via) =>
+      withViaOptions(
+        via,
+        sortTransportOptions(viaTransportOptions(via), next),
+      ),
+    )
+    setDraft(withTransportSegments(draft, sorted))
+    persistNow(sorted, next)
   }
 
   function removeOption(placeIdx: number, optIdx: number) {
@@ -1827,6 +1883,9 @@ function TransportBlock({
           >
             <span className="v2-transport-label-row">
               <span className="v2-transport-label">{summary}</span>
+              {travelLabel ? (
+                <span className="v2-transport-duration">{travelLabel}</span>
+              ) : null}
               {showWarn && (
                 <span
                   className="v2-warn-badge"
@@ -1873,6 +1932,26 @@ function TransportBlock({
                 ? '. Hvert sted trenger navn og minst én reise (buss, tog, fly …).'
                 : '. Du kan legge hovedlinjen med bare steder; reisemåte er valgfritt.'}
             </p>
+            <nav className="v2-hop-sort" aria-label="Sorter transport">
+              {(
+                [
+                  ['depart', 'Avreise'],
+                  ['arrive', 'Ankomst'],
+                  ['duration', 'Varighet'],
+                ] as const
+              ).map(([id, label]) => (
+                <button
+                  key={id}
+                  type="button"
+                  className={`v2-overview-tab${optionSort === id ? ' is-on' : ''}`}
+                  disabled={disabled}
+                  title={`Sorter etter ${label.toLowerCase()}`}
+                  onClick={() => applyOptionSort(id)}
+                >
+                  {label}
+                </button>
+              ))}
+            </nav>
 
             <div className="v2-via-list">
               <div className="v2-via-head">
@@ -1918,7 +1997,7 @@ function TransportBlock({
                 const fromLabel = prevLabel(idx)
                 const goal = isGoal(seg)
                 const expanded = isSegOpen(seg.id)
-                const hopSummary = summarizeViaHop(seg, fromLabel)
+                const hopSummary = summarizeViaHop(seg, fromLabel, markOvernight)
                 const missingRide =
                   requireTransportMode && !isViaHopFilled(seg)
                 const hopIncomplete = !seg.title.trim() || missingRide
@@ -2120,10 +2199,71 @@ function TransportBlock({
                             <div className="v2-hop-title">
                               {fromLabel} → {seg.title.trim() || '…'}
                             </div>
+                            <ConnectionToggle
+                              value={viaConnection(seg)}
+                              disabled={disabled}
+                              onChange={(connection) =>
+                                updateSegment(idx, { connection }, true)
+                              }
+                            />
+                            <label className="v2-change-time">
+                              Byttetid
+                              <span
+                                className={`v2-change-time-row${
+                                  viaConnection(seg) === 'change'
+                                    ? ' has-place'
+                                    : ''
+                                }`}
+                              >
+                                {viaConnection(seg) === 'change' ? (
+                                  <input
+                                    value={seg.changePlace || ''}
+                                    disabled={disabled}
+                                    placeholder="Stasjon / by"
+                                    title="Hvor du bytter"
+                                    aria-label="Bytte på stasjon eller by"
+                                    onChange={(e) =>
+                                      updateSegment(idx, {
+                                        changePlace: e.target.value,
+                                      })
+                                    }
+                                    onBlur={(e) =>
+                                      updateSegment(
+                                        idx,
+                                        {
+                                          changePlace: e.target.value.trim(),
+                                        },
+                                        true,
+                                      )
+                                    }
+                                  />
+                                ) : null}
+                                <span className="v2-hop-minutes">
+                                  <input
+                                    inputMode="numeric"
+                                    placeholder="15"
+                                    value={seg.changeMinutes || ''}
+                                    disabled={disabled}
+                                    title="Anbefalt tid mellom to kommunikasjoner"
+                                    aria-label="Anbefalt byttetid i minutter"
+                                    onChange={(e) =>
+                                      updateSegment(idx, {
+                                        changeMinutes: e.target.value.replace(
+                                          /[^\d]/g,
+                                          '',
+                                        ),
+                                      })
+                                    }
+                                    onBlur={() => updateSegment(idx, {}, true)}
+                                  />
+                                  <span>min</span>
+                                </span>
+                              </span>
+                            </label>
                             <p className="v2-meta" style={{ margin: 0 }}>
                               {hasFlight
                                 ? 'Fly er valgt — andre avganger på dette hoppet er fjernet.'
-                                : 'Legg inn avganger som egne rader. Bland gjerne buss og tog — de sorteres etter klokkeslett.'}
+                                : 'Legg inn avganger som egne rader. Bland gjerne buss og tog — sorter etter avreise, ankomst eller varighet.'}
                             </p>
                           </div>
                         </div>
@@ -2140,8 +2280,14 @@ function TransportBlock({
                         const menuOpen = modeMenuKey === menuKey
                         const modeLabel =
                           legModeLabel(opt.mode) || 'Reisemåte'
+                        const durationMins = optionDurationMinutes(opt)
+                        const overnight = markOvernight && optionIsOvernight(opt)
+                        const selected = optionIsTaken(opt)
                         return (
-                          <div key={opt.id} className="v2-hop-row">
+                          <div
+                            key={opt.id}
+                            className={`v2-hop-row${selected ? ' is-taken' : ''}`}
+                          >
                             <div className="v2-hop-mode">
                               <button
                                 type="button"
@@ -2232,24 +2378,70 @@ function TransportBlock({
                                 }`}
                               >
                                 {isWalk ? (
-                                  <label className="v2-hop-minutes">
-                                    <input
-                                      inputMode="numeric"
-                                      placeholder="Minutter"
-                                      value={opt.minutes || ''}
+                                  <>
+                                    <label className="v2-hop-minutes">
+                                      <input
+                                        inputMode="numeric"
+                                        placeholder="Minutter"
+                                        value={opt.minutes || ''}
+                                        disabled={disabled}
+                                        onChange={(e) =>
+                                          updateOption(idx, oi, {
+                                            minutes: e.target.value.replace(
+                                              /[^\d]/g,
+                                              '',
+                                            ),
+                                          })
+                                        }
+                                        aria-label="Gåtid i minutter"
+                                      />
+                                      <span>min</span>
+                                    </label>
+                                    <button
+                                      type="button"
+                                      className={`v2-hop-ticket${
+                                        optionHasTicket(opt) ? ' is-on' : ''
+                                      }`}
                                       disabled={disabled}
-                                      onChange={(e) =>
-                                        updateOption(idx, oi, {
-                                          minutes: e.target.value.replace(
-                                            /[^\d]/g,
-                                            '',
-                                          ),
-                                        })
+                                      title={
+                                        optionHasTicket(opt)
+                                          ? 'Billett er kjøpt'
+                                          : 'Merk at billetten er kjøpt'
                                       }
-                                      aria-label="Gåtid i minutter"
-                                    />
-                                    <span>min</span>
-                                  </label>
+                                      onClick={() =>
+                                        updateOption(
+                                          idx,
+                                          oi,
+                                          { ticket: !opt.ticket },
+                                          true,
+                                        )
+                                      }
+                                    >
+                                      {optionHasTicket(opt) ? 'Kjøpt' : 'Billett'}
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className={`v2-hop-taken${selected ? ' is-on' : ''}`}
+                                      disabled={disabled}
+                                      title={
+                                        selected
+                                          ? 'Valgt — denne telles i utgifter'
+                                          : 'Kvitter ut denne avgangen'
+                                      }
+                                      onClick={() =>
+                                        setOptions(
+                                          idx,
+                                          withTakenTransportOption(
+                                            options,
+                                            opt.id,
+                                          ),
+                                          true,
+                                        )
+                                      }
+                                    >
+                                      {selected ? 'Kvittert' : 'Kvitter ut'}
+                                    </button>
+                                  </>
                                 ) : (
                                   <>
                                     <div className="v2-hop-opt-row is-main">
@@ -2318,31 +2510,44 @@ function TransportBlock({
                                           aria-label="Perong"
                                         />
                                       )}
-                                      <input
-                                        inputMode="numeric"
+                                      <ClockTimeInput
                                         placeholder="Avgang"
                                         value={opt.startTime || ''}
                                         disabled={disabled}
-                                        onChange={(e) =>
+                                        onChange={(value) =>
                                           updateOption(idx, oi, {
-                                            startTime: e.target.value,
+                                            startTime: value,
                                             departures: [],
                                           })
                                         }
                                         onBlur={() => resortOptions(idx)}
                                       />
-                                      <input
-                                        inputMode="numeric"
-                                        placeholder="Ankomst"
-                                        value={opt.endTime || ''}
-                                        disabled={disabled}
-                                        onChange={(e) =>
-                                          updateOption(idx, oi, {
-                                            endTime: e.target.value,
-                                          })
-                                        }
-                                      />
+                                      <div className="v2-hop-arrive">
+                                        <ClockTimeInput
+                                          placeholder="Ankomst"
+                                          value={opt.endTime || ''}
+                                          disabled={disabled}
+                                          onChange={(value) =>
+                                            updateOption(idx, oi, {
+                                              endTime: value,
+                                            })
+                                          }
+                                        />
+                                        {overnight ? (
+                                          <span
+                                            className="v2-day-plus"
+                                            title="Ankomst neste dag"
+                                          >
+                                            +1
+                                          </span>
+                                        ) : null}
+                                      </div>
                                     </div>
+                                    {durationMins != null && !isWalk ? (
+                                      <p className="v2-hop-duration">
+                                        {formatDurationHM(durationMins)}
+                                      </p>
+                                    ) : null}
                                     <div className="v2-hop-opt-row is-prices">
                                       <input
                                         className="v2-hop-price"
@@ -2370,6 +2575,50 @@ function TransportBlock({
                                           })
                                         }
                                       />
+                                      <button
+                                        type="button"
+                                        className={`v2-hop-ticket${
+                                          optionHasTicket(opt) ? ' is-on' : ''
+                                        }`}
+                                        disabled={disabled}
+                                        title={
+                                          optionHasTicket(opt)
+                                            ? 'Billett er kjøpt'
+                                            : 'Merk at billetten er kjøpt'
+                                        }
+                                        onClick={() =>
+                                          updateOption(
+                                            idx,
+                                            oi,
+                                            { ticket: !opt.ticket },
+                                            true,
+                                          )
+                                        }
+                                      >
+                                        {optionHasTicket(opt) ? 'Kjøpt' : 'Billett'}
+                                      </button>
+                                      <button
+                                        type="button"
+                                        className={`v2-hop-taken${selected ? ' is-on' : ''}`}
+                                        disabled={disabled}
+                                        title={
+                                          selected
+                                            ? 'Valgt — denne telles i utgifter'
+                                            : 'Kvitter ut denne avgangen'
+                                        }
+                                        onClick={() =>
+                                          setOptions(
+                                            idx,
+                                            withTakenTransportOption(
+                                              options,
+                                              opt.id,
+                                            ),
+                                            true,
+                                          )
+                                        }
+                                      >
+                                        {selected ? 'Kvittert' : 'Kvitter ut'}
+                                      </button>
                                     </div>
                                   </>
                                 )}
@@ -2535,23 +2784,21 @@ function DepartLegSheet({
           </label>
           <label>
             Avgang
-            <input
-              inputMode="numeric"
+            <ClockTimeInput
               placeholder="10:40"
               value={leg.startTime || ''}
-              onChange={(e) =>
-                setLeg((p) => ({ ...p, startTime: e.target.value }))
+              onChange={(value) =>
+                setLeg((p) => ({ ...p, startTime: value }))
               }
             />
           </label>
           <label>
             Ankomst
-            <input
-              inputMode="numeric"
+            <ClockTimeInput
               placeholder="14:10"
               value={leg.endTime || ''}
-              onChange={(e) =>
-                setLeg((p) => ({ ...p, endTime: e.target.value }))
+              onChange={(value) =>
+                setLeg((p) => ({ ...p, endTime: value }))
               }
             />
           </label>

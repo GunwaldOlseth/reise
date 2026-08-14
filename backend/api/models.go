@@ -138,6 +138,7 @@ type Trip struct {
 	ColorByCountry map[string]string `json:"colorByCountry,omitempty" firestore:"colorByCountry,omitempty"`
 	Features       TripFeatures      `json:"features" firestore:"features"`
 	Travelers      []string          `json:"travelers,omitempty" firestore:"travelers,omitempty"`
+	ShareToken     string            `json:"shareToken,omitempty" firestore:"shareToken,omitempty"`
 	CreatedAt      time.Time         `json:"createdAt" firestore:"createdAt"`
 	UpdatedAt      time.Time         `json:"updatedAt" firestore:"updatedAt"`
 }
@@ -287,6 +288,8 @@ type JourneyTransportOption struct {
 	Info        string   `json:"info,omitempty" firestore:"info,omitempty"`       // ekstra info (annet)
 	Price       string   `json:"price,omitempty" firestore:"price,omitempty"`
 	ActualPrice string   `json:"actualPrice,omitempty" firestore:"actualPrice,omitempty"`
+	Taken       bool     `json:"taken,omitempty" firestore:"taken,omitempty"`
+	Ticket      bool     `json:"ticket,omitempty" firestore:"ticket,omitempty"`
 	Departures  []string `json:"departures,omitempty" firestore:"departures,omitempty"`
 }
 
@@ -305,8 +308,11 @@ type JourneyVia struct {
 	// Options are alternative ways to arrive at this place from the previous one.
 	Options   []JourneyTransportOption `json:"options,omitempty" firestore:"options,omitempty"`
 	Sights    []JourneySight           `json:"sights,omitempty" firestore:"sights,omitempty"`
-	Purpose   string                   `json:"purpose,omitempty" firestore:"purpose,omitempty"` // visit | transfer
-	SortOrder int                      `json:"sortOrder" firestore:"sortOrder"`
+	Purpose    string                   `json:"purpose,omitempty" firestore:"purpose,omitempty"`       // visit | transfer
+	Connection string                   `json:"connection,omitempty" firestore:"connection,omitempty"` // direct | change
+	ChangePlace string                  `json:"changePlace,omitempty" firestore:"changePlace,omitempty"`
+	ChangeMinutes string                `json:"changeMinutes,omitempty" firestore:"changeMinutes,omitempty"`
+	SortOrder  int                      `json:"sortOrder" firestore:"sortOrder"`
 }
 
 // JourneyLeg is travel between two consecutive stops on the thread.

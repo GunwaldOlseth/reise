@@ -38,6 +38,7 @@ export function HomePage({
   googleSlot,
   onRefresh,
   onOpenSettings,
+  onOpenLinks,
   onOpenTrip,
   onShowNewTrip,
   onHideNewTrip,
@@ -62,6 +63,7 @@ export function HomePage({
   googleSlot?: ReactNode
   onRefresh: () => void
   onOpenSettings: () => void
+  onOpenLinks: () => void
   onOpenTrip: (tripId: string) => void
   onShowNewTrip: () => void
   onHideNewTrip: () => void
@@ -92,6 +94,14 @@ export function HomePage({
             onClick={onOpenSettings}
           >
             Innstillinger
+          </button>
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm"
+            title="Nyttige lenker"
+            onClick={onOpenLinks}
+          >
+            Lenker
           </button>
           <button
             type="button"

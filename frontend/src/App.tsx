@@ -25,6 +25,11 @@ import {
 } from './userSettings'
 import { HomePage } from './v2/HomePage'
 import { TripHub } from './v2/TripHub'
+import { ShareItineraryPage } from './v2/ShareItineraryPage'
+import { SharePreviewCard } from './v2/ShareItineraryView'
+import { UsefulLinksCard, UsefulLinksPage } from './v2/UsefulLinks'
+import { TimeAlertsCard, TravelAlertWatcher } from './v2/TravelAlertWatcher'
+import { readShareToken } from './v2/shareItinerary'
 import {
   emptyJourney,
   journeyVisitStats,
@@ -72,6 +77,7 @@ function GoogleLoginButton() {
 type View =
   | { name: 'home' }
   | { name: 'settings'; returnTo?: View }
+  | { name: 'links'; returnTo?: View }
   | {
       name: 'trip'
       tripId: string
@@ -88,14 +94,20 @@ function SettingsPage({
   initialHome,
   initialPlanner,
   error,
+  trips,
+  previewTripId,
   onBack,
   onSave,
+  onOpenLinks,
 }: {
   initialHome: HomePlace
   initialPlanner: PlannerSettings
   error?: string
+  trips: Trip[]
+  previewTripId?: string
   onBack: () => void
   onSave: (home: HomePlace, planner: PlannerSettings) => void
+  onOpenLinks: () => void
 }) {
   const [draft, setDraft] = useState<HomePlace>(initialHome)
   const [planner, setPlanner] = useState<PlannerSettings>(initialPlanner)
@@ -119,7 +131,7 @@ function SettingsPage({
           </button>
           <div>
             <h1>Innstillinger</h1>
-            <p className="v2-meta">Hjem, steg og varsler</p>
+            <p className="v2-meta">Hjem, lenker, steg, deling og varsler</p>
           </div>
         </div>
       </header>
@@ -201,6 +213,8 @@ function SettingsPage({
           </div>
         </section>
 
+        <UsefulLinksCard onOpenPage={onOpenLinks} />
+
         <section className="v2-settings-card">
           <h2>Planlegger — steg</h2>
           <p className="v2-meta">
@@ -272,6 +286,10 @@ function SettingsPage({
             </button>
           </div>
         </section>
+
+        <TimeAlertsCard />
+
+        <SharePreviewCard trips={trips} initialTripId={previewTripId} />
 
         <AdminBackupPanel />
       </div>
@@ -472,6 +490,14 @@ function AdminBackupPanel() {
 }
 
 export default function App() {
+  const shareToken = readShareToken()
+  if (shareToken) {
+    return <ShareItineraryPage token={shareToken} />
+  }
+  return <AppMain />
+}
+
+function AppMain() {
   const [view, setView] = useState<View>({ name: 'home' })
   const [trips, setTrips] = useState<Trip[]>([])
   const [homePlace, setHomePlace] = useState<HomePlace>(() => loadHomePlace())
@@ -597,17 +623,46 @@ export default function App() {
     }
   }
 
+  const alerts = <TravelAlertWatcher tripIds={trips.map((t) => t.id)} />
+
+  if (view.name === 'links') {
+    const returnTo = view.returnTo || { name: 'home' as const }
+    return (
+      <>
+        {alerts}
+        <UsefulLinksPage
+          onBack={() => {
+            setError('')
+            setView(returnTo)
+          }}
+        />
+      </>
+    )
+  }
+
   if (view.name === 'settings') {
     const returnTo = view.returnTo || { name: 'home' as const }
     return (
-      <SettingsPage
+      <>
+        {alerts}
+        <SettingsPage
         initialHome={homePlace}
         initialPlanner={plannerSettings}
         error={error}
+        trips={trips}
+        previewTripId={
+          returnTo.name === 'trip' ? returnTo.tripId : trips[0]?.id
+        }
         onBack={() => {
           setError('')
           setView(returnTo)
         }}
+        onOpenLinks={() =>
+          setView({
+            name: 'links',
+            returnTo: { name: 'settings', returnTo },
+          })
+        }
         onSave={(home, planner) => {
           setHomePlace(saveHomePlace(home))
           setPlannerSettings(savePlannerSettings(planner))
@@ -615,13 +670,16 @@ export default function App() {
           setView(returnTo)
         }}
       />
+      </>
     )
   }
 
   if (view.name === 'trip') {
     const trip = trips.find((t) => t.id === view.tripId)
     return (
-      <TripHub
+      <>
+        {alerts}
+        <TripHub
         tripId={view.tripId}
         trip={trip}
         tripName={trip?.name || 'Tur'}
@@ -650,12 +708,25 @@ export default function App() {
             },
           })
         }
+        onOpenLinks={() =>
+          setView({
+            name: 'links',
+            returnTo: {
+              name: 'trip',
+              tripId: view.tripId,
+              tab: view.tab || 'plan',
+            },
+          })
+        }
       />
+      </>
     )
   }
 
   return (
-    <HomePage
+    <>
+      {alerts}
+      <HomePage
       trips={trips}
       tripDayCounts={tripDayCounts}
       loading={loading}
@@ -670,6 +741,10 @@ export default function App() {
       onOpenSettings={() => {
         setError('')
         setView({ name: 'settings', returnTo: { name: 'home' } })
+      }}
+      onOpenLinks={() => {
+        setError('')
+        setView({ name: 'links', returnTo: { name: 'home' } })
       }}
       onOpenTrip={(tripId) => setView({ name: 'trip', tripId })}
       onShowNewTrip={() => {
@@ -687,5 +762,6 @@ export default function App() {
         )
       }}
     />
+    </>
   )
 }

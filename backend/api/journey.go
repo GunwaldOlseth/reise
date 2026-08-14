@@ -43,6 +43,15 @@ func normalizePurpose(value string) string {
 	}
 }
 
+func normalizeConnection(value string) string {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "change":
+		return "change"
+	default:
+		return "direct"
+	}
+}
+
 func normalizeSights(sights []JourneySight) {
 	for i := range sights {
 		sights[i].Purpose = normalizePurpose(sights[i].Purpose)
@@ -232,6 +241,9 @@ func normalizeJourney(j *Journey) {
 			for vi := range existing.Vias {
 				existing.Vias[vi].SortOrder = vi
 				existing.Vias[vi].Purpose = normalizePurpose(existing.Vias[vi].Purpose)
+				existing.Vias[vi].Connection = normalizeConnection(existing.Vias[vi].Connection)
+				existing.Vias[vi].ChangePlace = strings.TrimSpace(existing.Vias[vi].ChangePlace)
+				existing.Vias[vi].ChangeMinutes = strings.TrimSpace(existing.Vias[vi].ChangeMinutes)
 				normalizeSights(existing.Vias[vi].Sights)
 				if existing.Vias[vi].ID == "" {
 					existing.Vias[vi].ID = newJourneyID("via")

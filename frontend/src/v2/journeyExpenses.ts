@@ -13,7 +13,7 @@ import {
   packageOf,
   packageTypeLabel,
   stayNights,
-  viaTransportOptions,
+  chosenTransportOption,
   type Journey,
   type JourneyCost,
   type JourneyStop,
@@ -284,40 +284,40 @@ export function journeyExpenseSummary(journey: Journey): TripExpenseSummary {
     const place = to?.city || ''
     const vias = [...(leg.vias || [])].sort((a, b) => a.sortOrder - b.sortOrder)
     for (const via of vias) {
-      for (const opt of viaTransportOptions(via)) {
-        const expected = (opt.price || '').trim()
-        const actual = (opt.actualPrice || '').trim()
-        const useActual = !!actual
-        const raw = useActual ? actual : expected
-        const resolved = takeAmount(raw)
-        if (resolved === 'empty') continue
-        if (resolved === 'unparsed') {
-          unparsedCount += 1
-          continue
-        }
-        pricedCount += 1
-        const mode = opt.mode || 'transport'
-        const title = [
-          via.title?.trim() || 'Transport',
-          opt.title?.trim() || mode,
-        ]
-          .filter(Boolean)
-          .join(' · ')
-        const line: ExpenseLine = {
-          id: `${via.id}:${opt.id}`,
-          title,
-          date,
-          rawPrice: resolved.raw,
-          amount: resolved.amount,
-          isActual: useActual || undefined,
-          expectedRaw:
-            useActual && expected && expected !== actual
-              ? expected
-              : undefined,
-        }
-        transportLines.push(line)
-        addShare(date, place, 'transport', resolved.amount, line)
+      const opt = chosenTransportOption(via)
+      if (!opt) continue
+      const expected = (opt.price || '').trim()
+      const actual = (opt.actualPrice || '').trim()
+      const useActual = !!actual
+      const raw = useActual ? actual : expected
+      const resolved = takeAmount(raw)
+      if (resolved === 'empty') continue
+      if (resolved === 'unparsed') {
+        unparsedCount += 1
+        continue
       }
+      pricedCount += 1
+      const mode = opt.mode || 'transport'
+      const title = [
+        via.title?.trim() || 'Transport',
+        opt.title?.trim() || mode,
+      ]
+        .filter(Boolean)
+        .join(' · ')
+      const line: ExpenseLine = {
+        id: `${via.id}:${opt.id}`,
+        title,
+        date,
+        rawPrice: resolved.raw,
+        amount: resolved.amount,
+        isActual: useActual || undefined,
+        expectedRaw:
+          useActual && expected && expected !== actual
+            ? expected
+            : undefined,
+      }
+      transportLines.push(line)
+      addShare(date, place, 'transport', resolved.amount, line)
     }
   }
 
