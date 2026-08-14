@@ -25,6 +25,11 @@ dist/
 .env.test.local
 .env.production.local
 
+# Firebase emulator debug logs
+firebase-debug.log
+firestore-debug.log
+ui-debug.log
+
 # IDE and OS files
 .idea/
 .vscode/
