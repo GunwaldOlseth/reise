@@ -68,7 +68,7 @@ create_job() {
       --time-zone="$TZ_NAME" \
       --uri="${BACKEND_URL}${path}" \
       --http-method=POST \
-      --headers="X-Backup-Secret=${SECRET}" \
+      --update-headers="X-Backup-Secret=${SECRET}" \
       --quiet
   else
     gcloud scheduler jobs create http "$name" \

@@ -681,6 +681,7 @@ func getWeather(w http.ResponseWriter, r *http.Request) {
 	country := strings.TrimSpace(r.URL.Query().Get("country"))
 	requestedDate := strings.TrimSpace(r.URL.Query().Get("date"))
 	wantWeek := r.URL.Query().Get("week") == "1" || strings.EqualFold(r.URL.Query().Get("week"), "true")
+	forceLive := r.URL.Query().Get("refresh") == "1" || strings.EqualFold(r.URL.Query().Get("refresh"), "true")
 
 	if city == "" {
 		respondWithError(w, http.StatusBadRequest, "city is required")
@@ -693,9 +694,19 @@ func getWeather(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	archived := latestWeatherSnap(r.Context(), city, country)
+	if shouldServeWeatherFromArchive(archived, forceLive) {
+		respondWithJSON(w, http.StatusOK, weatherResponseFromSnap(city, country, requestedDate, *archived))
+		return
+	}
+
 	place, suggestions, err := resolvePlace(city, country)
 	if err != nil {
 		log.Printf("[Weather] geocode %q: %v (suggestions=%d)", city, err, len(suggestions))
+		if archived != nil {
+			respondWithJSON(w, http.StatusOK, weatherResponseFromSnap(city, country, requestedDate, *archived))
+			return
+		}
 		status := http.StatusNotFound
 		if err.Error() == "city is required" {
 			status = http.StatusBadRequest
@@ -716,6 +727,10 @@ func getWeather(w http.ResponseWriter, r *http.Request) {
 	data, err := fetchForecast(place.Latitude, place.Longitude, forecastDays)
 	if err != nil {
 		log.Printf("[Weather] forecast %s: %v", city, err)
+		if archived != nil {
+			respondWithJSON(w, http.StatusOK, weatherResponseFromSnap(city, country, requestedDate, *archived))
+			return
+		}
 		respondWithError(w, http.StatusBadGateway, err.Error())
 		return
 	}
@@ -757,14 +772,18 @@ func getWeather(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if len(days) >= 2 {
+	if len(days) > 0 {
 		snapDays := append([]weatherDay(nil), days...)
 		var snapCurrent *weatherCurrent
 		if out.Current != nil {
 			c := *out.Current
 			snapCurrent = &c
 		}
-		go saveWeatherSnapshot(context.Background(), out.City, out.Country, snapDays, snapCurrent)
+		archiveCity := city
+		if strings.TrimSpace(archiveCity) == "" {
+			archiveCity = out.City
+		}
+		go saveWeatherSnapshot(context.Background(), archiveCity, country, snapDays, snapCurrent)
 	}
 
 	respondWithJSON(w, http.StatusOK, out)

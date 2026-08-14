@@ -506,16 +506,16 @@ export function JourneyPlanner({
                           {isHome
                             ? `Hjem · ${stop.city || 'Hjem'}`
                             : [
+                                pack?.title?.trim()
+                                  ? pack.title.trim()
+                                  : `${packageTypeLabel(packType)} · ${
+                                      stop.city || 'Pakke'
+                                    }`,
                                 stop.arriveDate && nights > 0
                                   ? `${formatDateNO(stop.arriveDate)}–${formatDateNO(depart)} (${nights}n)`
                                   : stop.arriveDate
                                     ? formatDateNO(stop.arriveDate)
                                     : '',
-                                pack?.title?.trim()
-                                  ? `${packageTypeLabel(packType)} · ${pack.title}`
-                                  : `${packageTypeLabel(packType)} · ${
-                                      stop.city || 'Pakke'
-                                    }`,
                               ]
                                 .filter(Boolean)
                                 .join(' · ')}
@@ -1009,16 +1009,16 @@ function PlaceStopPanel({
           title={open ? 'Skjul by' : 'Åpne by'}
         >
           <span className="v2-place-bits">
+            <span className="v2-place-bit">
+              <PlaceMetaIcon name="city" size={16} />
+              <span className="v2-place-bit-text">{city}</span>
+            </span>
             {dateSpan ? (
               <span className="v2-place-bit">
                 <PlaceMetaIcon name="dates" size={16} />
                 <span className="v2-place-bit-text">{dateSpan}</span>
               </span>
             ) : null}
-            <span className="v2-place-bit">
-              <PlaceMetaIcon name="city" size={16} />
-              <span className="v2-place-bit-text">{city}</span>
-            </span>
             {warnings.length > 0 && (
               <span
                 className="v2-warn-badge"

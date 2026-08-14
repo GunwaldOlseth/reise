@@ -1043,6 +1043,11 @@ html {
   min-width: 0;
 }
 
+.v2-weather-card-title strong {
+  color: var(--v2-accent);
+  font-weight: 700;
+}
+
 .v2-weather-refresh {
   appearance: none;
   display: inline-flex;
@@ -2438,6 +2443,12 @@ html {
   gap: 0.45rem;
   font-size: 0.88rem;
   font-weight: 650;
+  color: var(--v2-accent);
+}
+
+.v2-city-day-head .v2-cruise-day-date {
+  color: var(--v2-accent);
+  font-weight: 750;
 }
 
 .v2-pack-day-programs {
@@ -3735,6 +3746,7 @@ html {
 .v2-day-title {
   font-weight: 600;
   font-size: 0.95rem;
+  color: var(--v2-accent);
 }
 
 .v2-day-body {
@@ -4132,7 +4144,7 @@ html {
 
 .v2-shell .expense-category-head h3,
 .v2-shell .expense-by-day-title {
-  color: var(--v2-label);
+  color: var(--v2-accent);
 }
 
 .v2-shell .expense-line-title,
@@ -4232,6 +4244,8 @@ html {
 
 .v2-live-date strong {
   font-size: 1.05rem;
+  color: var(--v2-accent);
+  font-weight: 700;
 }
 
 .v2-live-alert {

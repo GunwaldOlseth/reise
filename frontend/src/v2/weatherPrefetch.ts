@@ -68,6 +68,7 @@ async function pump() {
       const weather = await api.getWeather(city, item.country.trim(), {
         week: !!item.week,
         date: item.date?.trim() || undefined,
+        refresh: !!item.force,
       })
       setEntry(key, { status: 'ready', weather, suggestions: [] })
     } catch (err: unknown) {

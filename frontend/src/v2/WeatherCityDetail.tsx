@@ -138,7 +138,7 @@ function HistoryChart({
               textAnchor={i === 0 ? 'start' : 'end'}
               className="v2-weather-chart-date"
             >
-              {formatDateNO(p.at.slice(0, 10)).slice(0, 5)}
+              {formatDateNO(p.at.slice(0, 10))}
             </text>
           ) : null}
         </g>
@@ -262,7 +262,7 @@ function WeatherCityDialog({
                 key={d.date}
                 className={d.date === highlight ? 'is-on' : undefined}
               >
-                <strong>{formatDateNO(d.date).slice(0, 5)}</strong>
+                <strong>{formatDateNO(d.date)}</strong>
                 <span>
                   {Math.round(d.tempMax)}° / {Math.round(d.tempMin)}°
                 </span>

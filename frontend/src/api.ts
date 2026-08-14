@@ -1478,13 +1478,15 @@ export const api = {
 
   /**
    * Weather for a city. Always includes today.
-   * Pass week=true only when the trip day is within the next 7 days.
+   * week=true fetches the 7-day forecast (also archived on the backend).
+   * refresh=true forces Open-Meteo; otherwise the API uses Firestore after the first save.
    */
-  getWeather: (city: string, country = '', opts?: { week?: boolean; date?: string }) => {
+  getWeather: (city: string, country = '', opts?: { week?: boolean; date?: string; refresh?: boolean }) => {
     const qs = new URLSearchParams({ city });
     if (country.trim()) qs.set('country', country.trim());
     if (opts?.week) qs.set('week', '1');
     if (opts?.date?.trim()) qs.set('date', opts.date.trim());
+    if (opts?.refresh) qs.set('refresh', '1');
     return request<WeatherReport>(`/weather?${qs.toString()}`);
   },
 

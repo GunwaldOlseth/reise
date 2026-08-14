@@ -102,20 +102,19 @@ function uniqueWeatherPlaces(journey: Journey) {
   >()
   for (const spot of journeyWeatherSpots(journey)) {
     const key = `${spot.city.trim().toLowerCase()}|${spot.country.trim().toLowerCase()}`
-    const week = isWithinNext7Days(spot.date)
     const prev = byKey.get(key)
     if (!prev) {
       byKey.set(key, {
         city: spot.city,
         country: spot.country,
-        week,
+        week: true,
         date: spot.date,
       })
       continue
     }
     byKey.set(key, {
       ...prev,
-      week: prev.week || week,
+      week: true,
       date: prev.date < spot.date ? prev.date : spot.date,
     })
   }
@@ -279,7 +278,7 @@ function SpotWeatherCard({
     refreshWeatherPlace({
       city: place,
       country: nextCountry,
-      week: inRange,
+      week: true,
       date: spot.date.trim() || undefined,
     })
   }
@@ -381,13 +380,15 @@ function SpotWeatherCard({
               </span>
             )}
           </div>
-          <WeatherDaySpark
-            days={weather.days || []}
-            highlight={spot.date}
-            city={localizeCity(city) || city}
-            country={country}
-            weather={weather}
-          />
+          {weather && (
+            <WeatherDaySpark
+              days={weather.days || []}
+              highlight={spot.date}
+              city={localizeCity(city) || city}
+              country={country}
+              weather={weather}
+            />
+          )}
         </div>
       )}
 

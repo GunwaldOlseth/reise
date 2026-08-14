@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { localizeCity } from '../placeNames'
 import { CityInfoTip } from './CityInfoTip'
 import { HolidayCountdown } from './HolidayCountdown'

@@ -11,13 +11,15 @@ import (
 	"time"
 	"unicode"
 
+	"cloud.google.com/go/firestore"
 	"google.golang.org/api/iterator"
 )
 
 const (
-	weatherArchiveCol = "weather_archive"
-	weatherSnapsCol   = "snaps"
-	weatherSnapKeep   = 28
+	weatherArchiveCol     = "weather_archive"
+	weatherSnapsCol       = "snaps"
+	weatherSnapKeep       = 28
+	weatherGlobalCooldown = 2 * time.Hour
 )
 
 type weatherSnap struct {
@@ -95,7 +97,7 @@ func weatherSnapBucket(t time.Time) string {
 }
 
 func saveWeatherSnapshot(ctx context.Context, city, country string, days []weatherDay, current *weatherCurrent) {
-	if db == nil || len(days) < 2 {
+	if db == nil || len(days) == 0 {
 		return
 	}
 	now := osloNow()
@@ -146,6 +148,81 @@ func pruneWeatherSnapsRef(ctx context.Context, placeID string) {
 	for _, id := range drop {
 		_, _ = db.Collection(weatherArchiveCol).Doc(placeID).Collection(weatherSnapsCol).Doc(id).Delete(ctx)
 	}
+}
+
+func parseWeatherSnapTime(snap weatherSnap) time.Time {
+	t, err := time.Parse(time.RFC3339, strings.TrimSpace(snap.FetchedAt))
+	if err != nil {
+		return time.Time{}
+	}
+	return t
+}
+
+func latestWeatherSnap(ctx context.Context, city, country string) *weatherSnap {
+	if db == nil {
+		return nil
+	}
+	id := weatherPlaceID(city, country)
+	col := db.Collection(weatherArchiveCol).Doc(id).Collection(weatherSnapsCol)
+	iter := col.OrderBy("fetchedAt", firestore.Desc).Limit(1).Documents(ctx)
+	doc, err := iter.Next()
+	if err != nil {
+		hist, herr := loadWeatherHistory(ctx, city, country)
+		if herr != nil || hist.Latest == nil || len(hist.Latest.Days) == 0 {
+			return nil
+		}
+		latest := *hist.Latest
+		return &latest
+	}
+	var snap weatherSnap
+	if err := doc.DataTo(&snap); err != nil || len(snap.Days) == 0 {
+		return nil
+	}
+	return &snap
+}
+
+func weatherResponseFromSnap(city, country, requestedDate string, snap weatherSnap) weatherResponse {
+	todayISO := osloTodayISO()
+	days := append([]weatherDay(nil), snap.Days...)
+	forecast := make([]weatherDay, 0, len(days))
+	var today *weatherDay
+	for i := range days {
+		days[i].IsToday = days[i].Date == todayISO
+		if days[i].IsToday {
+			copyDay := days[i]
+			today = &copyDay
+		} else {
+			forecast = append(forecast, days[i])
+		}
+	}
+	out := weatherResponse{
+		City:             city,
+		Country:          country,
+		Today:            today,
+		Current:          snap.Current,
+		Forecast:         forecast,
+		Days:             days,
+		RequestedDate:    requestedDate,
+		RequestedInRange: false,
+		Source:           "archive",
+	}
+	if requestedDate != "" {
+		for i := range days {
+			if days[i].Date == requestedDate {
+				copyDay := days[i]
+				out.Requested = &copyDay
+				out.RequestedInRange = true
+				break
+			}
+		}
+	}
+	return out
+}
+
+// Normal page loads use Firestore when a snapshot exists.
+// After two hours we never call Open-Meteo automatically (cron and Oppdater still do).
+func shouldServeWeatherFromArchive(snap *weatherSnap, force bool) bool {
+	return !force && snap != nil && len(snap.Days) > 0
 }
 
 func loadWeatherHistory(ctx context.Context, city, country string) (weatherHistoryResponse, error) {

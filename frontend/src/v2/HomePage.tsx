@@ -1,6 +1,6 @@
 import { useMemo, useState, type ReactNode } from 'react'
 import { HolidayCountdown } from './HolidayCountdown'
-import { todayIsoOslo } from './journeyModel'
+import { formatDateNO, todayIsoOslo } from './journeyModel'
 import {
   emptyTripFeatures,
   formatTravelers,
@@ -19,8 +19,10 @@ import './v2.css'
 
 function formatDateRange(start: string, end: string) {
   if (!start && !end) return 'Uten datoer'
-  if (start && end && start !== end) return `${start} – ${end}`
-  return start || end
+  if (start && end && start !== end) {
+    return `${formatDateNO(start)} – ${formatDateNO(end)}`
+  }
+  return formatDateNO(start || end)
 }
 
 export function HomePage({

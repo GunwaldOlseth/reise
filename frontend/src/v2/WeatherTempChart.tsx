@@ -180,7 +180,7 @@ export function WeatherTempChart({
                 className="v2-weather-chart-city"
                 transform={`rotate(90 ${xAt(i)} ${height - pad.bottom + 8})`}
               >
-                {p.city} {formatDateNO(p.date).slice(0, 5)}
+                {p.city} {formatDateNO(p.date)}
               </text>
             </g>
           ))}

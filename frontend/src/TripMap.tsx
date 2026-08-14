@@ -18,6 +18,7 @@ import {
   googleMapsPlaceUrl,
 } from './googleMaps'
 import { localizeCity, localizeCountry } from './placeNames'
+import { formatDateNO } from './v2/journeyModel'
 
 function escapeHtml(value: string) {
   return value
@@ -206,12 +207,6 @@ function stackPopupHtml(group: ResolvedStop[]): string {
   return `<div class="trip-map-stack-popup"><strong>${placeName}</strong><div class="meta">${group.length} stopp samme sted</div>${group
     .map(stopPopupLine)
     .join('')}<div style="margin-top:0.35rem">${maps}</div></div>`
-}
-
-function formatDateNO(iso: string) {
-  const m = iso.trim().match(/^(\d{4})-(\d{2})-(\d{2})/)
-  if (m) return `${m[3]}.${m[2]}.${m[1]}`
-  return iso
 }
 
 function formatMapTime(timeKey?: number): string {

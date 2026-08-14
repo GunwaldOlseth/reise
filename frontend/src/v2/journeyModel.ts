@@ -1724,10 +1724,42 @@ export function showOnwardFromHere(
   return hasPlanGapBetween(stop, nextStop)
 }
 
+const MONTHS_NO = [
+  'jan',
+  'feb',
+  'mar',
+  'apr',
+  'mai',
+  'jun',
+  'jul',
+  'aug',
+  'sep',
+  'okt',
+  'nov',
+  'des',
+] as const
+
+const WEEKDAYS_NO = [
+  'søndag',
+  'mandag',
+  'tirsdag',
+  'onsdag',
+  'torsdag',
+  'fredag',
+  'lørdag',
+] as const
+
 export function formatDateNO(iso: string): string {
   if (!iso || iso.length < 10) return iso || ''
-  const [y, m, d] = iso.slice(0, 10).split('-')
-  return `${d}.${m}.${y}`
+  const stamp = iso.slice(0, 10)
+  const [, month, day] = stamp.split('-')
+  const monthName = MONTHS_NO[Number(month) - 1]
+  const dayNum = Number(day)
+  if (!monthName || !Number.isFinite(dayNum) || dayNum < 1) return iso
+  const parsed = new Date(`${stamp}T12:00:00`)
+  if (Number.isNaN(parsed.getTime())) return iso
+  const weekday = WEEKDAYS_NO[parsed.getDay()]
+  return `${weekday} ${String(dayNum).padStart(2, '0')}. ${monthName}`
 }
 
 export function legForGap(
