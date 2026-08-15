@@ -1,13 +1,19 @@
 import { useState } from 'react'
 import { localizeCity, localizeCountry } from '../placeNames'
 import { CityInfoTip } from './CityInfoTip'
-import { journeyVisitPlaces, type Journey } from './journeyModel'
+import {
+  formatDateNO,
+  journeyOverviewRides,
+  journeyVisitPlaces,
+  type Journey,
+} from './journeyModel'
 
-type OverviewPage = 'cities' | 'countries'
+type OverviewPage = 'cities' | 'countries' | 'rides'
 
 export function JourneyOverview({ journey }: { journey: Journey }) {
   const [page, setPage] = useState<OverviewPage>('cities')
   const { cities, countries } = journeyVisitPlaces(journey)
+  const rides = journeyOverviewRides(journey)
 
   return (
     <div className="v2-overview">
@@ -27,6 +33,14 @@ export function JourneyOverview({ journey }: { journey: Journey }) {
           onClick={() => setPage('countries')}
         >
           Land
+        </button>
+        <button
+          type="button"
+          className={`v2-overview-tab${page === 'rides' ? ' is-on' : ''}`}
+          title="Transport med dato"
+          onClick={() => setPage('rides')}
+        >
+          Transport
         </button>
       </nav>
 
@@ -50,6 +64,41 @@ export function JourneyOverview({ journey }: { journey: Journey }) {
                     ) : null}
                   </span>
                   <CityInfoTip text={place.info} docs={place.docs} />
+                </li>
+              ))}
+            </ol>
+          )}
+        </section>
+      )}
+
+      {page === 'rides' && (
+        <section>
+          <h2>Transport</h2>
+          <p className="v2-meta">
+            {rides.length === 0
+              ? 'Ingen avganger ennå. Legg inn transport under Plan.'
+              : `${rides.length} ${rides.length === 1 ? 'etappe' : 'etapper'} i rekkefølge.`}
+          </p>
+          {rides.length > 0 && (
+            <ol className="v2-overview-list is-rides">
+              {rides.map((ride, i) => (
+                <li key={`${ride.id}|${i}`}>
+                  <span className="v2-overview-num">{i + 1}</span>
+                  <span className="v2-overview-main">
+                    {ride.date ? (
+                      <span className="v2-overview-date">
+                        {formatDateNO(ride.date)}
+                      </span>
+                    ) : (
+                      <span className="v2-meta">Uten dato</span>
+                    )}
+                    <strong>
+                      {localizeCity(ride.fromLabel)} → {localizeCity(ride.toLabel)}
+                    </strong>
+                    {ride.detail ? (
+                      <span className="v2-meta">{ride.detail}</span>
+                    ) : null}
+                  </span>
                 </li>
               ))}
             </ol>

@@ -53,6 +53,18 @@ function setEntry(key: string, entry: WeatherCacheEntry) {
   notify()
 }
 
+function pastHistoryDays(weather?: WeatherReport): number {
+  if (!weather) return 0
+  const today = new Date()
+  const todayIso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
+  const days = new Set<string>()
+  for (const o of weather.observations || []) {
+    const day = (o.at || '').slice(0, 10)
+    if (day && day < todayIso) days.add(day)
+  }
+  return days.size
+}
+
 async function pump() {
   if (pumping) return
   pumping = true
@@ -65,11 +77,18 @@ async function pump() {
     if (!city) continue
     setEntry(key, { status: 'loading', suggestions: [] })
     try {
-      const weather = await api.getWeather(city, item.country.trim(), {
-        week: !!item.week,
+      let weather = await api.getWeather(city, item.country.trim(), {
+        week: true,
         date: item.date?.trim() || undefined,
         refresh: !!item.force,
       })
+      if (pastHistoryDays(weather) < 5 && !item.force) {
+        weather = await api.getWeather(city, item.country.trim(), {
+          week: true,
+          date: item.date?.trim() || undefined,
+          refresh: true,
+        })
+      }
       setEntry(key, { status: 'ready', weather, suggestions: [] })
     } catch (err: unknown) {
       const suggestions =
@@ -95,7 +114,14 @@ export function enqueueWeatherPlaces(
     if (!city) continue
     const key = placeWeatherKey(city, place.country)
     const current = cache.get(key)
-    if (!opts?.force && (current?.status === 'ready' || current?.status === 'loading')) {
+    if (
+      !opts?.force &&
+      current?.status === 'ready' &&
+      pastHistoryDays(current.weather) >= 5
+    ) {
+      continue
+    }
+    if (!opts?.force && current?.status === 'loading') {
       continue
     }
     if (!opts?.force && queuedKeys.has(key)) continue

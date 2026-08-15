@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useConfirmDelete } from './ConfirmDelete'
 import { ClockTimeInput } from './ClockTimeInput'
 import { CitySuggestFields } from '../CitySuggest'
 import {
@@ -146,6 +147,7 @@ export function PackageWizard({
   onClose: () => void
   onSave: (stop: JourneyStop) => Promise<void>
 }) {
+  const askDelete = useConfirmDelete()
   const existing = stopId
     ? journey.stops.find(
         (s) => s.id === stopId && isPackageStop(s) && s.kind === packageType,
@@ -441,13 +443,20 @@ export function PackageWizard({
                     type="button"
                     className="btn btn-ghost btn-sm"
                     title="Fjern kostnad"
-                    onClick={() =>
-                      patchPack({
-                        costs: (pack.costs || []).filter(
-                          (c) => c.id !== cost.id,
-                        ),
+                    onClick={() => {
+                      const name = (cost.title || '').trim() || 'kostnaden'
+                      void askDelete({
+                        title: `Slette ${name}?`,
+                        confirmLabel: 'Fjern',
+                      }).then((ok) => {
+                        if (!ok) return
+                        patchPack({
+                          costs: (pack.costs || []).filter(
+                            (c) => c.id !== cost.id,
+                          ),
+                        })
                       })
-                    }
+                    }}
                   >
                     ×
                   </button>

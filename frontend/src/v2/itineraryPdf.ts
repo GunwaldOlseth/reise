@@ -214,7 +214,10 @@ function buildPdf(lines: PdfLine[]): Blob {
   }
   const trailer = `trailer\n<< /Size ${objects.length + 1} /Root ${catalogId} 0 R >>\nstartxref\n${xrefStart}\n%%EOF\n`
   chunks.push(xref, trailer)
-  return new Blob([latin1Bytes(chunks.join(''))], { type: 'application/pdf' })
+  const bytes = latin1Bytes(chunks.join(''))
+  const buffer = new ArrayBuffer(bytes.byteLength)
+  new Uint8Array(buffer).set(bytes)
+  return new Blob([buffer], { type: 'application/pdf' })
 }
 
 function pdfFilename(name: string): string {

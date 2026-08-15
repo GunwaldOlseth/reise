@@ -11,6 +11,7 @@ import {
   packageNightsOf,
   packageOf,
   stopDepartDate,
+  stopGoalLabel,
   todayIsoOslo,
   transportSegments,
   type Journey,
@@ -29,6 +30,10 @@ export interface TimeAlertEvent {
 }
 
 const FIRED_KEY = 'reise.firedTimeAlerts'
+
+function placeName(name?: string | null): string {
+  return localizeCity(name) || (name || '').trim()
+}
 
 function hopFromLabel(prev: JourneyStop | JourneyVia): string {
   if ('kind' in prev) {
@@ -86,7 +91,11 @@ function collectTravelEvents(journey: Journey, date: string): TimeAlertEvent[] {
       const opt = chosenTransportOption(via)
       if (!opt) continue
       const fromLabel = hopFromLabel(prev)
-      const toLabel = placeName(via.title || to.city)
+      const toLabel = placeName(
+        s === segs.length - 1
+          ? stopGoalLabel(to, via.title || to.city)
+          : via.title || to.city,
+      )
       const start = (opt.startTime || '').trim()
       const end = (opt.endTime || '').trim()
       if (onDepartDay && start) {

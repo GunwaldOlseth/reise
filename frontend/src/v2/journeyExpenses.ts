@@ -14,6 +14,8 @@ import {
   packageTypeLabel,
   stayNights,
   chosenTransportOption,
+  effectiveTransportPrice,
+  legTravelDate,
   type Journey,
   type JourneyCost,
   type JourneyStop,
@@ -279,8 +281,9 @@ export function journeyExpenseSummary(journey: Journey): TripExpenseSummary {
   }
 
   for (const leg of journey.legs || []) {
+    const from = stops.find((s) => s.id === leg.fromStopId)
     const to = stops.find((s) => s.id === leg.toStopId)
-    const date = to?.arriveDate || ''
+    const date = legTravelDate(from, to)
     const place = to?.city || ''
     const vias = [...(leg.vias || [])].sort((a, b) => a.sortOrder - b.sortOrder)
     for (const via of vias) {
@@ -289,7 +292,7 @@ export function journeyExpenseSummary(journey: Journey): TripExpenseSummary {
       const expected = (opt.price || '').trim()
       const actual = (opt.actualPrice || '').trim()
       const useActual = !!actual
-      const raw = useActual ? actual : expected
+      const raw = effectiveTransportPrice(opt)
       const resolved = takeAmount(raw)
       if (resolved === 'empty') continue
       if (resolved === 'unparsed') {

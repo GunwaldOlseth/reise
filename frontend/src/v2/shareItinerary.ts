@@ -2,6 +2,8 @@ import { formatTravelers, type Trip } from '../api'
 import {
   addDaysIso,
   chosenTransportOption,
+  formatChangeTimeLabel,
+  formatCityStation,
   formatDateNO,
   formatPackageDayListLine,
   isPackageStop,
@@ -67,11 +69,24 @@ export function sharePageUrl(token: string): string {
   return `${window.location.origin}/d/${encodeURIComponent(token)}`
 }
 
+function isLocalPage(): boolean {
+  const host = window.location.hostname
+  return host === 'localhost' || host === '127.0.0.1'
+}
+
+/** Windows desktop share sheet often says the page cannot be shared. */
+function shouldUseNativeShare(): boolean {
+  if (typeof navigator.share !== 'function') return false
+  if (isLocalPage()) return false
+  if (window.location.protocol !== 'https:') return false
+  return /Android|iPhone|iPad|iPod/i.test(navigator.userAgent || '')
+}
+
 export async function shareOrCopy(
   url: string,
   title: string,
-): Promise<'shared' | 'copied'> {
-  if (typeof navigator.share === 'function') {
+): Promise<'shared' | 'copied' | 'copied-local'> {
+  if (shouldUseNativeShare()) {
     try {
       await navigator.share({ title, text: title, url })
       return 'shared'
@@ -80,7 +95,7 @@ export async function shareOrCopy(
     }
   }
   await navigator.clipboard.writeText(url)
-  return 'copied'
+  return isLocalPage() ? 'copied-local' : 'copied'
 }
 
 export function formatShareDateRange(start: string, end: string): string {
@@ -101,7 +116,7 @@ export function shareStopTitle(stop: JourneyStop): string {
   if (stop.kind === 'home') {
     return (stop.city || stop.address || 'Hjem').trim()
   }
-  return (stop.city || stop.address || 'Sted').trim()
+  return formatCityStation(stop.city, stop.station) || (stop.address || '').trim() || 'Sted'
 }
 
 /** First row on the hop after current sort — not the kvitterte. */
@@ -156,20 +171,15 @@ export function formatShareHop(
   detailed = false,
 ): string {
   const opt = pickTransportOption(via, pick)
-  const place = (via.title || '').trim()
+  const place = formatCityStation(via.title, via.station)
   const bits: string[] = []
   if (opt) {
     const bit = formatTransportBit(opt, detailed)
     if (bit) bits.push(bit)
   }
   if (place) bits.push(place)
-  if (via.connection === 'change') {
-    const mins = (via.changeMinutes || '').trim()
-    const at = (via.changePlace || '').trim()
-    if (at && mins) bits.push(`bytte ${at} ${mins} min`)
-    else if (at) bits.push(`bytte ${at}`)
-    else if (mins) bits.push(`bytte ${mins} min`)
-  }
+  const change = formatChangeTimeLabel(via, opt)
+  if (change) bits.push(change)
   return bits.filter(Boolean).join(' · ')
 }
 

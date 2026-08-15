@@ -243,6 +243,7 @@ func normalizeJourney(j *Journey) {
 				existing.Vias[vi].Purpose = normalizePurpose(existing.Vias[vi].Purpose)
 				existing.Vias[vi].Connection = normalizeConnection(existing.Vias[vi].Connection)
 				existing.Vias[vi].ChangePlace = strings.TrimSpace(existing.Vias[vi].ChangePlace)
+				existing.Vias[vi].ChangePlatform = strings.TrimSpace(existing.Vias[vi].ChangePlatform)
 				existing.Vias[vi].ChangeMinutes = strings.TrimSpace(existing.Vias[vi].ChangeMinutes)
 				normalizeSights(existing.Vias[vi].Sights)
 				if existing.Vias[vi].ID == "" {

@@ -70,6 +70,7 @@ export function TripHub({
   initialTab = 'plan',
   onBack,
   onOpenSettings,
+  onOpenAppearance,
   onOpenLinks,
   onTripDeleted,
   onTripUpdated,
@@ -83,6 +84,7 @@ export function TripHub({
   initialTab?: TripHubTab
   onBack: () => void
   onOpenSettings: () => void
+  onOpenAppearance: () => void
   onOpenLinks: () => void
   onTripDeleted: () => void
   trip?: Trip | null
@@ -216,7 +218,13 @@ export function TripHub({
       const { token } = await api.ensureShare(tripId)
       const url = sharePageUrl(token)
       const result = await shareOrCopy(url, tripName || 'Reise')
-      setShareHint(result === 'copied' ? 'Lenke kopiert' : '')
+      setShareHint(
+        result === 'copied-local'
+          ? 'Lokal — del fra Cloud Run'
+          : result === 'copied'
+            ? 'Lenke kopiert'
+            : '',
+      )
     } catch (err) {
       if (err instanceof Error && err.name === 'AbortError') return
       setShareHint('Kunne ikke dele')
@@ -292,6 +300,16 @@ export function TripHub({
                   }}
                 >
                   Rediger tur…
+                </button>
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    setMenuOpen(false)
+                    onOpenAppearance()
+                  }}
+                >
+                  Utseende
                 </button>
                 <button
                   type="button"

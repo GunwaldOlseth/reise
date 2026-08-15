@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useConfirmDelete } from './ConfirmDelete'
 import {
   isSafeHttpUrl,
   loadUsefulLinks,
@@ -16,6 +17,7 @@ function persist(next: UsefulLink[]): UsefulLink[] {
 }
 
 export function UsefulLinksCard({ onOpenPage }: { onOpenPage: () => void }) {
+  const askDelete = useConfirmDelete()
   const [links, setLinks] = useState<UsefulLink[]>(() => loadUsefulLinks())
   const [draftTitle, setDraftTitle] = useState('')
   const [draftUrl, setDraftUrl] = useState('')
@@ -116,7 +118,14 @@ export function UsefulLinksCard({ onOpenPage }: { onOpenPage: () => void }) {
                   type="button"
                   className="btn btn-ghost btn-sm"
                   title={`Fjern ${usefulLinkTitle(link)}`}
-                  onClick={() => commit(links.filter((l) => l.id !== link.id))}
+                  onClick={() => {
+                    void askDelete({
+                      title: `Slette ${usefulLinkTitle(link)}?`,
+                      confirmLabel: 'Fjern',
+                    }).then((ok) => {
+                      if (ok) commit(links.filter((l) => l.id !== link.id))
+                    })
+                  }}
                 >
                   Fjern
                 </button>

@@ -10,6 +10,7 @@ import {
   type JourneyActivity,
   type JourneyActivityKind,
 } from './journeyModel'
+import { useConfirmDelete } from './ConfirmDelete'
 import { PurposeToggle } from './PurposeToggle'
 
 function ordered(list: JourneyActivity[]): JourneyActivity[] {
@@ -53,6 +54,7 @@ export function SightList({
   dayOffset?: number
   onChange: (sights: JourneyActivity[]) => void
 }) {
+  const askDelete = useConfirmDelete()
   const [draft, setDraft] = useState<JourneyActivity[]>(() =>
     ordered([...(sights || [])].sort((a, b) => a.sortOrder - b.sortOrder)),
   )
@@ -167,12 +169,17 @@ export function SightList({
   }
 
   function remove(idx: number) {
-    const id = draft[idx]?.id
-    emit(
-      draft.filter((_, i) => i !== idx),
-      true,
-    )
-    if (id && openId === id) setOpenId(null)
+    const row = draft[idx]
+    const id = row?.id
+    const name = row?.title.trim() || activityKindLabel(row?.kind)
+    void askDelete({ title: `Slette ${name}?` }).then((ok) => {
+      if (!ok) return
+      emit(
+        draft.filter((_, i) => i !== idx),
+        true,
+      )
+      if (id && openId === id) setOpenId(null)
+    })
   }
 
   return (
@@ -292,7 +299,7 @@ export function SightList({
                       {[
                         timeBits,
                         sight.notes?.trim(),
-                        purpose === 'transfer' ? 'Bare bytte' : '',
+                        purpose === 'transfer' ? 'Ikke stopp' : '',
                       ]
                         .filter(Boolean)
                         .join(' · ')}
@@ -417,7 +424,7 @@ export function SightPreview({ sights }: { sights?: JourneyActivity[] | null }) 
             .join(' ')}
           title={
             activityPurpose(s) === 'transfer'
-              ? `${activityKindLabel(s.kind)} · Bare bytte`
+              ? `${activityKindLabel(s.kind)} · Ikke stopp`
               : activityKindLabel(s.kind)
           }
         >
@@ -474,7 +481,7 @@ export function PlaceLinkedPreview({
             .join(' ')}
           title={
             activityPurpose(s) === 'transfer'
-              ? `${activityKindLabel(s.kind)} · Bare bytte`
+              ? `${activityKindLabel(s.kind)} · Ikke stopp`
               : activityKindLabel(s.kind)
           }
         >

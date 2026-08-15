@@ -2,13 +2,41 @@ import { arriveTimeSortKey, AT_SEA_LABEL, type TripMapStop } from '../api'
 import {
   addDaysIso,
   chosenTransportOption,
+  clockMinutesFromMidnight,
   geoCoordsOf,
   isPackageStop,
+  legTravelDurationMinutes,
+  optionDurationMinutes,
   packageFreeDayLabel,
   packageOf,
+  samePlaceName,
   type Journey,
+  type JourneyPackageDay,
   type JourneyStop,
 } from './journeyModel'
+
+function stopMapName(stop: JourneyStop): string {
+  if (isPackageStop(stop)) {
+    return (packageOf(stop)?.basePlace || stop.city || '').trim()
+  }
+  if (stop.kind === 'home') {
+    return (stop.address || stop.city || '').trim()
+  }
+  return (stop.city || '').trim()
+}
+
+function packagePortMinutes(
+  from?: Pick<JourneyPackageDay, 'offset' | 'leaveTime'> | null,
+  to?: Pick<JourneyPackageDay, 'offset' | 'arriveTime'> | null,
+): number | null {
+  if (!from || !to) return null
+  const start = clockMinutesFromMidnight(from.leaveTime)
+  const end = clockMinutesFromMidnight(to.arriveTime)
+  if (start == null || end == null) return null
+  const dayGap = Math.max(0, (to.offset || 0) - (from.offset || 0))
+  const diff = end - start + dayGap * 24 * 60
+  return diff > 0 ? diff : null
+}
 
 /**
  * Map stops from the v2 journey thread: via hops on legs, then each place /
@@ -23,6 +51,7 @@ export function journeyMapStopsInOrder(journey: Journey): TripMapStop[] {
   for (let i = 0; i < stops.length; i++) {
     const stop = stops[i]
     const prev = i > 0 ? stops[i - 1] : null
+    let destHopMins: number | undefined
     if (prev) {
       const leg = journey.legs.find(
         (l) => l.fromStopId === prev.id && l.toStopId === stop.id,
@@ -30,10 +59,19 @@ export function journeyMapStopsInOrder(journey: Journey): TripMapStop[] {
       const vias = [...(leg?.vias || [])].sort(
         (a, b) => a.sortOrder - b.sortOrder,
       )
+      const destName = stopMapName(stop)
+      const fromName = stopMapName(prev)
       for (const via of vias) {
         const title = via.title?.trim()
         if (!title) continue
         const opt = chosenTransportOption(via)
+        const hopMins = opt ? optionDurationMinutes(opt) : null
+        if (samePlaceName(title, destName) || samePlaceName(title, fromName)) {
+          if (samePlaceName(title, destName)) {
+            destHopMins = hopMins ?? destHopMins
+          }
+          continue
+        }
         const timeRaw = opt?.startTime || via.startTime || via.endTime || ''
         const timeKey = arriveTimeSortKey(timeRaw)
         const coords = geoCoordsOf(via.latitude, via.longitude)
@@ -48,12 +86,13 @@ export function journeyMapStopsInOrder(journey: Journey): TripMapStop[] {
             timeKey === Number.POSITIVE_INFINITY ? undefined : timeKey,
           latitude: coords?.latitude,
           longitude: coords?.longitude,
+          inboundMinutes: hopMins ?? undefined,
         })
       }
     }
 
     if (isPackageStop(stop)) {
-      pushPackageMapStops(out, stop)
+      pushPackageMapStops(out, stop, destHopMins)
       continue
     }
 
@@ -62,6 +101,18 @@ export function journeyMapStopsInOrder(journey: Journey): TripMapStop[] {
     if (!city && !address) continue
     const label = stop.kind === 'home' && address ? address : city || address || ''
     const coords = geoCoordsOf(stop.latitude, stop.longitude)
+    const inboundLeg = prev
+      ? journey.legs.find(
+          (l) => l.fromStopId === prev.id && l.toStopId === stop.id,
+        )
+      : undefined
+    const viaCount = inboundLeg?.vias?.filter((v) => v.title?.trim()).length || 0
+    const legMins =
+      prev && viaCount === 0 ? legTravelDurationMinutes(inboundLeg) : null
+    const last = out[out.length - 1]
+    if (last && last.kind !== 'sea' && samePlaceName(last.city, label)) {
+      continue
+    }
     out.push({
       kind: 'port',
       city: label,
@@ -71,13 +122,18 @@ export function journeyMapStopsInOrder(journey: Journey): TripMapStop[] {
       contextCity: stop.kind === 'home' && address ? city : undefined,
       latitude: coords?.latitude,
       longitude: coords?.longitude,
+      inboundMinutes: destHopMins ?? legMins ?? undefined,
     })
   }
 
   return out
 }
 
-function pushPackageMapStops(out: TripMapStop[], stop: JourneyStop) {
+function pushPackageMapStops(
+  out: TripMapStop[],
+  stop: JourneyStop,
+  firstInboundMins?: number,
+) {
   const pack = packageOf(stop)
   if (!pack) {
     const city = stop.city?.trim()
@@ -100,6 +156,7 @@ function pushPackageMapStops(out: TripMapStop[], stop: JourneyStop) {
   const days = [...(pack.days || [])].sort((a, b) => a.offset - b.offset)
   const byOffset = new Map(days.map((d) => [d.offset, d]))
   const baseCoords = geoCoordsOf(pack.baseLatitude, pack.baseLongitude)
+  let lastPort: Pick<JourneyPackageDay, 'offset' | 'leaveTime'> | null = null
   for (let offset = 0; offset <= nights; offset++) {
     const day = byOffset.get(offset)
     const date = stop.arriveDate
@@ -140,6 +197,20 @@ function pushPackageMapStops(out: TripMapStop[], stop: JourneyStop) {
       city.toLowerCase() === (pack.basePlace || '').trim().toLowerCase()
         ? baseCoords || geoCoordsOf(stop.latitude, stop.longitude)
         : undefined)
+    const hopMins =
+      packagePortMinutes(lastPort, {
+        offset,
+        arriveTime: day?.arriveTime,
+      }) ??
+      (lastPort ? null : firstInboundMins ?? null)
+    const last = out[out.length - 1]
+    if (last && last.kind !== 'sea' && samePlaceName(last.city, city)) {
+      lastPort = {
+        offset,
+        leaveTime: day?.leaveTime,
+      }
+      continue
+    }
     out.push({
       kind: 'port',
       city,
@@ -150,7 +221,12 @@ function pushPackageMapStops(out: TripMapStop[], stop: JourneyStop) {
         arriveKey === Number.POSITIVE_INFINITY ? undefined : arriveKey,
       latitude: dayCoords?.latitude,
       longitude: dayCoords?.longitude,
+      inboundMinutes: hopMins ?? undefined,
     })
+    lastPort = {
+      offset,
+      leaveTime: day?.leaveTime,
+    }
   }
 }
 
@@ -158,7 +234,7 @@ export function journeyMapRouteKey(journey: Journey): string {
   return journeyMapStopsInOrder(journey)
     .map(
       (s) =>
-        `${s.key}:${s.date}:${s.city}:${s.latitude ?? ''}:${s.longitude ?? ''}`,
+        `${s.key}:${s.date}:${s.city}:${s.inboundMinutes ?? ''}:${s.latitude ?? ''}:${s.longitude ?? ''}`,
     )
     .join('|')
 }

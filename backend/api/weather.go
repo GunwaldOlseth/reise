@@ -37,19 +37,29 @@ type weatherCurrent struct {
 	Icon        string  `json:"icon"`
 }
 
+// weatherObservation is actual weather at a point in time (not a forecast day).
+type weatherObservation struct {
+	At          string  `json:"at"`
+	Temperature float64 `json:"temperature"`
+	WeatherCode int     `json:"weatherCode"`
+	Summary     string  `json:"summary"`
+	Icon        string  `json:"icon"`
+}
+
 type weatherResponse struct {
-	City             string          `json:"city"`
-	Country          string          `json:"country"`
-	Latitude         float64         `json:"latitude"`
-	Longitude        float64         `json:"longitude"`
-	Today            *weatherDay     `json:"today,omitempty"`
-	Current          *weatherCurrent `json:"current,omitempty"`
-	Forecast         []weatherDay    `json:"forecast"` // upcoming days within 1 week (excl. today)
-	Days             []weatherDay    `json:"days"`     // today + forecast (max 7 days)
-	RequestedDate    string          `json:"requestedDate,omitempty"`
-	Requested        *weatherDay     `json:"requested,omitempty"`
-	RequestedInRange bool            `json:"requestedInRange"`
-	Source           string          `json:"source"`
+	City             string               `json:"city"`
+	Country          string               `json:"country"`
+	Latitude         float64              `json:"latitude"`
+	Longitude        float64              `json:"longitude"`
+	Today            *weatherDay          `json:"today,omitempty"`
+	Current          *weatherCurrent      `json:"current,omitempty"`
+	Forecast         []weatherDay         `json:"forecast"` // upcoming days within 1 week (excl. today)
+	Days             []weatherDay         `json:"days"`     // today + forecast (max 7 days)
+	Observations     []weatherObservation `json:"observations"`
+	RequestedDate    string               `json:"requestedDate,omitempty"`
+	Requested        *weatherDay          `json:"requested,omitempty"`
+	RequestedInRange bool                 `json:"requestedInRange"`
+	Source           string               `json:"source"`
 }
 
 type placeSuggestion struct {
@@ -86,13 +96,20 @@ type meteoPayload struct {
 		WeatherCode2 int     `json:"weathercode"` // legacy alias
 	} `json:"current"`
 	Daily struct {
-		Time             []string  `json:"time"`
-		WeatherCode      []int     `json:"weather_code"`
-		WeatherCodeLegacy []int    `json:"weathercode"`
-		TemperatureMax   []float64 `json:"temperature_2m_max"`
-		TemperatureMin   []float64 `json:"temperature_2m_min"`
-		PrecipitationSum []float64 `json:"precipitation_sum"`
+		Time              []string  `json:"time"`
+		WeatherCode       []int     `json:"weather_code"`
+		WeatherCodeLegacy []int     `json:"weathercode"`
+		TemperatureMax    []float64 `json:"temperature_2m_max"`
+		TemperatureMin    []float64 `json:"temperature_2m_min"`
+		TemperatureMean   []float64 `json:"temperature_2m_mean"`
+		PrecipitationSum  []float64 `json:"precipitation_sum"`
 	} `json:"daily"`
+	Hourly struct {
+		Time         []string  `json:"time"`
+		Temperature  []float64 `json:"temperature_2m"`
+		WeatherCode  []int     `json:"weather_code"`
+		WeatherCode2 []int     `json:"weathercode"`
+	} `json:"hourly"`
 }
 
 func (m meteoPayload) dailyCodes() []int {
@@ -110,6 +127,131 @@ func (m meteoPayload) currentCode() int {
 		return m.Current.WeatherCode
 	}
 	return m.Current.WeatherCode2
+}
+
+func (m meteoPayload) hourlyCodes() []int {
+	if len(m.Hourly.WeatherCode) > 0 {
+		return m.Hourly.WeatherCode
+	}
+	return m.Hourly.WeatherCode2
+}
+
+func currentFromMeteo(data meteoPayload) *weatherCurrent {
+	if data.Current == nil {
+		return nil
+	}
+	code := data.currentCode()
+	summary, icon := weatherCodeInfo(code)
+	return &weatherCurrent{
+		Temperature: data.Current.Temperature,
+		WeatherCode: code,
+		Summary:     summary,
+		Icon:        icon,
+	}
+}
+
+func parseMeteoHour(raw string) (time.Time, bool) {
+	raw = strings.TrimSpace(raw)
+	for _, layout := range []string{
+		"2006-01-02T15:04",
+		"2006-01-02T15:04:05",
+		time.RFC3339,
+	} {
+		if t, err := time.Parse(layout, raw); err == nil {
+			return t, true
+		}
+	}
+	return time.Time{}, false
+}
+
+func observationFromCurrent(at time.Time, cur *weatherCurrent) weatherObservation {
+	if cur == nil {
+		return weatherObservation{}
+	}
+	return weatherObservation{
+		At:          at.Format(time.RFC3339),
+		Temperature: cur.Temperature,
+		WeatherCode: cur.WeatherCode,
+		Summary:     cur.Summary,
+		Icon:        cur.Icon,
+	}
+}
+
+func putObservation(byBucket map[string]weatherObservation, obs weatherObservation, at time.Time) {
+	id := weatherSnapBucket(at)
+	byBucket[id] = obs
+}
+
+func dailyMeanTemp(data meteoPayload, i int) float64 {
+	if i >= 0 && i < len(data.Daily.TemperatureMean) {
+		return data.Daily.TemperatureMean[i]
+	}
+	return (atIndex(data.Daily.TemperatureMin, i) + atIndex(data.Daily.TemperatureMax, i)) / 2
+}
+
+func observationAt(at time.Time, temp float64, code int) weatherObservation {
+	summary, icon := weatherCodeInfo(code)
+	return weatherObservation{
+		At:          at.Format(time.RFC3339),
+		Temperature: temp,
+		WeatherCode: code,
+		Summary:     summary,
+		Icon:        icon,
+	}
+}
+
+// Past 5 days (08 + 19) from daily actuals, overwritten by hourly when present, plus "now".
+func observationsFromHourly(data meteoPayload, current *weatherCurrent) []weatherObservation {
+	now := osloNow()
+	today := now.Format("2006-01-02")
+	oldest := addDaysISO(today, -5)
+	byBucket := map[string]weatherObservation{}
+	codes := data.dailyCodes()
+
+	for i, date := range data.Daily.Time {
+		if date < oldest || date >= today {
+			continue
+		}
+		code := atIndexInt(codes, i)
+		minT := atIndex(data.Daily.TemperatureMin, i)
+		maxT := atIndex(data.Daily.TemperatureMax, i)
+		mean := dailyMeanTemp(data, i)
+		if minT == 0 && maxT == 0 && mean == 0 {
+			minT, maxT = mean, mean
+		}
+		morning, _ := time.Parse("2006-01-02T15:04", date+"T08:00")
+		evening, _ := time.Parse("2006-01-02T15:04", date+"T19:00")
+		putObservation(byBucket, observationAt(morning, minT, code), morning)
+		putObservation(byBucket, observationAt(evening, maxT, code), evening)
+	}
+
+	hourlyCodes := data.hourlyCodes()
+	for i, raw := range data.Hourly.Time {
+		t, ok := parseMeteoHour(raw)
+		if !ok {
+			continue
+		}
+		hour := t.Hour()
+		if hour != 8 && hour != 19 {
+			continue
+		}
+		date := t.Format("2006-01-02")
+		if date < oldest || date > today || t.After(now) {
+			continue
+		}
+		putObservation(byBucket, observationAt(t, atIndex(data.Hourly.Temperature, i), atIndexInt(hourlyCodes, i)), t)
+	}
+
+	if current != nil {
+		putObservation(byBucket, observationFromCurrent(now, current), now)
+	}
+
+	out := make([]weatherObservation, 0, len(byBucket))
+	for _, obs := range byBucket {
+		out = append(out, obs)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].At < out[j].At })
+	return out
 }
 
 func weatherCodeInfo(code int) (summary, icon string) {
@@ -372,8 +514,8 @@ func atIndexInt(ints []int, i int) int {
 	return ints[i]
 }
 
-// fetchForecast returns local daily weather. days=1 is today only; days=7 is today + week ahead.
-// Uses forecast_days (not start_date/end_date) to avoid UTC/timezone range errors.
+// fetchForecast returns current weather, hourly actuals for the last 5 days,
+// and daily forecast. days=1 is today only; days=7 is today + week ahead.
 func fetchForecast(lat, lon float64, days int) (meteoPayload, error) {
 	if days < 1 {
 		days = 1
@@ -382,14 +524,14 @@ func fetchForecast(lat, lon float64, days int) (meteoPayload, error) {
 		days = 7
 	}
 	u := fmt.Sprintf(
-		"https://api.open-meteo.com/v1/forecast?latitude=%f&longitude=%f&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum&current=temperature_2m,weather_code&timezone=auto&forecast_days=%d",
+		"https://api.open-meteo.com/v1/forecast?latitude=%f&longitude=%f&daily=weather_code,temperature_2m_max,temperature_2m_min,temperature_2m_mean,precipitation_sum&hourly=temperature_2m,weather_code&current=temperature_2m,weather_code&timezone=auto&forecast_days=%d&past_days=5",
 		lat, lon, days,
 	)
 	var data meteoPayload
 	if err := fetchJSON(u, &data); err != nil {
 		return meteoPayload{}, err
 	}
-	if len(data.Daily.Time) == 0 {
+	if data.Current == nil && len(data.Daily.Time) == 0 && len(data.Hourly.Time) == 0 {
 		return meteoPayload{}, fmt.Errorf("ingen værdata")
 	}
 	return data, nil
@@ -399,12 +541,12 @@ func buildWeatherDays(data meteoPayload) (today *weatherDay, forecast []weatherD
 	forecast = []weatherDay{}
 	all = []weatherDay{}
 	codes := data.dailyCodes()
-	// First day from Open-Meteo (location-local) is "today".
-	todayISO := ""
-	if len(data.Daily.Time) > 0 {
-		todayISO = data.Daily.Time[0]
-	}
+	todayISO := osloTodayISO()
+	oldest := addDaysISO(todayISO, -5)
 	for i, date := range data.Daily.Time {
+		if date < oldest {
+			continue
+		}
 		code := atIndexInt(codes, i)
 		summary, icon := weatherCodeInfo(code)
 		day := weatherDay{
@@ -676,6 +818,17 @@ func getPlaces(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func pastDayCount(days []weatherDay) int {
+	today := osloTodayISO()
+	n := 0
+	for _, d := range days {
+		if d.Date != "" && d.Date < today {
+			n++
+		}
+	}
+	return n
+}
+
 func getWeather(w http.ResponseWriter, r *http.Request) {
 	city := strings.TrimSpace(r.URL.Query().Get("city"))
 	country := strings.TrimSpace(r.URL.Query().Get("country"))
@@ -695,8 +848,14 @@ func getWeather(w http.ResponseWriter, r *http.Request) {
 	}
 
 	archived := latestWeatherSnap(r.Context(), city, country)
-	if shouldServeWeatherFromArchive(archived, forceLive) {
-		respondWithJSON(w, http.StatusOK, weatherResponseFromSnap(city, country, requestedDate, *archived))
+	hist, _ := loadWeatherHistory(r.Context(), city, country)
+	archivedObs := observationsFromSnaps(hist.Snapshots)
+	if shouldServeWeatherFromArchive(archived, forceLive) &&
+		!needsPastBackfill(archivedObs) &&
+		pastDayCount(archived.Days) >= 5 {
+		out := weatherResponseFromSnap(city, country, requestedDate, *archived)
+		out.Observations = archivedObs
+		respondWithJSON(w, http.StatusOK, out)
 		return
 	}
 
@@ -704,7 +863,9 @@ func getWeather(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		log.Printf("[Weather] geocode %q: %v (suggestions=%d)", city, err, len(suggestions))
 		if archived != nil {
-			respondWithJSON(w, http.StatusOK, weatherResponseFromSnap(city, country, requestedDate, *archived))
+			out := weatherResponseFromSnap(city, country, requestedDate, *archived)
+			out.Observations = archivedObs
+			respondWithJSON(w, http.StatusOK, out)
 			return
 		}
 		status := http.StatusNotFound
@@ -728,7 +889,9 @@ func getWeather(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		log.Printf("[Weather] forecast %s: %v", city, err)
 		if archived != nil {
-			respondWithJSON(w, http.StatusOK, weatherResponseFromSnap(city, country, requestedDate, *archived))
+			out := weatherResponseFromSnap(city, country, requestedDate, *archived)
+			out.Observations = archivedObs
+			respondWithJSON(w, http.StatusOK, out)
 			return
 		}
 		respondWithError(w, http.StatusBadGateway, err.Error())
@@ -736,6 +899,8 @@ func getWeather(w http.ResponseWriter, r *http.Request) {
 	}
 
 	todayDay, forecast, days := buildWeatherDays(data)
+	current := currentFromMeteo(data)
+	obs := observationsFromHourly(data, current)
 
 	out := weatherResponse{
 		City:             localizeCity(place.Name),
@@ -743,22 +908,13 @@ func getWeather(w http.ResponseWriter, r *http.Request) {
 		Latitude:         place.Latitude,
 		Longitude:        place.Longitude,
 		Today:            todayDay,
+		Current:          current,
 		Forecast:         forecast,
 		Days:             days,
+		Observations:     obs,
 		RequestedDate:    requestedDate,
 		RequestedInRange: false,
-		Source:           "forecast",
-	}
-
-	if data.Current != nil {
-		code := data.currentCode()
-		summary, icon := weatherCodeInfo(code)
-		out.Current = &weatherCurrent{
-			Temperature: data.Current.Temperature,
-			WeatherCode: code,
-			Summary:     summary,
-			Icon:        icon,
-		}
+		Source:           "observed",
 	}
 
 	if requestedDate != "" {
@@ -772,19 +928,11 @@ func getWeather(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if len(days) > 0 {
-		snapDays := append([]weatherDay(nil), days...)
-		var snapCurrent *weatherCurrent
-		if out.Current != nil {
-			c := *out.Current
-			snapCurrent = &c
-		}
-		archiveCity := city
-		if strings.TrimSpace(archiveCity) == "" {
-			archiveCity = out.City
-		}
-		go saveWeatherSnapshot(context.Background(), archiveCity, country, snapDays, snapCurrent)
+	archiveCity := city
+	if strings.TrimSpace(archiveCity) == "" {
+		archiveCity = out.City
 	}
+	go persistWeatherObservations(context.Background(), archiveCity, country, days, current, obs)
 
 	respondWithJSON(w, http.StatusOK, out)
 }

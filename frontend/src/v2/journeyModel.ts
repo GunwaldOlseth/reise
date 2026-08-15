@@ -15,8 +15,9 @@ export type JourneyPackageType =
 
 export type JourneyStopKind = 'place' | 'home' | JourneyPackageType
 
-/** Visit the city, or only change transport there. */
+/** Visit the city, or pass through without staying (ticket via). */
 export type PlacePurpose = 'visit' | 'transfer'
+/** Same-mode connection on one ride (train→train, bus→bus). Not bus→train. */
 export type RideConnection = 'direct' | 'change'
 
 export const PACKAGE_TYPES: JourneyPackageType[] = [
@@ -153,6 +154,8 @@ export interface JourneyStop {
   latitude?: number
   longitude?: number
   address?: string
+  /** Arrival station / terminal for this city (shown with hovedmål). */
+  station?: string
   arriveDate: string
   kind: JourneyStopKind
   stay?: JourneyStay | null
@@ -281,14 +284,41 @@ export interface JourneyTransportOption {
   info?: string
   /** Expected price (free text). */
   price?: string
-  /** Actual cost after travel (overrides price in expense totals). */
+  /** Actual cost after travel. Empty → expected `price` is used in expenses. */
   actualPrice?: string
   /** This is the alternative we took — used in expenses. */
   taken?: boolean
   /** Ticket is bought for this departure. */
   ticket?: boolean
+  /** This ride is direct, or has a change along the way. */
+  connection?: RideConnection
+  /** Station/city where this ride changes. */
+  changePlace?: string
+  /** Line / train name after the change. */
+  changeTitle?: string
+  /** Departure of the connecting ride. */
+  changeStartTime?: string
+  /** Arrival of the connecting ride. */
+  changeEndTime?: string
+  /** Platform at the change. */
+  changePlatform?: string
+  /** Recommended minutes for the change on this ride. */
+  changeMinutes?: string
+  /** Extra same-mode changes on this ride (after the first). */
+  changes?: JourneyLineChange[]
   /** @deprecated Multi-times are separate option rows now. */
   departures?: string[]
+}
+
+/** One same-mode change on a transport option. */
+export interface JourneyLineChange {
+  id: string
+  place?: string
+  title?: string
+  startTime?: string
+  endTime?: string
+  platform?: string
+  minutes?: string
 }
 
 /** City or airport point on the way to the main destination. */
@@ -296,6 +326,8 @@ export interface JourneyVia {
   id: string
   /** City or airport name (e.g. Bergamo, Milano, Genova). */
   title: string
+  /** Arrival station / terminal at this place. */
+  station?: string
   country?: string
   latitude?: number
   longitude?: number
@@ -315,6 +347,8 @@ export interface JourneyVia {
   connection?: RideConnection
   /** Station/city where a change happens (when connection is change). */
   changePlace?: string
+  /** Platform at the change. */
+  changePlatform?: string
   /** Recommended minutes between two connections. */
   changeMinutes?: string
   sortOrder: number
@@ -376,13 +410,111 @@ export function newTransportOption(
     actualPrice: '',
     taken: false,
     ticket: false,
+    connection: 'direct',
+    changePlace: '',
+    changeTitle: '',
+    changeStartTime: '',
+    changeEndTime: '',
+    changePlatform: '',
+    changeMinutes: '',
+    changes: [],
     departures: [],
+  }
+}
+
+export function newLineChange(): JourneyLineChange {
+  return {
+    id: crypto.randomUUID(),
+    place: '',
+    title: '',
+    startTime: '',
+    endTime: '',
+    platform: '',
+    minutes: '',
+  }
+}
+
+function lineChangeHasContent(change: JourneyLineChange): boolean {
+  return !!(
+    (change.place || '').trim() ||
+    (change.title || '').trim() ||
+    (change.startTime || '').trim() ||
+    (change.endTime || '').trim() ||
+    (change.platform || '').trim() ||
+    parsePositiveMinutes(change.minutes)
+  )
+}
+
+export function compactLineChange(change: JourneyLineChange): JourneyLineChange {
+  const mins = parsePositiveMinutes(change.minutes)
+  return {
+    id: change.id || crypto.randomUUID(),
+    place: (change.place || '').trim(),
+    title: (change.title || '').trim(),
+    startTime: (change.startTime || '').trim(),
+    endTime: (change.endTime || '').trim(),
+    platform: (change.platform || '').trim(),
+    minutes: mins != null ? String(mins) : '',
+  }
+}
+
+export function optionLineChanges(
+  option?: Pick<
+    JourneyTransportOption,
+    | 'id'
+    | 'connection'
+    | 'changes'
+    | 'changePlace'
+    | 'changeTitle'
+    | 'changeStartTime'
+    | 'changeEndTime'
+    | 'changePlatform'
+    | 'changeMinutes'
+  > | null,
+): JourneyLineChange[] {
+  if (!option) return []
+  if (option.changes?.length) return option.changes.map(compactLineChange)
+  const legacy: JourneyLineChange = {
+    id: `${option.id || 'opt'}-chg0`,
+    place: option.changePlace,
+    title: option.changeTitle,
+    startTime: option.changeStartTime,
+    endTime: option.changeEndTime,
+    platform: option.changePlatform,
+    minutes: option.changeMinutes,
+  }
+  if (lineChangeHasContent(legacy)) {
+    return [compactLineChange(legacy)]
+  }
+  return []
+}
+
+export function withOptionChanges(
+  option: JourneyTransportOption,
+  changes: JourneyLineChange[],
+): Partial<JourneyTransportOption> {
+  const next = changes.map(compactLineChange)
+  const first = next[0]
+  return {
+    connection: next.length ? 'change' : 'direct',
+    changes: next,
+    changePlace: first?.place || '',
+    changeTitle: first?.title || '',
+    changeStartTime: first?.startTime || '',
+    changeEndTime: first?.endTime || '',
+    changePlatform: first?.platform || '',
+    changeMinutes: first?.minutes || '',
   }
 }
 
 /** Bus / train / tram can have a platform. */
 export function modeHasPlatform(mode?: string): boolean {
   return mode === 'train' || mode === 'bus' || mode === 'tram'
+}
+
+/** Same-mode line change (not a new via city). */
+export function modeAllowsLineChange(mode?: string): boolean {
+  return modeHasPlatform(mode)
 }
 
 /** Flight uses flight number + gate. */
@@ -404,6 +536,7 @@ export function newJourneyVia(sortOrder = 0): JourneyVia {
   return {
     id: newViaId(),
     title: '',
+    station: '',
     country: '',
     mode: '',
     startTime: '',
@@ -414,6 +547,7 @@ export function newJourneyVia(sortOrder = 0): JourneyVia {
     purpose: 'transfer',
     connection: 'direct',
     changePlace: '',
+    changePlatform: '',
     changeMinutes: '',
     sortOrder,
   }
@@ -426,14 +560,42 @@ export function viaPurpose(
   return 'visit'
 }
 
+export function viaPurposeLabel(
+  purpose: PlacePurpose,
+  compact = false,
+): string {
+  if (purpose === 'transfer') return compact ? 'via' : 'Ikke stopp'
+  return compact ? 'besøk' : 'Besøk'
+}
+
 export function viaConnection(
   via: Pick<JourneyVia, 'connection'> | null | undefined,
 ): RideConnection {
   return via?.connection === 'change' ? 'change' : 'direct'
 }
 
+export function optionConnection(
+  option?: Pick<
+    JourneyTransportOption,
+    | 'connection'
+    | 'changes'
+    | 'changePlace'
+    | 'changeTitle'
+    | 'changeStartTime'
+    | 'changeEndTime'
+    | 'changePlatform'
+    | 'changeMinutes'
+    | 'id'
+  > | null,
+  via?: Pick<JourneyVia, 'connection'> | null,
+): RideConnection {
+  if (optionLineChanges(option).length >= 1) return 'change'
+  if (option?.connection === 'direct') return 'direct'
+  return viaConnection(via)
+}
+
 export function rideConnectionLabel(connection: RideConnection): string {
-  return connection === 'change' ? 'med bytte' : 'direkte'
+  return connection === 'change' ? 'med linjebytte' : 'direkte'
 }
 
 /** Positive whole minutes from a free-text field, or null. */
@@ -449,16 +611,54 @@ export function viaChangeMinutes(
   return parsePositiveMinutes(via?.changeMinutes)
 }
 
+function formatOneLineChange(change: JourneyLineChange): string {
+  const mins = parsePositiveMinutes(change.minutes)
+  const place = (change.place || '').trim()
+  const line = (change.title || '').trim()
+  const from = (change.startTime || '').trim()
+  const to = (change.endTime || '').trim()
+  const span = from && to ? `${from}–${to}` : from || to
+  const platform = (change.platform || '').trim()
+  const plat = platform ? `p.${platform}` : ''
+  const wait = mins != null ? formatDurationHM(mins) : ''
+  return [place, line, plat, span, wait].filter(Boolean).join(' ')
+}
+
 export function formatChangeTimeLabel(
-  via: Pick<JourneyVia, 'connection' | 'changePlace' | 'changeMinutes'>,
+  via: Pick<
+    JourneyVia,
+    'connection' | 'changePlace' | 'changePlatform' | 'changeMinutes'
+  >,
+  option?: Pick<
+    JourneyTransportOption,
+    | 'id'
+    | 'connection'
+    | 'changes'
+    | 'changePlace'
+    | 'changeTitle'
+    | 'changeStartTime'
+    | 'changeEndTime'
+    | 'changePlatform'
+    | 'changeMinutes'
+  > | null,
 ): string {
-  const mins = viaChangeMinutes(via)
-  const place = (via.changePlace || '').trim()
+  const connection = optionConnection(option, via)
+  const list = optionLineChanges(option)
+  if (list.length) {
+    const bits = list.map(formatOneLineChange).filter(Boolean)
+    if (bits.length === 1) return `linjebytte ${bits[0]}`
+    if (bits.length > 1) {
+      return bits.map((bit, i) => `bytte ${i + 1} ${bit}`).join(' · ')
+    }
+  }
+  const mins =
+    parsePositiveMinutes(option?.changeMinutes) ?? viaChangeMinutes(via)
+  const place = (option?.changePlace || via.changePlace || '').trim()
   const time = mins != null ? formatDurationHM(mins) : ''
-  if (place && time) return `bytte ${place} ${time}`
-  if (place) return `bytte ${place}`
-  if (time) return `bytte ${time}`
-  return viaConnection(via) === 'change' ? 'med bytte' : ''
+  if (place && time) return `linjebytte ${place} ${time}`
+  if (place) return `linjebytte ${place}`
+  if (time) return `linjebytte ${time}`
+  return connection === 'change' ? 'med linjebytte' : ''
 }
 
 /** Minutes from midnight, or null if the clock time is missing/invalid. */
@@ -508,9 +708,9 @@ export function formatDurationHM(minutes: number): string {
   const total = Math.max(0, Math.round(minutes))
   const hours = Math.floor(total / 60)
   const mins = total % 60
-  if (hours === 0) return `${mins} min`
+  if (hours === 0) return `${mins} m`
   if (mins === 0) return hours === 1 ? '1 t' : `${hours} t`
-  return `${hours} t ${mins} min`
+  return `${hours} t ${mins} m`
 }
 
 /** Chosen alternative on each hop, summed — same rule as expenses. */
@@ -686,6 +886,95 @@ export function journeyVisitStats(journey: Journey): {
   return { cityCount: cities.length, countryCount: countries.length }
 }
 
+export type OverviewRide = {
+  id: string
+  date: string
+  fromLabel: string
+  toLabel: string
+  detail: string
+}
+
+export function formatCityStation(city?: string, station?: string): string {
+  const c = (city || '').trim()
+  const s = (station || '').trim()
+  if (c && s && !samePlaceName(c, s)) return `${c} · ${s}`
+  return c || s
+}
+
+export function stopGoalLabel(
+  to?: Pick<JourneyStop, 'city' | 'address' | 'kind' | 'station'> | null,
+  fallback = 'Hovedmål',
+): string {
+  if (!to) return fallback
+  if (to.kind === 'home') {
+    return (to.address || '').trim() || (to.city || '').trim() || 'Hjem'
+  }
+  return formatCityStation(to.city, to.station) || fallback
+}
+
+function overviewStopLabel(stop: JourneyStop): string {
+  if (stop.kind === 'home') {
+    return (stop.address || stop.city || 'Start').trim()
+  }
+  if (isPackageStop(stop)) {
+    return (packageOf(stop)?.title || stop.city || packageTypeLabel(stop.kind)).trim()
+  }
+  return formatCityStation(stop.city, stop.station) || 'Sted'
+}
+
+/** Travel day for a hop: checkout / leave day from the previous stop. */
+export function legTravelDate(
+  from?: JourneyStop | null,
+  to?: JourneyStop | null,
+): string {
+  return (
+    (from ? stopDepartDate(from) : '') ||
+    (from?.arriveDate || '').trim() ||
+    (to?.arriveDate || '').trim()
+  )
+}
+
+/** Transport hops in journey order, with the day you travel. */
+export function journeyOverviewRides(journey: Journey): OverviewRide[] {
+  const stops = [...(journey.stops || [])].sort(
+    (a, b) => a.sortOrder - b.sortOrder,
+  )
+  const rides: OverviewRide[] = []
+  for (let i = 0; i < stops.length - 1; i++) {
+    const from = stops[i]
+    const to = stops[i + 1]
+    const date = legTravelDate(from, to)
+    const leg = (journey.legs || []).find(
+      (l) => l.fromStopId === from.id && l.toStopId === to.id,
+    )
+    const segs = transportSegments(leg)
+    if (!segs.length) continue
+    let prev = overviewStopLabel(from)
+    segs.forEach((via, vi) => {
+      const last = vi === segs.length - 1
+      const toLabel =
+        via.title.trim() || (last ? overviewStopLabel(to) : '…')
+      const opt = chosenTransportOption(via)
+      const detail = [
+        opt ? formatOptionSummaryBit(opt) : '',
+        formatChangeTimeLabel(via, opt),
+      ]
+        .filter(Boolean)
+        .join(' · ')
+      if (!toLabel && !detail) return
+      rides.push({
+        id: via.id,
+        date,
+        fromLabel: prev,
+        toLabel,
+        detail,
+      })
+      prev = toLabel
+    })
+  }
+  return rides
+}
+
 export function stopPurpose(
   stop: Pick<JourneyStop, 'kind' | 'purpose'> | null | undefined,
 ): PlacePurpose {
@@ -811,6 +1100,13 @@ export function optionIsTaken(option?: JourneyTransportOption | null): boolean {
 
 export function optionHasTicket(option?: JourneyTransportOption | null): boolean {
   return !!option?.ticket
+}
+
+/** Actual price when set, otherwise expected. */
+export function effectiveTransportPrice(
+  option?: Pick<JourneyTransportOption, 'price' | 'actualPrice'> | null,
+): string {
+  return (option?.actualPrice || '').trim() || (option?.price || '').trim()
 }
 
 /** The alternative we took, or the first one after current sort if none is kvittert. */
@@ -973,6 +1269,15 @@ function formatOptionSummaryBit(
   const overnight = markOvernight && optionIsOvernight(o) ? '+1' : ''
   const taken = optionIsTaken(o) ? 'kvittert' : ''
   const ticket = optionHasTicket(o) ? 'billett' : ''
+  const change = formatChangeTimeLabel(
+    {
+      connection: 'direct',
+      changePlace: '',
+      changePlatform: '',
+      changeMinutes: '',
+    },
+    o,
+  )
   if (modeIsWalk(o.mode)) {
     const m = (o.minutes || '').trim()
     const core = mode && m ? `${mode} ${m} min` : mode || (m ? `${m} min` : '')
@@ -991,6 +1296,7 @@ function formatOptionSummaryBit(
       dur,
       ticket,
       taken,
+      change,
     ].filter(Boolean)
     return parts.join(' ')
   }
@@ -1000,14 +1306,14 @@ function formatOptionSummaryBit(
     const t = (o.startTime || '').trim()
     const head = [type || mode, info].filter(Boolean).join(' — ')
     const core = head && t ? `${head} ${t}` : head || t
-    return [core, overnight, dur, ticket, taken].filter(Boolean).join(' · ')
+    return [core, overnight, dur, ticket, taken, change].filter(Boolean).join(' · ')
   }
   const t = (o.startTime || '').trim()
   const platform = modeHasPlatform(o.mode) ? (o.platform || '').trim() : ''
   const plat = platform ? ` p.${platform}` : ''
   const core =
     mode && t ? `${mode} ${t}${plat}` : mode ? `${mode}${plat}` : t
-  return [core, overnight, dur, ticket, taken].filter(Boolean).join(' · ')
+  return [core, overnight, dur, ticket, taken, change].filter(Boolean).join(' · ')
 }
 
 export function summarizeTransport(
@@ -1048,18 +1354,28 @@ export function summarizeTransport(
 export function summarizeViaHop(
   via: JourneyVia,
   fromLabel: string,
-  markOvernight = true,
+  _markOvernight = true,
 ): string {
-  const to = via.title.trim() || '…'
+  const to = formatCityStation(via.title, via.station) || via.title.trim() || '…'
   const route = `${fromLabel} → ${to}`
-  const change = formatChangeTimeLabel(via) || rideConnectionLabel(viaConnection(via))
-  const bits = viaTransportOptions(via)
-    .map((o) => formatOptionSummaryBit(o, markOvernight))
-    .filter(Boolean)
-  if (!bits.length) return `${route} · ${change}`
-  const shown = bits.slice(0, 3).join(' · ')
-  const extra = bits.length > 3 ? ` +${bits.length - 3}` : ''
-  return `${route} · ${change} · ${shown}${extra}`
+  const options = viaTransportOptions(via)
+  const opt = options[0]
+  if (!opt) return route
+  const mode = opt.mode ? legModeLabel(opt.mode) : ''
+  const mins = optionDurationMinutes(opt)
+  const dur = mins != null ? formatDurationHM(mins) : ''
+  const ride = [mode, dur].filter(Boolean).join(' · ')
+  return ride ? `${route} · ${ride}` : route
+}
+
+/** One line for the alt-count hover list. */
+export function formatOptionAltLine(option: JourneyTransportOption): string {
+  const mode = option.mode ? legModeLabel(option.mode) : ''
+  const time = modeIsWalk(option.mode) ? '' : (option.startTime || '').trim()
+  const nr = modeIsFlight(option.mode) ? (option.title || '').trim() : ''
+  const mins = optionDurationMinutes(option)
+  const dur = mins != null ? formatDurationHM(mins) : ''
+  return [mode, nr, time, dur].filter(Boolean).join(' · ')
 }
 
 export type JourneyLiveKind = 'food' | 'drink' | 'shop' | 'other'
@@ -2032,11 +2348,11 @@ export function samePlaceName(a: string, b: string): boolean {
   return longer.startsWith(`${shorter} `)
 }
 
-export type StopGoalRef = Pick<JourneyStop, 'city' | 'address' | 'kind'>
+export type StopGoalRef = Pick<JourneyStop, 'city' | 'address' | 'kind' | 'station'>
 
 export function stopGoalNames(to?: StopGoalRef | null): string[] {
   if (!to) return []
-  const names = [to.city, to.address]
+  const names = [to.city, to.address, to.station]
     .map((s) => (s || '').trim())
     .filter(Boolean)
   return [...new Set(names)]
@@ -2058,11 +2374,7 @@ function lastViaIsWalk(segs: JourneyVia[]): boolean {
 }
 
 function goalDisplayName(to?: StopGoalRef | null): string {
-  if (!to) return 'mål'
-  if (to.kind === 'home') {
-    return (to.address || '').trim() || (to.city || '').trim() || 'hjem'
-  }
-  return (to.city || '').trim() || 'mål'
+  return stopGoalLabel(to, 'mål')
 }
 
 /** One via place has at least one usable departure/mode. */
@@ -2361,16 +2673,22 @@ export function keepPlacePurpose(local: Journey, saved: Journey): Journey {
         const prevTicket = new Map(
           (prev ? viaTransportOptions(prev) : []).map((o) => [o.id, o.ticket]),
         )
+        const prevChanges = new Map(
+          (prev ? viaTransportOptions(prev) : []).map((o) => [o.id, o.changes]),
+        )
         return {
           ...v,
           purpose: v.purpose || prev?.purpose,
           connection: v.connection || prev?.connection,
+          station: v.station || prev?.station,
           changePlace: v.changePlace || prev?.changePlace,
+          changePlatform: v.changePlatform || prev?.changePlatform,
           changeMinutes: v.changeMinutes || prev?.changeMinutes,
           options: viaTransportOptions(v).map((o) => ({
             ...o,
             taken: o.taken ?? prevTaken.get(o.id),
             ticket: o.ticket ?? prevTicket.get(o.id),
+            changes: o.changes?.length ? o.changes : prevChanges.get(o.id),
           })),
           sights: keepActivityPurpose(v.sights, prev?.sights),
         }

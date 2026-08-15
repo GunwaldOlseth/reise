@@ -18,7 +18,43 @@ import {
   googleMapsPlaceUrl,
 } from './googleMaps'
 import { localizeCity, localizeCountry } from './placeNames'
-import { formatDateNO } from './v2/journeyModel'
+import { formatDateNO, formatDurationHM, samePlaceName } from './v2/journeyModel'
+
+const MAP_TIME_KEY = 'reise.mapShowTravelTime'
+
+function loadShowTravelTime(): boolean {
+  try {
+    return localStorage.getItem(MAP_TIME_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+
+function saveShowTravelTime(on: boolean) {
+  try {
+    localStorage.setItem(MAP_TIME_KEY, on ? '1' : '0')
+  } catch {
+    /* ignore */
+  }
+}
+
+function durationMarkerIcon(text: string) {
+  return L.divIcon({
+    className: 'trip-map-duration-wrap',
+    html: `<span class="trip-map-duration">${escapeHtml(text)}</span>`,
+    iconSize: [0, 0],
+    iconAnchor: [0, 0],
+  })
+}
+
+function midLatLng(
+  a: L.LatLngExpression,
+  b: L.LatLngExpression,
+): L.LatLngExpression {
+  const [alat, alng] = a as [number, number]
+  const [blat, blng] = b as [number, number]
+  return [(alat + blat) / 2, (alng + blng) / 2]
+}
 
 function escapeHtml(value: string) {
   return value
@@ -454,6 +490,7 @@ export function TripMap({
   const [gpsHint, setGpsHint] = useState('')
   const [mapSaveHint, setMapSaveHint] = useState('')
   const [savingMap, setSavingMap] = useState(false)
+  const [showTravelTime, setShowTravelTime] = useState(loadShowTravelTime)
   const { user, configured, login, getAccessToken } = useGoogleAuth()
 
   useEffect(() => {
@@ -590,6 +627,21 @@ export function TripMap({
     }
     const mainSegments: L.LatLngExpression[][] = []
     let mainSeg: L.LatLngExpression[] = []
+    const durationMarks: { at: L.LatLngExpression; text: string }[] = []
+    const addDuration = (
+      from: L.LatLngExpression,
+      to: L.LatLngExpression,
+      minutes?: number,
+    ) => {
+      if (!showTravelTime || minutes == null || minutes <= 0) return
+      const [alat, alng] = from as [number, number]
+      const [blat, blng] = to as [number, number]
+      if (alat === blat && alng === blng) return
+      durationMarks.push({
+        at: midLatLng(from, to),
+        text: formatDurationHM(minutes),
+      })
+    }
     const flushMain = () => {
       if (mainSeg.length >= 2) mainSegments.push(mainSeg)
       mainSeg = []
@@ -609,6 +661,9 @@ export function TripMap({
         flushMain()
         mainSeg = [ll]
         continue
+      }
+      if (mainSeg.length) {
+        addDuration(mainSeg[mainSeg.length - 1], ll, stop.inboundMinutes)
       }
       mainSeg.push(ll)
     }
@@ -642,11 +697,13 @@ export function TripMap({
       ]
       if (stop.kind === 'via') {
         if (!leg.length && lastPortLl) leg.push(lastPortLl)
+        if (leg.length) addDuration(leg[leg.length - 1], ll, stop.inboundMinutes)
         leg.push(ll)
         continue
       }
       if (stop.kind === 'port') {
         if (leg.length) {
+          addDuration(leg[leg.length - 1], ll, stop.inboundMinutes)
           leg.push(ll)
           flushViaLeg()
         }
@@ -705,6 +762,15 @@ export function TripMap({
       }).addTo(layer)
     }
 
+    for (const mark of durationMarks) {
+      L.marker(mark.at, {
+        icon: durationMarkerIcon(mark.text),
+        interactive: false,
+        keyboard: false,
+        zIndexOffset: 400,
+      }).addTo(layer)
+    }
+
     // Don't yank the view away while the user is following GPS.
     if (!gpsFollowRef.current) {
       if (latLngs.length === 1) {
@@ -718,7 +784,7 @@ export function TripMap({
     requestAnimationFrame(() => map.invalidateSize())
     const t = window.setTimeout(() => map.invalidateSize(), 120)
     return () => window.clearTimeout(t)
-  }, [resolved, routeKey])
+  }, [resolved, routeKey, showTravelTime])
 
   useEffect(() => {
     return () => {
@@ -856,6 +922,23 @@ export function TripMap({
     [resolved],
   )
 
+  const legendStops = useMemo(() => {
+    const rows: typeof resolved = []
+    for (const stop of resolved) {
+      const last = rows[rows.length - 1]
+      if (
+        last &&
+        last.kind !== 'sea' &&
+        stop.kind !== 'sea' &&
+        samePlaceName(last.city, stop.city)
+      ) {
+        continue
+      }
+      rows.push(stop)
+    }
+    return rows
+  }, [resolved])
+
   if (!stops.length) {
     return <p className="empty">Ingen byer eller reisestopp å vise på kartet ennå.</p>
   }
@@ -869,6 +952,27 @@ export function TripMap({
             : `${plotted} av ${stops.length} punkt (hovedrute = byer; via som 1a, 1b…)`}
         </p>
         <div className="trip-map-actions">
+          <button
+            type="button"
+            className={`btn btn-soft btn-sm${
+              showTravelTime ? ' is-active' : ''
+            }`}
+            aria-pressed={showTravelTime}
+            title={
+              showTravelTime
+                ? 'Skjul reisetid på linjene'
+                : 'Vis reisetid som boks på linjene mellom byene'
+            }
+            onClick={() => {
+              setShowTravelTime((on) => {
+                const next = !on
+                saveShowTravelTime(next)
+                return next
+              })
+            }}
+          >
+            Reisetid
+          </button>
           <button
             type="button"
             className="btn btn-soft btn-sm"
@@ -1001,7 +1105,7 @@ export function TripMap({
         />
       </div>
       <ol className="trip-map-legend">
-        {resolved.map((stop) => {
+        {legendStops.map((stop) => {
           const mapsUrl =
             stop.place && stop.kind !== 'sea'
               ? googleMapsPlaceUrl({

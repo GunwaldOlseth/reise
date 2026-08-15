@@ -38,6 +38,7 @@ export function HomePage({
   googleSlot,
   onRefresh,
   onOpenSettings,
+  onOpenAppearance,
   onOpenLinks,
   onOpenTrip,
   onShowNewTrip,
@@ -63,6 +64,7 @@ export function HomePage({
   googleSlot?: ReactNode
   onRefresh: () => void
   onOpenSettings: () => void
+  onOpenAppearance: () => void
   onOpenLinks: () => void
   onOpenTrip: (tripId: string) => void
   onShowNewTrip: () => void
@@ -87,6 +89,14 @@ export function HomePage({
       <header className="v2-home-top">
         <div className="v2-home-top-actions">
           {googleSlot}
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm"
+            title="Utseende"
+            onClick={onOpenAppearance}
+          >
+            Utseende
+          </button>
           <button
             type="button"
             className="btn btn-ghost btn-sm"

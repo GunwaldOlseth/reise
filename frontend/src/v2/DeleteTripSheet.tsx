@@ -13,6 +13,7 @@ export function DeleteTripSheet({
   onDeleted: () => void
 }) {
   const [password, setPassword] = useState('')
+  const [sure, setSure] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
 
@@ -73,6 +74,16 @@ export function DeleteTripSheet({
         </div>
         {error ? <p className="v2-error">{error}</p> : null}
 
+        <label className="v2-check-row">
+          <input
+            type="checkbox"
+            checked={sure}
+            disabled={busy}
+            onChange={(e) => setSure(e.target.checked)}
+          />
+          Ja, slett
+        </label>
+
         <div className="v2-sheet-actions">
           <button
             type="button"
@@ -86,7 +97,7 @@ export function DeleteTripSheet({
           <button
             type="button"
             className="btn btn-danger"
-            disabled={busy || !password.trim()}
+            disabled={busy || !password.trim() || !sure}
             title="Slett ferien og alt innhold"
             onClick={() => void confirm()}
           >

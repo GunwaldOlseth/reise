@@ -11,6 +11,7 @@ import {
   formatDateNO,
   formatDurationHM,
   formatChangeTimeLabel,
+  formatCityStation,
   isPackageStop,
   journeyDateSpan,
   liveHotelAlertText,
@@ -21,13 +22,14 @@ import {
   optionIsTaken,
   packageOf,
   stopDepartDate,
-  rideConnectionLabel,
+  stopGoalLabel,
   optionDurationMinutes,
   optionHasTicket,
   optionIsOvernight,
   todayIsoOslo,
   transportSegments,
-  viaConnection,
+  viaPurpose,
+  viaPurposeLabel,
   viaTransportOptions,
   sortTransportOptions,
   withTakenTransportOption,
@@ -40,6 +42,8 @@ import {
   type JourneyVia,
 } from './journeyModel'
 import { TrashIcon, TransportModeIcon } from '../TransportModeIcon'
+import { useConfirmDelete } from './ConfirmDelete'
+import { TicketToggle } from './PurposeToggle'
 
 function firstStopOnDate(journey: Journey, date: string): JourneyStop | undefined {
   return [...(journey.stops || [])]
@@ -71,11 +75,10 @@ type DayRide = {
 }
 
 function placeLabel(place: JourneyStop | JourneyVia): string {
-  if ('kind' in place && place.kind === 'home') {
-    return place.city || 'Hjem'
+  if ('kind' in place) {
+    return stopGoalLabel(place, place.kind === 'home' ? 'Hjem' : 'Fra')
   }
-  if ('title' in place && place.title?.trim()) return place.title
-  if ('city' in place && place.city?.trim()) return place.city
+  if (place.title?.trim()) return place.title
   return 'Fra'
 }
 
@@ -215,7 +218,14 @@ function ridesOnDate(journey: Journey, date: string): DayRide[] {
         via,
         options,
         fromLabel: placeLabel(prev),
-        toLabel: via.title || to.city || 'Neste',
+        toLabel:
+          s === segs.length - 1
+            ? formatCityStation(
+                via.title || to.city,
+                via.station || to.station,
+              ) ||
+              stopGoalLabel(to, 'Neste')
+            : formatCityStation(via.title, via.station) || via.title || 'Neste',
         markOvernight: from.kind !== 'cruise' && to.kind !== 'cruise',
       })
     }
@@ -274,7 +284,7 @@ function placesOnDate(journey: Journey, date: string): DayPlace[] {
     if (!days.some((d) => d.date === date)) continue
     out.push({
       stop,
-      city: stop.city || 'By',
+      city: stopGoalLabel(stop, 'By'),
       hotel: stop.stay?.hotelName?.trim() || '',
       notes: stop.notes,
       arriving: (stop.arriveDate || '').trim() === date,
@@ -306,6 +316,7 @@ export function JourneyLive({
   disabled?: boolean
   onChange: (next: Journey) => void
 }) {
+  const askDelete = useConfirmDelete()
   const span = useMemo(() => journeyDateSpan(journey), [journey])
   const today = todayIsoOslo()
   const [date, setDate] = useState(() => {
@@ -554,8 +565,10 @@ export function JourneyLive({
                         {localizeCity(ride.toLabel)}
                       </strong>
                       <span className="v2-meta">
-                        {formatChangeTimeLabel(ride.via) ||
-                          rideConnectionLabel(viaConnection(ride.via))}
+                        {formatChangeTimeLabel(ride.via, focus) ||
+                          (viaPurpose(ride.via) === 'transfer'
+                            ? viaPurposeLabel('transfer', true)
+                            : '')}
                       </span>
                     </div>
                   </div>
@@ -596,29 +609,20 @@ export function JourneyLive({
                                   ? `p. ${option.platform}`
                                   : '',
                                 option.gate ? `gate ${option.gate}` : '',
+                                formatChangeTimeLabel(ride.via, option),
                               ]
                                 .filter(Boolean)
                                 .join(' · ')}
                             </span>
-                            <button
-                              type="button"
-                              className={`v2-live-taken${
-                                ticket ? ' is-on' : ''
-                              }`}
+                            <TicketToggle
+                              checked={ticket}
                               disabled={disabled}
-                              title={
-                                ticket
-                                  ? 'Billett er kjøpt'
-                                  : 'Merk at billetten er kjøpt'
-                              }
-                              onClick={() =>
+                              onChange={(next) =>
                                 patchOption(ride.via.id, option.id, {
-                                  ticket: !option.ticket,
+                                  ticket: next,
                                 })
                               }
-                            >
-                              {ticket ? 'Kjøpt' : 'Billett'}
-                            </button>
+                            />
                             <button
                               type="button"
                               className={`v2-live-taken${
@@ -657,7 +661,10 @@ export function JourneyLive({
                                 <input
                                   value={option.actualPrice || ''}
                                   disabled={disabled}
-                                  placeholder="Betalt"
+                                  placeholder={
+                                    option.price?.trim() || 'Forventet pris'
+                                  }
+                                  title="Tomt felt bruker forventet pris i utgifter"
                                   onChange={(e) =>
                                     patchOption(ride.via.id, option.id, {
                                       actualPrice: e.target.value,
@@ -735,7 +742,13 @@ export function JourneyLive({
                 entry={entry}
                 disabled={disabled}
                 onChange={(partial) => updateEntry(entry.id, partial)}
-                onRemove={() => removeEntry(entry.id)}
+                onRemove={() => {
+                  const name =
+                    entry.title.trim() || liveKindLabel(entry.kind)
+                  void askDelete({ title: `Slette ${name}?` }).then((ok) => {
+                    if (ok) removeEntry(entry.id)
+                  })
+                }}
               />
             ))}
           </ul>

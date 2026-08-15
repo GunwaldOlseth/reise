@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useConfirmDelete } from './ConfirmDelete'
 import {
   api,
   emptyTripFeatures,
@@ -15,6 +16,7 @@ export function TravelerEditor({
   disabled?: boolean
   onChange: (next: string[]) => void
 }) {
+  const askDelete = useConfirmDelete()
   const [draft, setDraft] = useState('')
 
   function add() {
@@ -37,9 +39,15 @@ export function TravelerEditor({
                 disabled={disabled}
                 title={`Fjern ${name}`}
                 aria-label={`Fjern ${name}`}
-                onClick={() =>
-                  onChange(travelers.filter((n) => n !== name))
-                }
+                onClick={() => {
+                  void askDelete({
+                    title: `Fjerne ${name}?`,
+                    confirmLabel: 'Fjern',
+                    checkLabel: 'Ja, fjern',
+                  }).then((ok) => {
+                    if (ok) onChange(travelers.filter((n) => n !== name))
+                  })
+                }}
               >
                 ×
               </button>

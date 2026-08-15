@@ -231,7 +231,13 @@ func shareStopTitle(stop JourneyStop) string {
 		return "Hjem"
 	}
 	if city := strings.TrimSpace(stop.City); city != "" {
+		if st := strings.TrimSpace(stop.Station); st != "" && !strings.EqualFold(st, city) {
+			return city + " · " + st
+		}
 		return city
+	}
+	if st := strings.TrimSpace(stop.Station); st != "" {
+		return st
 	}
 	if addr := strings.TrimSpace(stop.Address); addr != "" {
 		return addr
@@ -357,16 +363,42 @@ func formatShareHop(via JourneyVia) string {
 	if place != "" {
 		bits = append(bits, place)
 	}
-	if strings.EqualFold(strings.TrimSpace(via.Connection), "change") {
-		at := strings.TrimSpace(via.ChangePlace)
-		mins := strings.TrimSpace(via.ChangeMinutes)
+	conn := strings.TrimSpace(via.Connection)
+	at := strings.TrimSpace(via.ChangePlace)
+	plat := strings.TrimSpace(via.ChangePlatform)
+	mins := strings.TrimSpace(via.ChangeMinutes)
+	if opt != nil {
+		if c := strings.TrimSpace(opt.Connection); c != "" {
+			conn = c
+		}
+		if p := strings.TrimSpace(opt.ChangePlace); p != "" {
+			at = p
+		}
+		if p := strings.TrimSpace(opt.ChangePlatform); p != "" {
+			plat = p
+		}
+		if m := strings.TrimSpace(opt.ChangeMinutes); m != "" {
+			mins = m
+		}
+	}
+	where := at
+	if plat != "" {
+		if where != "" {
+			where += " p." + plat
+		} else {
+			where = "p." + plat
+		}
+	}
+	if strings.EqualFold(conn, "change") || where != "" || mins != "" {
 		switch {
-		case at != "" && mins != "":
-			bits = append(bits, "bytte "+at+" "+mins+" min")
-		case at != "":
-			bits = append(bits, "bytte "+at)
+		case where != "" && mins != "":
+			bits = append(bits, "bytte "+where+" "+mins+" m")
+		case where != "":
+			bits = append(bits, "bytte "+where)
 		case mins != "":
-			bits = append(bits, "bytte "+mins+" min")
+			bits = append(bits, "bytte "+mins+" m")
+		default:
+			bits = append(bits, "med bytte")
 		}
 	}
 	return strings.Join(bits, " · ")

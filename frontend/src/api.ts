@@ -1472,6 +1472,14 @@ export interface WeatherCurrent {
   icon: string;
 }
 
+export interface WeatherObservation {
+  at: string;
+  temperature: number;
+  weatherCode: number;
+  summary: string;
+  icon: string;
+}
+
 export interface WeatherReport {
   city: string;
   country: string;
@@ -1481,6 +1489,7 @@ export interface WeatherReport {
   current?: WeatherCurrent;
   forecast: WeatherDay[];
   days: WeatherDay[];
+  observations?: WeatherObservation[];
   requestedDate?: string;
   requested?: WeatherDay;
   requestedInRange: boolean;
@@ -1498,6 +1507,7 @@ export interface WeatherHistory {
   country: string;
   latest?: WeatherSnapshot;
   snapshots: WeatherSnapshot[];
+  observations?: WeatherObservation[];
   resolution: string;
 }
 
@@ -1505,9 +1515,9 @@ export const api = {
   health: () => request<{ status: string }>('/health'),
 
   /**
-   * Weather for a city. Always includes today.
-   * week=true fetches the 7-day forecast (also archived on the backend).
-   * refresh=true forces Open-Meteo; otherwise the API uses Firestore after the first save.
+   * Weather for a city. Always includes current weather now.
+   * week=true also fetches the 7-day forecast. Observations are actual
+   * readings (5 days back, then twice a day). refresh=true forces Open-Meteo.
    */
   getWeather: (city: string, country = '', opts?: { week?: boolean; date?: string; refresh?: boolean }) => {
     const qs = new URLSearchParams({ city });
@@ -2616,6 +2626,8 @@ export type TripMapStop = {
   /** Cached coordinates — map skips geocode when set. */
   latitude?: number
   longitude?: number
+  /** Minutes to this point from the previous mapped place. */
+  inboundMinutes?: number
 }
 
 /** Effective sort time for a via stop (prefer leg ankomst/avgang). */

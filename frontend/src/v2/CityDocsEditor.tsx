@@ -8,6 +8,7 @@ import {
   type JourneyStop,
 } from './journeyModel'
 import { compactNoteHtml } from './noteHtml'
+import { useConfirmDelete } from './ConfirmDelete'
 
 export function CityDocsEditor({
   stop,
@@ -21,6 +22,7 @@ export function CityDocsEditor({
     opts?: { immediate?: boolean },
   ) => void
 }) {
+  const askDelete = useConfirmDelete()
   const docs = cityDocsForEdit(stop)
 
   function commit(nextDocs: JourneyCityDoc[], immediate?: boolean) {
@@ -78,12 +80,16 @@ export function CityDocsEditor({
                   disabled={disabled}
                   aria-label="Slett dokument"
                   title="Slett dokument"
-                  onClick={() =>
-                    commit(
-                      docs.filter((d) => d.id !== doc.id),
-                      true,
-                    )
-                  }
+                  onClick={() => {
+                    const name = doc.title.trim() || 'dokumentet'
+                    void askDelete({ title: `Slette ${name}?` }).then((ok) => {
+                      if (!ok) return
+                      commit(
+                        docs.filter((d) => d.id !== doc.id),
+                        true,
+                      )
+                    })
+                  }}
                 >
                   <TrashIcon size={14} />
                 </button>

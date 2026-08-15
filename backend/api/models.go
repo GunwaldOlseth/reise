@@ -241,6 +241,7 @@ type JourneyStop struct {
 	Latitude   float64         `json:"latitude,omitempty" firestore:"latitude,omitempty"`
 	Longitude  float64         `json:"longitude,omitempty" firestore:"longitude,omitempty"`
 	Address    string          `json:"address,omitempty" firestore:"address,omitempty"`
+	Station    string          `json:"station,omitempty" firestore:"station,omitempty"`
 	ArriveDate string          `json:"arriveDate" firestore:"arriveDate"` // YYYY-MM-DD
 	Kind       string          `json:"kind" firestore:"kind"`             // place | home | cruise | tour | charter | roadtrip | other
 	Stay       *JourneyStay    `json:"stay,omitempty" firestore:"stay,omitempty"`
@@ -288,15 +289,35 @@ type JourneyTransportOption struct {
 	Info        string   `json:"info,omitempty" firestore:"info,omitempty"`       // ekstra info (annet)
 	Price       string   `json:"price,omitempty" firestore:"price,omitempty"`
 	ActualPrice string   `json:"actualPrice,omitempty" firestore:"actualPrice,omitempty"`
-	Taken       bool     `json:"taken,omitempty" firestore:"taken,omitempty"`
-	Ticket      bool     `json:"ticket,omitempty" firestore:"ticket,omitempty"`
-	Departures  []string `json:"departures,omitempty" firestore:"departures,omitempty"`
+	Taken         bool     `json:"taken,omitempty" firestore:"taken,omitempty"`
+	Ticket        bool     `json:"ticket,omitempty" firestore:"ticket,omitempty"`
+	Connection    string   `json:"connection,omitempty" firestore:"connection,omitempty"` // direct | change
+	ChangePlace    string   `json:"changePlace,omitempty" firestore:"changePlace,omitempty"`
+	ChangeTitle    string   `json:"changeTitle,omitempty" firestore:"changeTitle,omitempty"`
+	ChangeStartTime string  `json:"changeStartTime,omitempty" firestore:"changeStartTime,omitempty"`
+	ChangeEndTime   string  `json:"changeEndTime,omitempty" firestore:"changeEndTime,omitempty"`
+	ChangePlatform string   `json:"changePlatform,omitempty" firestore:"changePlatform,omitempty"`
+	ChangeMinutes  string   `json:"changeMinutes,omitempty" firestore:"changeMinutes,omitempty"`
+	Changes        []JourneyLineChange `json:"changes,omitempty" firestore:"changes,omitempty"`
+	Departures     []string `json:"departures,omitempty" firestore:"departures,omitempty"`
+}
+
+// JourneyLineChange is one same-mode change on a transport option.
+type JourneyLineChange struct {
+	ID        string `json:"id" firestore:"id"`
+	Place     string `json:"place,omitempty" firestore:"place,omitempty"`
+	Title     string `json:"title,omitempty" firestore:"title,omitempty"`
+	StartTime string `json:"startTime,omitempty" firestore:"startTime,omitempty"`
+	EndTime   string `json:"endTime,omitempty" firestore:"endTime,omitempty"`
+	Platform  string `json:"platform,omitempty" firestore:"platform,omitempty"`
+	Minutes   string `json:"minutes,omitempty" firestore:"minutes,omitempty"`
 }
 
 // JourneyVia is a city or airport point on a transport block between two stops.
 type JourneyVia struct {
 	ID         string                   `json:"id" firestore:"id"`
 	Title      string                   `json:"title" firestore:"title"` // by eller flyplass
+	Station    string                   `json:"station,omitempty" firestore:"station,omitempty"`
 	Country    string                   `json:"country,omitempty" firestore:"country,omitempty"`
 	Latitude   float64                  `json:"latitude,omitempty" firestore:"latitude,omitempty"`
 	Longitude  float64                  `json:"longitude,omitempty" firestore:"longitude,omitempty"`
@@ -310,8 +331,9 @@ type JourneyVia struct {
 	Sights    []JourneySight           `json:"sights,omitempty" firestore:"sights,omitempty"`
 	Purpose    string                   `json:"purpose,omitempty" firestore:"purpose,omitempty"`       // visit | transfer
 	Connection string                   `json:"connection,omitempty" firestore:"connection,omitempty"` // direct | change
-	ChangePlace string                  `json:"changePlace,omitempty" firestore:"changePlace,omitempty"`
-	ChangeMinutes string                `json:"changeMinutes,omitempty" firestore:"changeMinutes,omitempty"`
+	ChangePlace    string               `json:"changePlace,omitempty" firestore:"changePlace,omitempty"`
+	ChangePlatform string               `json:"changePlatform,omitempty" firestore:"changePlatform,omitempty"`
+	ChangeMinutes  string               `json:"changeMinutes,omitempty" firestore:"changeMinutes,omitempty"`
 	SortOrder  int                      `json:"sortOrder" firestore:"sortOrder"`
 }
 

@@ -295,10 +295,9 @@ function SpotWeatherCard({
     <article className="v2-weather-card">
       <header className="v2-weather-card-head">
         <div className="v2-weather-card-title">
-          <strong>{formatDateNO(spot.date)}</strong>
+          <strong>{localizeCity(city) || city}</strong>
           <span className="v2-meta">
-            {' '}
-            · {localizeCity(city) || city}
+            {formatDateNO(spot.date)}
             {spot.note ? ` · ${spot.note}` : ''}
           </span>
           <button
@@ -359,22 +358,40 @@ function SpotWeatherCard({
         </div>
       )}
 
-      {status === 'ready' && display && (
+      {status === 'ready' && (weather?.current || display) && (
         <div className="v2-weather-body">
-          <span className="v2-weather-glyph" title={display.summary}>
-            <WeatherIcon icon={display.icon} size={22} />
+          <span
+            className="v2-weather-glyph"
+            title={weather?.current?.summary || display?.summary}
+          >
+            <WeatherIcon
+              icon={weather?.current?.icon || display?.icon || 'cloud'}
+              size={22}
+            />
           </span>
           <div className="v2-weather-temps">
-            {showingNow && weather?.current ? (
+            {weather?.current ? (
               <strong>{Math.round(weather.current.temperature)}°</strong>
-            ) : (
+            ) : display ? (
               <strong>
                 {Math.round(display.tempMax)}°
                 <span className="v2-meta"> / {Math.round(display.tempMin)}°</span>
               </strong>
-            )}
-            <span>{display.summary}</span>
-            {display.precipitation > 0 && (
+            ) : null}
+            <span>
+              {weather?.current
+                ? showingNow
+                  ? weather.current.summary
+                  : `Nå · ${weather.current.summary}`
+                : display?.summary}
+            </span>
+            {display && weather?.current && !showingNow ? (
+              <span className="v2-meta">
+                {formatDateNO(spot.date)}: {Math.round(display.tempMax)}° /{' '}
+                {Math.round(display.tempMin)}°
+              </span>
+            ) : null}
+            {display && display.precipitation > 0 && (
               <span className="v2-meta">
                 {display.precipitation.toFixed(1)} mm
               </span>
@@ -392,7 +409,7 @@ function SpotWeatherCard({
         </div>
       )}
 
-      {status === 'ready' && weather && !display && (
+      {status === 'ready' && weather && !weather.current && !display && (
         <p className="v2-meta">
           Ingen prognose for {formatDateNO(spot.date)} ennå.
         </p>
@@ -418,8 +435,9 @@ export function JourneyWeatherView({ journey }: { journey: Journey }) {
   return (
     <div className="v2-weather-list">
       <p className="v2-meta" style={{ marginTop: 0 }}>
-        Prognose for stedene på reisen (inntil 7 dager frem). Backend lagrer
-        vær to ganger om dagen. Trykk den lille grafen for detaljer.
+        Den lille grafen viser aktuelt vær på stedet. Backend logger to ganger
+        om dagen fra én måned før turen til tre dager etter siste dag. Trykk
+        grafen for detaljer.
       </p>
       <WeatherTempChart spots={spots} />
       {spots.map((spot) => (

@@ -23,6 +23,7 @@ import {
   type PlannerSettings,
   type ThemeId,
 } from './userSettings'
+import { ConfirmDeleteProvider } from './v2/ConfirmDelete'
 import { HomePage } from './v2/HomePage'
 import { TripHub } from './v2/TripHub'
 import { ShareItineraryPage } from './v2/ShareItineraryPage'
@@ -77,6 +78,7 @@ function GoogleLoginButton() {
 type View =
   | { name: 'home' }
   | { name: 'settings'; returnTo?: View }
+  | { name: 'appearance'; returnTo?: View }
   | { name: 'links'; returnTo?: View }
   | {
       name: 'trip'
@@ -90,32 +92,8 @@ function journeyListStats(journey: Journey) {
   return { dayCount: cityCount, countryCount, cityCount }
 }
 
-function SettingsPage({
-  initialHome,
-  initialPlanner,
-  error,
-  trips,
-  previewTripId,
-  onBack,
-  onSave,
-  onOpenLinks,
-}: {
-  initialHome: HomePlace
-  initialPlanner: PlannerSettings
-  error?: string
-  trips: Trip[]
-  previewTripId?: string
-  onBack: () => void
-  onSave: (home: HomePlace, planner: PlannerSettings) => void
-  onOpenLinks: () => void
-}) {
-  const [draft, setDraft] = useState<HomePlace>(initialHome)
-  const [planner, setPlanner] = useState<PlannerSettings>(initialPlanner)
+function AppearancePage({ onBack }: { onBack: () => void }) {
   const [theme, setTheme] = useState<ThemeId>(() => loadTheme())
-
-  function togglePlanner<K extends keyof PlannerSettings>(key: K) {
-    setPlanner((p) => ({ ...p, [key]: !p[key] }))
-  }
 
   return (
     <div className="v2-shell v2-settings">
@@ -130,18 +108,18 @@ function SettingsPage({
             ← Tilbake
           </button>
           <div>
-            <h1>Innstillinger</h1>
-            <p className="v2-meta">Hjem, lenker, steg, deling og varsler</p>
+            <h1>Utseende</h1>
+            <p className="v2-meta">Fargetema for appen</p>
           </div>
         </div>
       </header>
 
       <div className="v2-settings-body">
-        {error && <p className="v2-error">{error}</p>}
-
         <section className="v2-settings-card">
           <h2>Fargetema</h2>
-          <p className="v2-meta">Rolige paletter — velg én, den brukes med en gang.</p>
+          <p className="v2-meta">
+            Rolige paletter — velg én, den brukes med en gang.
+          </p>
           {(
             [
               ['Mørke', 'dark'],
@@ -172,6 +150,57 @@ function SettingsPage({
             </div>
           ))}
         </section>
+      </div>
+    </div>
+  )
+}
+
+function SettingsPage({
+  initialHome,
+  initialPlanner,
+  error,
+  trips,
+  previewTripId,
+  onBack,
+  onSave,
+  onOpenLinks,
+}: {
+  initialHome: HomePlace
+  initialPlanner: PlannerSettings
+  error?: string
+  trips: Trip[]
+  previewTripId?: string
+  onBack: () => void
+  onSave: (home: HomePlace, planner: PlannerSettings) => void
+  onOpenLinks: () => void
+}) {
+  const [draft, setDraft] = useState<HomePlace>(initialHome)
+  const [planner, setPlanner] = useState<PlannerSettings>(initialPlanner)
+  function togglePlanner<K extends keyof PlannerSettings>(key: K) {
+    setPlanner((p) => ({ ...p, [key]: !p[key] }))
+  }
+
+  return (
+    <div className="v2-shell v2-settings">
+      <header className="v2-hub-top">
+        <div className="v2-hub-brand">
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm"
+            title="Tilbake"
+            onClick={onBack}
+          >
+            ← Tilbake
+          </button>
+          <div>
+            <h1>Innstillinger</h1>
+            <p className="v2-meta">Hjem, lenker, steg, deling og varsler</p>
+          </div>
+        </div>
+      </header>
+
+      <div className="v2-settings-body">
+        {error && <p className="v2-error">{error}</p>}
 
         <section className="v2-settings-card">
           <h2>Hjem</h2>
@@ -491,10 +520,15 @@ function AdminBackupPanel() {
 
 export default function App() {
   const shareToken = readShareToken()
-  if (shareToken) {
-    return <ShareItineraryPage token={shareToken} />
-  }
-  return <AppMain />
+  return (
+    <ConfirmDeleteProvider>
+      {shareToken ? (
+        <ShareItineraryPage token={shareToken} />
+      ) : (
+        <AppMain />
+      )}
+    </ConfirmDeleteProvider>
+  )
 }
 
 function AppMain() {
@@ -640,6 +674,21 @@ function AppMain() {
     )
   }
 
+  if (view.name === 'appearance') {
+    const returnTo = view.returnTo || { name: 'home' as const }
+    return (
+      <>
+        {alerts}
+        <AppearancePage
+          onBack={() => {
+            setError('')
+            setView(returnTo)
+          }}
+        />
+      </>
+    )
+  }
+
   if (view.name === 'settings') {
     const returnTo = view.returnTo || { name: 'home' as const }
     return (
@@ -708,6 +757,16 @@ function AppMain() {
             },
           })
         }
+        onOpenAppearance={() =>
+          setView({
+            name: 'appearance',
+            returnTo: {
+              name: 'trip',
+              tripId: view.tripId,
+              tab: view.tab || 'plan',
+            },
+          })
+        }
         onOpenLinks={() =>
           setView({
             name: 'links',
@@ -741,6 +800,10 @@ function AppMain() {
       onOpenSettings={() => {
         setError('')
         setView({ name: 'settings', returnTo: { name: 'home' } })
+      }}
+      onOpenAppearance={() => {
+        setError('')
+        setView({ name: 'appearance', returnTo: { name: 'home' } })
       }}
       onOpenLinks={() => {
         setError('')

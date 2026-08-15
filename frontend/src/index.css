@@ -1225,6 +1225,33 @@ textarea {
   background: rgba(31, 111, 235, 0.1);
 }
 
+.trip-map-actions .btn.is-active {
+  border-color: #147a84;
+  color: #147a84;
+  background: rgba(20, 122, 132, 0.12);
+}
+
+.trip-map-duration-wrap {
+  background: none !important;
+  border: none !important;
+}
+
+.trip-map-duration {
+  display: inline-block;
+  transform: translate(-50%, -50%);
+  padding: 0.14rem 0.42rem;
+  border-radius: 0.4rem;
+  border: 1px solid #147a84;
+  background: #f4fbfb;
+  color: #0d3d42;
+  font-size: 11px;
+  font-weight: 750;
+  letter-spacing: 0.01em;
+  line-height: 1.2;
+  white-space: nowrap;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.28);
+}
+
 .trip-map-gps-hint {
   margin: 0;
 }

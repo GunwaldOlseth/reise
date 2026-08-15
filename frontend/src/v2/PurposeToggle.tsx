@@ -13,7 +13,7 @@ export function PurposeToggle({
   onChange: (next: PlacePurpose) => void
 }) {
   return (
-    <div className="v2-purpose" role="group" aria-label="Besøk eller bytte">
+    <div className="v2-purpose" role="group" aria-label="Besøk eller via">
       <button
         type="button"
         className={`v2-purpose-btn${value === 'visit' ? ' is-on' : ''}`}
@@ -27,10 +27,10 @@ export function PurposeToggle({
         type="button"
         className={`v2-purpose-btn${value === 'transfer' ? ' is-on' : ''}`}
         disabled={disabled}
-        title="Bare bytte transport her"
+        title="Vi reiser gjennom — ofte inkludert i billetten, uten å stoppe"
         onClick={() => onChange('transfer')}
       >
-        {compact ? 'Bytte' : 'Bare bytte'}
+        {compact ? 'Via' : 'Ikke stopp'}
       </button>
     </div>
   )
@@ -45,26 +45,48 @@ export function ConnectionToggle({
   disabled?: boolean
   onChange: (next: RideConnection) => void
 }) {
+  const checked = value === 'change'
   return (
-    <div className="v2-purpose" role="group" aria-label="Direkte eller med bytte">
-      <button
-        type="button"
-        className={`v2-purpose-btn${value === 'direct' ? ' is-on' : ''}`}
+    <label
+      className="v2-change-check"
+      title={
+        checked
+          ? 'Bytte til annet tog eller annen buss (samme type)'
+          : 'Linjebytte på samme type — ikke buss til tog. Da legger du til et sted på veien.'
+      }
+    >
+      <input
+        type="checkbox"
+        checked={checked}
         disabled={disabled}
-        title="Rett frem uten bytte"
-        onClick={() => onChange('direct')}
-      >
-        Direkte
-      </button>
-      <button
-        type="button"
-        className={`v2-purpose-btn${value === 'change' ? ' is-on' : ''}`}
+        onChange={(e) => onChange(e.target.checked ? 'change' : 'direct')}
+      />
+      Linjebytte
+    </label>
+  )
+}
+
+export function TicketToggle({
+  checked,
+  disabled,
+  onChange,
+}: {
+  checked: boolean
+  disabled?: boolean
+  onChange: (next: boolean) => void
+}) {
+  return (
+    <label
+      className="v2-change-check"
+      title={checked ? 'Billett er kjøpt' : 'Merk at billetten er kjøpt'}
+    >
+      <input
+        type="checkbox"
+        checked={checked}
         disabled={disabled}
-        title="Reise med bytte underveis"
-        onClick={() => onChange('change')}
-      >
-        Med bytte
-      </button>
-    </div>
+        onChange={(e) => onChange(e.target.checked)}
+      />
+      Billett
+    </label>
   )
 }

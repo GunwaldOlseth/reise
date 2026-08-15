@@ -132,7 +132,13 @@ export function SharePreviewCard({
       const { token } = await api.ensureShare(tripId)
       const url = sharePageUrl(token)
       const result = await shareOrCopy(url, itinerary.name || 'Reise')
-      setHint(result === 'copied' ? 'Lenke kopiert' : 'Delt')
+      setHint(
+        result === 'copied-local'
+          ? 'Lokal lenke kopiert — andre kan ikke åpne den. Del fra Cloud Run.'
+          : result === 'copied'
+            ? 'Lenke kopiert'
+            : 'Delt',
+      )
     } catch (err) {
       if (err instanceof Error && err.name === 'AbortError') return
       setHint('Kunne ikke lage delingslenke')
