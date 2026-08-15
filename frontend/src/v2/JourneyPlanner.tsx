@@ -2649,7 +2649,7 @@ function TransportBlock({
                                         className="v2-hop-opt-row is-change"
                                       >
                                         <span className="v2-change-label">Bytte</span>
-                                        <span className="v2-change-time-row has-place has-line has-clocks">
+                                        <div className="v2-change-place">
                                           <input
                                             value={chg.place || ''}
                                             disabled={disabled}
@@ -2729,6 +2729,8 @@ function TransportBlock({
                                               )
                                             }
                                           />
+                                        </div>
+                                        <div className="v2-change-times">
                                           <ClockTimeInput
                                             placeholder="Avgang"
                                             value={chg.startTime || ''}
@@ -2796,6 +2798,8 @@ function TransportBlock({
                                               </span>
                                             ) : null}
                                           </div>
+                                        </div>
+                                        <div className="v2-change-meta">
                                           <input
                                             className="v2-change-platform"
                                             value={chg.platform || ''}
@@ -2875,7 +2879,7 @@ function TransportBlock({
                                             />
                                             <span>min</span>
                                           </span>
-                                        </span>
+                                        </div>
                                         <button
                                           type="button"
                                           className="v2-via-remove"

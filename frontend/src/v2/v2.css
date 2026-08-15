@@ -2166,37 +2166,28 @@ html {
 
 .v2-hop-opt-row.is-change {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 0.3rem;
   min-width: 0;
-  overflow: hidden;
-}
-
-.v2-hop-opt-row.is-change .v2-change-time-row {
-  flex: 1 1 auto;
 }
 
 .v2-change-label {
   flex: 0 0 auto;
-  align-self: center;
   font-size: 0.78rem;
   font-weight: 700;
   color: var(--v2-muted);
   letter-spacing: 0.01em;
 }
 
-.v2-hop-opt-row.is-change .v2-change-time-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.3rem;
-  min-width: 0;
+.v2-change-place,
+.v2-change-times,
+.v2-change-meta {
+  display: contents;
 }
 
-.v2-hop-opt-row.is-change .v2-change-time-row > input:not(.v2-change-platform):not(.v2-change-line) {
-  flex: 1 1 6rem;
-  width: auto;
-  max-width: none;
+.v2-hop-opt-row.is-change > input,
+.v2-change-place > input,
+.v2-change-line {
   min-width: 5.2rem;
   min-height: 2.5rem;
   padding: 0.45rem 0.5rem;
@@ -2206,8 +2197,6 @@ html {
   flex: 1 1 7rem;
   width: auto;
   max-width: none;
-  min-width: 5.5rem;
-  padding: 0.45rem 0.5rem;
 }
 
 .v2-hop-opt-row.is-change .v2-clock-input {
@@ -2241,6 +2230,76 @@ html {
   width: 3.1rem;
   max-width: 3.1rem;
   padding: 0.45rem 0.35rem;
+}
+
+@media (max-width: 640px) {
+  .v2-hop-opt-row.is-change {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    align-items: center;
+    gap: 0.4rem 0.35rem;
+    padding: 0.5rem;
+    border-radius: 0.65rem;
+    background: rgba(0, 0, 0, 0.12);
+    border: 1px solid rgba(232, 244, 242, 0.1);
+  }
+
+  .v2-change-label {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .v2-hop-opt-row.is-change > .v2-via-remove {
+    grid-column: 2;
+    grid-row: 1;
+    justify-self: end;
+  }
+
+  .v2-change-place,
+  .v2-change-times,
+  .v2-change-meta {
+    display: grid;
+    grid-column: 1 / -1;
+    gap: 0.3rem;
+    min-width: 0;
+  }
+
+  .v2-change-place {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+
+  .v2-change-times {
+    grid-template-columns: 5.4rem minmax(2.6rem, auto) auto;
+    align-items: center;
+    justify-content: start;
+  }
+
+  .v2-change-meta {
+    grid-template-columns: 4.6rem auto;
+    justify-content: start;
+    align-items: center;
+  }
+
+  .v2-hop-opt-row.is-change > input,
+  .v2-change-place > input,
+  .v2-change-line,
+  .v2-hop-opt-row.is-change .v2-change-line {
+    width: 100%;
+    min-width: 0;
+    max-width: none;
+    flex: none;
+  }
+
+  .v2-hop-opt-row.is-change .v2-clock-input {
+    width: 5.4rem;
+    flex: none;
+  }
+
+  .v2-hop-opt-row.is-change .v2-change-platform {
+    width: 4.6rem;
+    max-width: 4.6rem;
+    flex: none;
+  }
 }
 
 .v2-hop-opt-row.is-prices .v2-hop-minutes {
