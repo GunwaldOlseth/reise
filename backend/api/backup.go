@@ -51,10 +51,37 @@ func backupBucketName() string {
 	if b := strings.TrimSpace(os.Getenv(defaultBucketEnv)); b != "" {
 		return b
 	}
-	if p := strings.TrimSpace(os.Getenv("FIREBASE_PROJECT_ID")); p != "" {
-		return p + "-reise-backups"
+	proj := strings.TrimSpace(os.Getenv("FIREBASE_PROJECT_ID"))
+	if proj == "" {
+		proj = projectIDFromServiceAccount()
+	}
+	if proj != "" {
+		return proj + "-reise-backups"
 	}
 	return ""
+}
+
+func projectIDFromServiceAccount() string {
+	keyPath := strings.TrimSpace(os.Getenv("FIREBASE_KEY_PATH"))
+	if keyPath == "" {
+		if _, err := os.Stat("service-account.json"); err == nil {
+			keyPath = "service-account.json"
+		}
+	}
+	if keyPath == "" {
+		return ""
+	}
+	raw, err := os.ReadFile(keyPath)
+	if err != nil {
+		return ""
+	}
+	var partial struct {
+		ProjectID string `json:"project_id"`
+	}
+	if err := json.Unmarshal(raw, &partial); err != nil {
+		return ""
+	}
+	return strings.TrimSpace(partial.ProjectID)
 }
 
 func cronSecret() string {
@@ -190,13 +217,18 @@ func adminListBackups(w http.ResponseWriter, r *http.Request) {
 	if !requireAdmin(w, r) {
 		return
 	}
-	list, err := listBackups(r.Context())
+	list, gcsCount, localCount, err := listBackups(r.Context())
 	if err != nil {
 		log.Printf("[Backup] list: %v", err)
 		respondWithError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	respondWithJSON(w, http.StatusOK, map[string]interface{}{"backups": list})
+	respondWithJSON(w, http.StatusOK, map[string]interface{}{
+		"backups":    list,
+		"bucket":     backupBucketName(),
+		"gcsCount":   gcsCount,
+		"localCount": localCount,
+	})
 }
 
 func adminRestoreBackup(w http.ResponseWriter, r *http.Request) {
@@ -336,7 +368,9 @@ func writeBackupObject(ctx context.Context, id string, raw []byte) error {
 			_ = w.Close()
 			return err
 		}
-		return w.Close()
+		if err := w.Close(); err != nil {
+			return err
+		}
 	}
 	if err := os.MkdirAll(localBackupDir, 0o755); err != nil {
 		return err
@@ -364,16 +398,27 @@ func readBackupObject(ctx context.Context, id string) ([]byte, error) {
 	return os.ReadFile(path.Join(localBackupDir, path.Base(id)))
 }
 
-func listBackups(ctx context.Context) ([]backupMeta, error) {
+func listBackups(ctx context.Context) ([]backupMeta, int, int, error) {
 	type item struct {
 		id   string
 		size int64
 	}
+	seen := map[string]bool{}
 	var items []item
+	var gcsCount, localCount int
+
+	addItem := func(id string, size int64) {
+		if !strings.HasSuffix(id, ".json") || seen[id] {
+			return
+		}
+		seen[id] = true
+		items = append(items, item{id: id, size: size})
+	}
+
 	if bucket := backupBucketName(); bucket != "" {
 		client, err := newStorageClient(ctx)
 		if err != nil {
-			return nil, err
+			return nil, 0, 0, err
 		}
 		defer client.Close()
 		it := client.Bucket(bucket).Objects(ctx, &storage.Query{Prefix: backupPrefix})
@@ -383,44 +428,68 @@ func listBackups(ctx context.Context) ([]backupMeta, error) {
 				break
 			}
 			if err != nil {
-				return nil, err
+				return nil, 0, 0, err
 			}
-			if !strings.HasSuffix(attrs.Name, ".json") {
-				continue
-			}
-			items = append(items, item{id: attrs.Name, size: attrs.Size})
+			gcsCount++
+			addItem(attrs.Name, attrs.Size)
 		}
-	} else {
-		entries, err := os.ReadDir(localBackupDir)
-		if err != nil && !os.IsNotExist(err) {
-			return nil, err
-		}
+	}
+
+	entries, err := os.ReadDir(localBackupDir)
+	if err == nil {
 		for _, e := range entries {
 			if e.IsDir() || !strings.HasSuffix(e.Name(), ".json") {
 				continue
 			}
+			localCount++
 			info, _ := e.Info()
 			var size int64
 			if info != nil {
 				size = info.Size()
 			}
-			items = append(items, item{id: backupPrefix + e.Name(), size: size})
+			addItem(backupPrefix+e.Name(), size)
 		}
+	} else if !os.IsNotExist(err) && backupBucketName() == "" {
+		return nil, 0, 0, err
 	}
+
 	sort.Slice(items, func(i, j int) bool { return items[i].id > items[j].id })
 	out := make([]backupMeta, 0, len(items))
 	for _, it := range items {
-		created := strings.TrimSuffix(strings.TrimPrefix(it.id, backupPrefix), ".json")
-		if t, err := time.ParseInLocation("2006-01-02T15-04-05", created, osloLocation()); err == nil {
-			created = t.Format(time.RFC3339)
+		meta := backupMetaFromID(it.id, it.size)
+		if raw, err := readBackupObject(ctx, it.id); err == nil {
+			meta = enrichBackupMeta(meta, raw)
 		}
-		out = append(out, backupMeta{ID: it.id, CreatedAt: created, Bytes: it.size})
+		out = append(out, meta)
 	}
-	return out, nil
+	return out, gcsCount, localCount, nil
+}
+
+func backupMetaFromID(id string, size int64) backupMeta {
+	created := strings.TrimSuffix(strings.TrimPrefix(id, backupPrefix), ".json")
+	if t, err := time.ParseInLocation("2006-01-02T15-04-05", created, osloLocation()); err == nil {
+		created = t.Format(time.RFC3339)
+	}
+	return backupMeta{ID: id, CreatedAt: created, Bytes: size}
+}
+
+func enrichBackupMeta(meta backupMeta, raw []byte) backupMeta {
+	var partial struct {
+		Trips    []json.RawMessage `json:"trips"`
+		Days     []json.RawMessage `json:"days"`
+		Journeys []json.RawMessage `json:"journeys"`
+	}
+	if err := json.Unmarshal(raw, &partial); err != nil {
+		return meta
+	}
+	meta.Trips = len(partial.Trips)
+	meta.Days = len(partial.Days)
+	meta.Journeys = len(partial.Journeys)
+	return meta
 }
 
 func pruneOldBackups(ctx context.Context) error {
-	list, err := listBackups(ctx)
+	list, _, _, err := listBackups(ctx)
 	if err != nil || len(list) <= backupKeep {
 		return err
 	}

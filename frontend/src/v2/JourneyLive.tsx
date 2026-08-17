@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { localizeCity } from '../placeNames'
 import { CityInfoTip } from './CityInfoTip'
 import { CountdownCard, HolidayCountdown, osloWallTimeMs } from './HolidayCountdown'
+import { nextScheduledDeparture } from './transportSchedule'
 import {
   activitiesForDay,
   activityKindLabel,
@@ -9,9 +10,9 @@ import {
   cityStayDays,
   clockMinutesFromMidnight,
   formatDateNO,
-  formatDurationHM,
   formatChangeTimeLabel,
   formatCityStation,
+  formatTransportOptionLabel,
   isPackageStop,
   journeyDateSpan,
   liveHotelAlertText,
@@ -23,9 +24,7 @@ import {
   packageOf,
   stopDepartDate,
   stopGoalLabel,
-  optionDurationMinutes,
   optionHasTicket,
-  optionIsOvernight,
   todayIsoOslo,
   transportSegments,
   viaPurpose,
@@ -451,11 +450,26 @@ export function JourneyLive({
     const name = stop.kind === 'home' ? stop.city || 'Hjem' : stop.city
     return localizeCity(name) || name
   }, [journey, span])
+  const tripDepart = useMemo(
+    () => nextScheduledDeparture(journey),
+    [journey],
+  )
 
   return (
     <div className="v2-live">
       {beforeStart && span && (
-        <HolidayCountdown startDate={span.start} detail={firstCity} />
+        <HolidayCountdown
+          startDate={tripDepart?.date || span.start}
+          atMs={tripDepart?.atMs}
+          departureTime={tripDepart?.time}
+          detail={
+            tripDepart
+              ? `${localizeCity(tripDepart.fromLabel) || tripDepart.fromLabel} → ${
+                  localizeCity(tripDepart.toLabel) || tripDepart.toLabel
+                }`
+              : firstCity
+          }
+        />
       )}
       <header className="v2-live-head">
         <button
@@ -575,17 +589,6 @@ export function JourneyLive({
                   <ul className="v2-live-ride-opts">
                     {ride.options.map((option) => {
                       const mode = option.mode || 'other'
-                      const overnight =
-                        ride.markOvernight && optionIsOvernight(option)
-                      const time = [
-                        option.startTime,
-                        option.endTime
-                          ? `${option.endTime}${overnight ? ' +1' : ''}`
-                          : '',
-                      ]
-                        .filter(Boolean)
-                        .join('–')
-                      const durationMins = optionDurationMinutes(option)
                       const selected = option.id === focus?.id
                       const taken = optionIsTaken(option)
                       const ticket = optionHasTicket(option)
@@ -600,11 +603,7 @@ export function JourneyLive({
                             <TransportModeIcon mode={mode} size={18} />
                             <span className="v2-meta">
                               {[
-                                option.title,
-                                time,
-                                durationMins != null
-                                  ? formatDurationHM(durationMins)
-                                  : '',
+                                formatTransportOptionLabel(option),
                                 option.platform
                                   ? `p. ${option.platform}`
                                   : '',

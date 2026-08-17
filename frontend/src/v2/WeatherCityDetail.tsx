@@ -8,6 +8,7 @@ import {
   type WeatherReport,
 } from '../api'
 import { formatDateNO, todayIsoOslo } from './journeyModel'
+import { formatChartDateNO, formatTempC, tempChartScale } from './weatherDisplay'
 
 function CloseIcon({ size = 18 }: { size?: number }) {
   return (
@@ -26,48 +27,61 @@ function CloseIcon({ size = 18 }: { size?: number }) {
   )
 }
 
-function observationsOf(
-  weather: WeatherReport,
+/** Chart: kl. 12 (± legacy 08/19), siste 7 dager. Fyller fra API når lagret historikk er tynn. */
+function chartObservations(
   history?: WeatherHistory | null,
+  weather?: WeatherReport | null,
 ): WeatherObservation[] {
-  const fromWeather = weather.observations || []
-  if (fromWeather.length >= 2) return fromWeather
-  const fromHist = history?.observations || []
-  if (fromHist.length >= 2) return fromHist
-  const fromSnaps = (history?.snapshots || [])
-    .filter((snap) => snap.current)
-    .map((snap) => ({
-      at: snap.fetchedAt,
-      temperature: snap.current!.temperature,
-      weatherCode: snap.current!.weatherCode,
-      summary: snap.current!.summary,
-      icon: snap.current!.icon,
-    }))
-  if (fromSnaps.length >= 2) return fromSnaps
-  if (fromWeather.length) return fromWeather
-  if (fromHist.length) return fromHist
-  return fromSnaps
+  const today = todayIsoOslo()
+  const oldest = addDaysIso(today, -7)
+  const byDate = new Map<string, WeatherObservation>()
+
+  const add = (o: WeatherObservation, replace = false) => {
+    const day = (o.at || '').slice(0, 10)
+    if (!day || day < oldest || day > today) return
+    const hour = parseOsloHour(o.at)
+    if (hour !== null && hour !== 12 && hour !== 8 && hour !== 19) return
+    if (!replace && byDate.has(day)) return
+    byDate.set(day, { ...o, at: `${day}T12:00:00` })
+  }
+
+  for (const o of history?.observations || []) add(o)
+  for (const o of weather?.observations || []) add(o)
+  for (const d of weather?.days || []) {
+    if (!d.date || d.date >= today) continue
+    add({
+      at: `${d.date}T12:00:00`,
+      temperature: d.tempMax,
+      weatherCode: d.weatherCode,
+      summary: d.summary,
+      icon: d.icon,
+    })
+  }
+
+  return [...byDate.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([, o]) => o)
 }
 
-function daysAsPoints(days: WeatherDay[]): WeatherObservation[] {
-  return (days || []).map((d) => ({
-    at: `${d.date}T12:00:00`,
-    temperature: d.tempMax,
-    weatherCode: d.weatherCode,
-    summary: d.summary,
-    icon: d.icon,
-  }))
+function addDaysIso(iso: string, days: number): string {
+  const d = new Date(`${iso}T12:00:00`)
+  if (Number.isNaN(d.getTime())) return iso
+  d.setDate(d.getDate() + days)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+function parseOsloHour(at: string): number | null {
+  const m = at.match(/T(\d{2}):/)
+  if (m) return Number(m[1])
+  const d = new Date(at)
+  return Number.isNaN(d.getTime()) ? null : d.getHours()
 }
 
 function sparkPoints(
-  weather: WeatherReport,
+  weather?: WeatherReport | null,
   history?: WeatherHistory | null,
 ): WeatherObservation[] {
-  const observed = observationsOf(weather, history)
-  if (observed.length >= 2) return observed
-  const today = todayIsoOslo()
-  const past = (weather.days || []).filter((d) => d.date && d.date <= today)
-  return daysAsPoints(past)
+  return chartObservations(history, weather)
 }
 
 function DaySpark({
@@ -79,8 +93,7 @@ function DaySpark({
 }) {
   if (observations.length < 2) return null
   const temps = observations.map((o) => o.temperature)
-  const lo = Math.min(...temps) - 1
-  const hi = Math.max(...temps) + 1
+  const { lo, hi } = tempChartScale(temps)
   const w = 92
   const h = 36
   const pad = 3
@@ -100,7 +113,7 @@ function DaySpark({
     <button
       type="button"
       className="v2-weather-spark"
-      title="Aktuelt vær, to ganger om dagen"
+      title="Temperatur kl. 12 de siste 7 dagene"
       aria-label="Vis værdetaljer"
       onClick={onOpen}
     >
@@ -132,17 +145,16 @@ function HistoryChart({
   if (observations.length < 2) {
     return (
       <p className="v2-meta">
-        Historikk bygges med aktuelt vær to ganger om dagen. Fem dager bakover
-        fylles inn første gang stedet hentes.
+        Grafen viser temperatur kl. 12 de siste 7 dagene. Historikk fylles inn
+        første gang stedet hentes, og én gang daglig kl. 12.
       </p>
     )
   }
   const temps = observations.map((o) => o.temperature)
-  const lo = Math.floor(Math.min(...temps) / 2) * 2
-  const hi = Math.ceil(Math.max(...temps) / 2) * 2
-  const w = 280
-  const h = 120
-  const pad = { t: 8, r: 8, b: 22, l: 28 }
+  const { ticks, lo, hi } = tempChartScale(temps)
+  const w = 320
+  const h = 148
+  const pad = { t: 10, r: 10, b: 30, l: 34 }
   const xAt = (i: number) =>
     pad.l + (i / (observations.length - 1)) * (w - pad.l - pad.r)
   const yAt = (t: number) =>
@@ -153,8 +165,6 @@ function HistoryChart({
         `${i === 0 ? 'M' : 'L'} ${xAt(i).toFixed(1)} ${yAt(o.temperature).toFixed(1)}`,
     )
     .join(' ')
-  const first = observations[0]
-  const last = observations[observations.length - 1]
 
   return (
     <svg
@@ -162,40 +172,57 @@ function HistoryChart({
       viewBox={`0 0 ${w} ${h}`}
       width="100%"
       role="img"
-      aria-label="Aktuelt vær over tid"
+      aria-label="Temperatur kl. 12 de siste 7 dagene"
     >
+      {ticks.map((t) => (
+        <g key={t}>
+          <line
+            x1={pad.l}
+            x2={w - pad.r}
+            y1={yAt(t)}
+            y2={yAt(t)}
+            className="v2-weather-chart-grid"
+          />
+          <text
+            x={pad.l - 5}
+            y={yAt(t) + 3}
+            textAnchor="end"
+            className="v2-weather-chart-tick"
+          >
+            {t}°
+          </text>
+        </g>
+      ))}
       <path d={line} className="v2-weather-chart-max" fill="none" />
       {observations.map((o, i) => (
-        <circle
-          key={o.at}
-          cx={xAt(i)}
-          cy={yAt(o.temperature)}
-          r="3"
-          className="v2-weather-chart-dot-max"
-        />
+        <g key={o.at}>
+          <circle
+            cx={xAt(i)}
+            cy={yAt(o.temperature)}
+            r="3.5"
+            className="v2-weather-chart-dot-max"
+          />
+          <text
+            x={xAt(i)}
+            y={yAt(o.temperature) - 6}
+            textAnchor="middle"
+            className="v2-weather-chart-temp-label"
+          >
+            {formatTempC(o.temperature)}
+          </text>
+        </g>
       ))}
-      <text
-        x={xAt(0)}
-        y={h - 6}
-        textAnchor="start"
-        className="v2-weather-chart-date"
-      >
-        {formatDateNO(first.at.slice(0, 10))}
-      </text>
-      <text
-        x={xAt(observations.length - 1)}
-        y={h - 6}
-        textAnchor="end"
-        className="v2-weather-chart-date"
-      >
-        {formatDateNO(last.at.slice(0, 10))}
-      </text>
-      <text x={4} y={pad.t + 4} className="v2-weather-chart-tick">
-        {hi}°
-      </text>
-      <text x={4} y={h - pad.b} className="v2-weather-chart-tick">
-        {lo}°
-      </text>
+      {observations.map((o, i) => (
+        <text
+          key={`${o.at}-label`}
+          x={xAt(i)}
+          y={h - 5}
+          textAnchor="middle"
+          className="v2-weather-chart-date"
+        >
+          {formatChartDateNO(o.at.slice(0, 10))}
+        </text>
+      ))}
     </svg>
   )
 }
@@ -293,7 +320,7 @@ function WeatherCityDialog({
   }, [onClose])
 
   const days = weather.days || []
-  const observations = observationsOf(weather, history)
+  const observations = chartObservations(history, weather)
 
   return createPortal(
     <div className="v2-weather-detail-layer" onClick={onClose}>
@@ -308,7 +335,7 @@ function WeatherCityDialog({
           <div>
             <h3>{city}</h3>
             <p className="v2-meta">
-              Aktuelt vær · to ganger om dagen · fem dager bakover
+              Temperatur kl. 12 · sju dager bakover
             </p>
           </div>
           <button
@@ -323,7 +350,7 @@ function WeatherCityDialog({
         </div>
         <div className="v2-weather-detail-body">
           <section>
-            <h4>Aktuelt vær</h4>
+            <h4>Temperatur kl. 12</h4>
             {history === null && observations.length < 2 ? (
               <p className="v2-meta">Henter historikk…</p>
             ) : (
@@ -331,25 +358,44 @@ function WeatherCityDialog({
             )}
           </section>
           {days.length > 0 ? (
-            <ul className="v2-weather-detail-days">
-              {days.map((d) => (
-                <li
-                  key={d.date}
-                  className={d.date === highlight ? 'is-on' : undefined}
-                >
-                  <strong>{formatDateNO(d.date)}</strong>
-                  <span>
-                    {Math.round(d.tempMax)}° / {Math.round(d.tempMin)}°
-                  </span>
-                  <span className="v2-meta">{d.summary}</span>
-                  {d.precipitation > 0 ? (
-                    <span className="v2-meta">
-                      {d.precipitation.toFixed(1)} mm
-                    </span>
-                  ) : null}
-                </li>
-              ))}
-            </ul>
+            <section>
+              <h4>Prognose per dag</h4>
+              <ul className="v2-weather-detail-days">
+                {days.map((d) => {
+                  const today = todayIsoOslo()
+                  const isForecast = d.date > today
+                  return (
+                    <li
+                      key={d.date}
+                      className={[
+                        d.date === highlight ? 'is-on' : '',
+                        isForecast ? 'is-forecast' : '',
+                      ]
+                        .filter(Boolean)
+                        .join(' ') || undefined}
+                      title={formatDateNO(d.date)}
+                    >
+                      <span className="v2-weather-detail-day-date">
+                        {formatChartDateNO(d.date)}
+                      </span>
+                      <strong className="v2-weather-detail-day-temp">
+                        {formatTempC(d.tempMax)}
+                      </strong>
+                      <span className="v2-weather-detail-day-summary">
+                        {d.summary}
+                      </span>
+                      {d.precipitation > 0 ? (
+                        <span className="v2-meta v2-weather-detail-day-rain">
+                          {d.precipitation.toFixed(1)} mm
+                        </span>
+                      ) : (
+                        <span className="v2-weather-detail-day-rain" />
+                      )}
+                    </li>
+                  )
+                })}
+              </ul>
+            </section>
           ) : null}
         </div>
       </div>

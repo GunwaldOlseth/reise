@@ -1,9 +1,11 @@
 import {
   loadTransportOptionSort,
+  type HomePlace,
   type PlannerSettings,
   type TransportOptionSort,
 } from '../userSettings'
 import { arriveTimeSortKey, normalizeClockTime, normalizeDepartures } from '../api'
+import { localizeJourneyPlaces } from '../placeNames'
 import { compactNoteHtml, noteHasContent } from './noteHtml'
 
 export type JourneyPackageType =
@@ -55,6 +57,7 @@ export interface JourneyStay {
   address?: string
   url?: string
   price?: string
+  notes?: string
   checkInTime?: string
   checkOutTime?: string
 }
@@ -150,6 +153,9 @@ export interface JourneyStop {
   id: string
   city: string
   country: string
+  /** English / API spelling for weather and geocoding. */
+  citySearch?: string
+  countrySearch?: string
   /** Cached map coordinates from place search (skip geocode on map). */
   latitude?: number
   longitude?: number
@@ -272,6 +278,8 @@ export interface JourneyTransportOption {
   mode?: JourneyLegMode | string
   /** Line / flight number (optional). */
   title?: string
+  /** Transport company / carrier. */
+  company?: string
   startTime?: string
   endTime?: string
   /** Platform / perong — for bus and train. */
@@ -400,6 +408,7 @@ export function newTransportOption(
     id: newOptionId(),
     mode,
     title: '',
+    company: '',
     startTime: '',
     endTime: '',
     platform: '',
@@ -490,7 +499,6 @@ export function optionLineChanges(
 }
 
 export function withOptionChanges(
-  option: JourneyTransportOption,
   changes: JourneyLineChange[],
 ): Partial<JourneyTransportOption> {
   const next = changes.map(compactLineChange)
@@ -975,6 +983,85 @@ export function journeyOverviewRides(journey: Journey): OverviewRide[] {
   return rides
 }
 
+export type JourneyScheduledDeparture = {
+  date: string
+  time: string
+  fromLabel: string
+  toLabel: string
+}
+
+function scheduledHopLabel(
+  place: JourneyStop | JourneyVia,
+  fallback = 'Sted',
+): string {
+  if ('kind' in place) return overviewStopLabel(place)
+  return (place.title || '').trim() || fallback
+}
+
+/** All registered departure times in journey order (transport + cruise ports). */
+export function journeyScheduledDepartures(
+  journey: Journey,
+): JourneyScheduledDeparture[] {
+  const stops = [...(journey.stops || [])].sort(
+    (a, b) => a.sortOrder - b.sortOrder,
+  )
+  const out: JourneyScheduledDeparture[] = []
+
+  for (let i = 1; i < stops.length; i++) {
+    const from = stops[i - 1]
+    const to = stops[i]
+    const depart = (stopDepartDate(from) || from.arriveDate || '').trim()
+    if (!depart) continue
+    const leg = (journey.legs || []).find(
+      (l) => l.fromStopId === from.id && l.toStopId === to.id,
+    )
+    const segs = transportSegments(leg, { sort: false })
+    for (let s = 0; s < segs.length; s++) {
+      const via = segs[s]
+      const prev = s === 0 ? from : segs[s - 1]
+      const fromLabel = scheduledHopLabel(prev, overviewStopLabel(from))
+      const toLabel =
+        s === segs.length - 1
+          ? stopGoalLabel(to, via.title || to.city)
+          : (via.title || '').trim() || '…'
+      for (const opt of viaTransportOptions(via)) {
+        const time = (opt.startTime || '').trim()
+        if (!time) continue
+        out.push({ date: depart, time, fromLabel, toLabel })
+      }
+    }
+  }
+
+  for (const stop of stops) {
+    if (stop.kind !== 'cruise' || !isPackageStop(stop)) continue
+    const pack = packageOf(stop)
+    if (!pack) continue
+    const ship = (pack.title || stop.city || 'Cruise').trim()
+    const nights = packageNightsOf(pack)
+    for (const day of pack.days || []) {
+      if (day.atSea || day.offset === nights) continue
+      const leave = (day.leaveTime || '').trim()
+      if (!leave) continue
+      const date = stop.arriveDate
+        ? addDaysIso(stop.arriveDate, day.offset)
+        : ''
+      if (!date) continue
+      const port = (day.city || pack.basePlace || stop.city || 'Havn').trim()
+      out.push({
+        date,
+        time: leave,
+        fromLabel: ship,
+        toLabel: port,
+      })
+    }
+  }
+
+  return out.sort((a, b) => {
+    if (a.date !== b.date) return a.date.localeCompare(b.date)
+    return arriveTimeSortKey(a.time) - arriveTimeSortKey(b.time)
+  })
+}
+
 export function stopPurpose(
   stop: Pick<JourneyStop, 'kind' | 'purpose'> | null | undefined,
 ): PlacePurpose {
@@ -1259,6 +1346,44 @@ export function reorderTransportSegments(
   return next.map((v, i) => ({ ...v, sortOrder: i }))
 }
 
+/** Compact label for collapsed list rows (3 letters + dot). */
+export function abbreviateTransportCompany(company: string): string {
+  const trimmed = company.trim()
+  if (!trimmed) return ''
+  return `${trimmed.slice(0, 3)}.`
+}
+
+function transportCompanyLabel(
+  company: string,
+  abbreviate = false,
+): string {
+  const trimmed = company.trim()
+  if (!trimmed) return ''
+  return abbreviate ? abbreviateTransportCompany(trimmed) : trimmed
+}
+
+/** One-line label for a transport option in lists (plan, live, overview). */
+export function formatTransportOptionLabel(
+  opt: JourneyTransportOption,
+  opts?: { abbreviateCompany?: boolean },
+): string {
+  const title = (opt.title || '').trim()
+  const company = transportCompanyLabel(
+    opt.company || '',
+    opts?.abbreviateCompany,
+  )
+  const time = (opt.startTime || '').trim()
+  const mins = optionDurationMinutes(opt)
+  const dur = mins != null ? formatDurationHM(mins) : ''
+  if (modeIsWalk(opt.mode)) {
+    const walk = (opt.minutes || '').trim()
+    return [legModeLabel(opt.mode), walk ? `${walk} min` : '']
+      .filter(Boolean)
+      .join(' · ') || 'Rediger avgang'
+  }
+  return [title, company, time, dur].filter(Boolean).join(' · ') || 'Rediger avgang'
+}
+
 function formatOptionSummaryBit(
   o: JourneyTransportOption,
   markOvernight = true,
@@ -1284,11 +1409,13 @@ function formatOptionSummaryBit(
     return [core, ticket, taken].filter(Boolean).join(' · ')
   }
   if (modeIsFlight(o.mode)) {
+    const company = transportCompanyLabel(o.company || '')
     const nr = (o.title || '').trim()
     const gate = (o.gate || '').trim()
     const t = (o.startTime || '').trim()
     const parts = [
       mode,
+      company,
       nr,
       gate ? `gate ${gate}` : '',
       t,
@@ -1301,18 +1428,22 @@ function formatOptionSummaryBit(
     return parts.join(' ')
   }
   if (modeIsOther(o.mode)) {
+    const company = transportCompanyLabel(o.company || '')
     const type = (o.title || '').trim()
     const info = (o.info || '').trim()
     const t = (o.startTime || '').trim()
-    const head = [type || mode, info].filter(Boolean).join(' — ')
+    const head = [company, type || mode, info].filter(Boolean).join(' — ')
     const core = head && t ? `${head} ${t}` : head || t
     return [core, overnight, dur, ticket, taken, change].filter(Boolean).join(' · ')
   }
+  const company = transportCompanyLabel(o.company || '')
+  const nr = (o.title || '').trim()
   const t = (o.startTime || '').trim()
   const platform = modeHasPlatform(o.mode) ? (o.platform || '').trim() : ''
   const plat = platform ? ` p.${platform}` : ''
+  const head = [mode, company, nr].filter(Boolean).join(' ')
   const core =
-    mode && t ? `${mode} ${t}${plat}` : mode ? `${mode}${plat}` : t
+    head && t ? `${head} ${t}${plat}` : head || (t ? `${t}${plat}` : plat.trim())
   return [core, overnight, dur, ticket, taken, change].filter(Boolean).join(' · ')
 }
 
@@ -1362,20 +1493,22 @@ export function summarizeViaHop(
   const opt = options[0]
   if (!opt) return route
   const mode = opt.mode ? legModeLabel(opt.mode) : ''
+  const company = transportCompanyLabel(opt.company || '')
   const mins = optionDurationMinutes(opt)
   const dur = mins != null ? formatDurationHM(mins) : ''
-  const ride = [mode, dur].filter(Boolean).join(' · ')
+  const ride = [company, mode, dur].filter(Boolean).join(' · ')
   return ride ? `${route} · ${ride}` : route
 }
 
 /** One line for the alt-count hover list. */
 export function formatOptionAltLine(option: JourneyTransportOption): string {
   const mode = option.mode ? legModeLabel(option.mode) : ''
+  const company = transportCompanyLabel(option.company || '')
   const time = modeIsWalk(option.mode) ? '' : (option.startTime || '').trim()
   const nr = modeIsFlight(option.mode) ? (option.title || '').trim() : ''
   const mins = optionDurationMinutes(option)
   const dur = mins != null ? formatDurationHM(mins) : ''
-  return [mode, nr, time, dur].filter(Boolean).join(' · ')
+  return [company, mode, nr, time, dur].filter(Boolean).join(' · ')
 }
 
 export type JourneyLiveKind = 'food' | 'drink' | 'shop' | 'other'
@@ -1854,11 +1987,6 @@ export function formatPackageDayListLine(
   const parts: string[] = [row.place]
   if (row.arrive && row.leave) {
     parts.push(`${row.arrive}–${row.leave}`)
-    if (row.portHours) {
-      parts.push(
-        opts.type === 'cruise' ? `${row.portHours} i havn` : row.portHours,
-      )
-    }
   } else if (row.arrive) {
     parts.push(`Ank. ${row.arrive}`)
   } else if (row.leave) {
@@ -2256,6 +2384,17 @@ export function journeyWithRegisteredHome(
   return changed ? { ...journey, stops } : journey
 }
 
+/** Full normalize for Plan tab: legs, localized names, registered home. */
+export function normalizePlannerJourney(
+  journey: Journey,
+  homePlace: HomePlace,
+): Journey {
+  return journeyWithRegisteredHome(
+    localizeJourneyPlaces(syncJourneyLegs(journey)),
+    homePlace,
+  )
+}
+
 export function showOnwardFromHere(
   stop: JourneyStop,
   nextStop?: JourneyStop | null,
@@ -2322,6 +2461,7 @@ export function isTransportOptionFilled(
   return !!(
     o.mode?.trim() ||
     o.title?.trim() ||
+    o.company?.trim() ||
     o.startTime?.trim() ||
     (o.minutes || '').trim() ||
     o.info?.trim() ||

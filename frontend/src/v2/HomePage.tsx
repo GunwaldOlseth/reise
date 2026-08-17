@@ -1,6 +1,8 @@
 import { useMemo, useState, type ReactNode } from 'react'
 import { HolidayCountdown } from './HolidayCountdown'
+import { cachedJourney } from './journeyCache'
 import { formatDateNO, todayIsoOslo } from './journeyModel'
+import { nextScheduledDeparture } from './transportSchedule'
 import {
   emptyTripFeatures,
   formatTravelers,
@@ -40,6 +42,7 @@ export function HomePage({
   onOpenSettings,
   onOpenAppearance,
   onOpenLinks,
+  onOpenAdmin,
   onOpenTrip,
   onShowNewTrip,
   onHideNewTrip,
@@ -66,6 +69,7 @@ export function HomePage({
   onOpenSettings: () => void
   onOpenAppearance: () => void
   onOpenLinks: () => void
+  onOpenAdmin: () => void
   onOpenTrip: (tripId: string) => void
   onShowNewTrip: () => void
   onHideNewTrip: () => void
@@ -80,9 +84,25 @@ export function HomePage({
   const nextTrip = useMemo(() => {
     const today = todayIsoOslo()
     return [...trips]
-      .filter((t) => (t.startDate || '').trim() > today)
+      .filter((t) => (t.startDate || '').trim() >= today)
       .sort((a, b) => a.startDate.localeCompare(b.startDate))[0]
   }, [trips])
+  const nextDepart = useMemo(() => {
+    let best: (ReturnType<typeof nextScheduledDeparture> & {
+      tripId: string
+      tripName: string
+    }) | null = null
+    for (const trip of trips) {
+      const journey = cachedJourney(trip.id)
+      if (!journey) continue
+      const dep = nextScheduledDeparture(journey)
+      if (!dep) continue
+      if (!best || dep.atMs < best.atMs) {
+        best = { ...dep, tripId: trip.id, tripName: trip.name }
+      }
+    }
+    return best
+  }, [trips, loading])
 
   return (
     <div className="v2-shell v2-home">
@@ -116,6 +136,14 @@ export function HomePage({
           <button
             type="button"
             className="btn btn-ghost btn-sm"
+            title="Admin"
+            onClick={onOpenAdmin}
+          >
+            Admin
+          </button>
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm"
             title="Oppdater turer"
             onClick={onRefresh}
           >
@@ -144,11 +172,21 @@ export function HomePage({
             Hjem: {formatHomePlace(homePlace)}
           </p>
         )}
-        {nextTrip && (
+        {(nextDepart || nextTrip) && (
           <HolidayCountdown
-            startDate={nextTrip.startDate}
-            detail={nextTrip.name}
-            onOpen={() => onOpenTrip(nextTrip.id)}
+            startDate={
+              nextDepart?.date || nextTrip?.startDate || ''
+            }
+            atMs={nextDepart?.atMs}
+            departureTime={nextDepart?.time}
+            detail={
+              nextDepart
+                ? `${nextDepart.fromLabel} → ${nextDepart.toLabel} · ${nextDepart.tripName}`
+                : nextTrip?.name
+            }
+            onOpen={() =>
+              onOpenTrip(nextDepart?.tripId || nextTrip!.id)
+            }
           />
         )}
       </section>

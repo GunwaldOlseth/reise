@@ -3,7 +3,6 @@ import {
   api,
   emptyTripFeatures,
   normalizeTravelers,
-  type BackupMeta,
   type Trip,
   type TripInput,
 } from './api'
@@ -27,7 +26,6 @@ import { ConfirmDeleteProvider } from './v2/ConfirmDelete'
 import { HomePage } from './v2/HomePage'
 import { TripHub } from './v2/TripHub'
 import { ShareItineraryPage } from './v2/ShareItineraryPage'
-import { SharePreviewCard } from './v2/ShareItineraryView'
 import { UsefulLinksCard, UsefulLinksPage } from './v2/UsefulLinks'
 import { TimeAlertsCard, TravelAlertWatcher } from './v2/TravelAlertWatcher'
 import { readShareToken } from './v2/shareItinerary'
@@ -38,7 +36,9 @@ import {
   type Journey,
 } from './v2/journeyModel'
 import { localizeJourneyPlaces } from './placeNames'
+import { AdminPage } from './v2/AdminPage'
 import { enqueueJourneyWeather } from './v2/JourneyWeather'
+import { cacheJourney } from './v2/journeyCache'
 import './v2/v2.css'
 
 function GoogleLoginButton() {
@@ -78,6 +78,7 @@ function GoogleLoginButton() {
 type View =
   | { name: 'home' }
   | { name: 'settings'; returnTo?: View }
+  | { name: 'admin'; returnTo?: View }
   | { name: 'appearance'; returnTo?: View }
   | { name: 'links'; returnTo?: View }
   | {
@@ -159,8 +160,6 @@ function SettingsPage({
   initialHome,
   initialPlanner,
   error,
-  trips,
-  previewTripId,
   onBack,
   onSave,
   onOpenLinks,
@@ -168,8 +167,6 @@ function SettingsPage({
   initialHome: HomePlace
   initialPlanner: PlannerSettings
   error?: string
-  trips: Trip[]
-  previewTripId?: string
   onBack: () => void
   onSave: (home: HomePlace, planner: PlannerSettings) => void
   onOpenLinks: () => void
@@ -194,7 +191,7 @@ function SettingsPage({
           </button>
           <div>
             <h1>Innstillinger</h1>
-            <p className="v2-meta">Hjem, lenker, steg, deling og varsler</p>
+            <p className="v2-meta">Hjem, lenker, steg og varsler</p>
           </div>
         </div>
       </header>
@@ -317,204 +314,8 @@ function SettingsPage({
         </section>
 
         <TimeAlertsCard />
-
-        <SharePreviewCard trips={trips} initialTripId={previewTripId} />
-
-        <AdminBackupPanel />
       </div>
     </div>
-  )
-}
-
-const ADMIN_TOKEN_KEY = 'reise.adminToken'
-
-function formatBackupWhen(iso: string) {
-  const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) return iso
-  return d.toLocaleString('nb-NO', {
-    timeZone: 'Europe/Oslo',
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  })
-}
-
-function AdminBackupPanel() {
-  const [password, setPassword] = useState('')
-  const [token, setToken] = useState(
-    () => sessionStorage.getItem(ADMIN_TOKEN_KEY) || '',
-  )
-  const [backups, setBackups] = useState<BackupMeta[]>([])
-  const [busy, setBusy] = useState(false)
-  const [hint, setHint] = useState('')
-
-  async function loadList(nextToken: string) {
-    const data = await api.adminListBackups(nextToken)
-    setBackups(data.backups || [])
-  }
-
-  async function login() {
-    setBusy(true)
-    setHint('')
-    try {
-      const data = await api.adminLogin(password)
-      sessionStorage.setItem(ADMIN_TOKEN_KEY, data.token)
-      setToken(data.token)
-      setPassword('')
-      await loadList(data.token)
-    } catch (err) {
-      setHint(err instanceof Error ? err.message : 'Innlogging feilet')
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  async function refresh() {
-    if (!token) return
-    setBusy(true)
-    setHint('')
-    try {
-      await loadList(token)
-    } catch (err) {
-      sessionStorage.removeItem(ADMIN_TOKEN_KEY)
-      setToken('')
-      setHint(err instanceof Error ? err.message : 'Kunne ikke hente backup')
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  async function createNow() {
-    if (!token) return
-    setBusy(true)
-    setHint('')
-    try {
-      await api.adminCreateBackup(token)
-      await loadList(token)
-      setHint('Ny sikkerhetskopi er tatt.')
-    } catch (err) {
-      setHint(err instanceof Error ? err.message : 'Kunne ikke ta backup')
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  async function restore(id: string, label: string) {
-    if (
-      !confirm(
-        `Gjenopprette sikkerhetskopi fra ${label}? Dette erstatter alle turer med innholdet i kopien.`,
-      )
-    ) {
-      return
-    }
-    setBusy(true)
-    setHint('')
-    try {
-      await api.adminRestoreBackup(token, id)
-      setHint('Gjenopprettet. Last siden på nytt for å se turene.')
-    } catch (err) {
-      setHint(err instanceof Error ? err.message : 'Kunne ikke gjenopprette')
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  return (
-    <section className="v2-settings-card">
-      <h2>Admin · sikkerhetskopi</h2>
-      <p className="v2-meta">
-        Automatisk kl. 08, 14 og 19 (norsk tid). Lagres som filer i Google Cloud
-        Storage — ingen nye tabeller.
-      </p>
-      {!token ? (
-        <div className="form-grid">
-          <label className="full">
-            Admin-passord
-            <input
-              type="password"
-              value={password}
-              autoComplete="current-password"
-              onChange={(e) => setPassword(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') void login()
-              }}
-            />
-          </label>
-          <div className="v2-settings-actions">
-            <button
-              className="btn btn-primary"
-              type="button"
-              disabled={busy || !password.trim()}
-              onClick={() => void login()}
-            >
-              {busy ? 'Logger inn…' : 'Logg inn som admin'}
-            </button>
-          </div>
-        </div>
-      ) : (
-        <>
-          <div className="v2-settings-actions">
-            <button
-              className="btn btn-soft"
-              type="button"
-              disabled={busy}
-              onClick={() => void refresh()}
-            >
-              Oppdater liste
-            </button>
-            <button
-              className="btn btn-primary"
-              type="button"
-              disabled={busy}
-              onClick={() => void createNow()}
-            >
-              Ta backup nå
-            </button>
-            <button
-              className="btn btn-ghost"
-              type="button"
-              onClick={() => {
-                sessionStorage.removeItem(ADMIN_TOKEN_KEY)
-                setToken('')
-                setBackups([])
-              }}
-            >
-              Logg ut
-            </button>
-          </div>
-          {backups.length === 0 ? (
-            <p className="v2-meta">Ingen sikkerhetskopier ennå.</p>
-          ) : (
-            <ul className="v2-backup-list">
-              {backups.map((b) => {
-                const label = formatBackupWhen(b.createdAt)
-                return (
-                  <li key={b.id}>
-                    <span>
-                      <strong>{label}</strong>
-                      {b.trips != null ? (
-                        <span className="v2-meta"> · {b.trips} turer</span>
-                      ) : null}
-                    </span>
-                    <button
-                      className="btn btn-soft btn-sm"
-                      type="button"
-                      disabled={busy}
-                      onClick={() => void restore(b.id, label)}
-                    >
-                      Hent tilbake
-                    </button>
-                  </li>
-                )
-              })}
-            </ul>
-          )}
-        </>
-      )}
-      {hint ? <p className="v2-meta">{hint}</p> : null}
-    </section>
   )
 }
 
@@ -574,6 +375,7 @@ function AppMain() {
               tripId: trip.id,
             })
             counts[trip.id] = journeyListStats(localized)
+            cacheJourney(localized)
             enqueueJourneyWeather(localized)
           } catch {
             counts[trip.id] = { dayCount: 0, countryCount: 0, cityCount: 0 }
@@ -689,6 +491,25 @@ function AppMain() {
     )
   }
 
+  if (view.name === 'admin') {
+    const returnTo = view.returnTo || { name: 'home' as const }
+    return (
+      <>
+        {alerts}
+        <AdminPage
+          trips={trips}
+          previewTripId={
+            returnTo.name === 'trip' ? returnTo.tripId : trips[0]?.id
+          }
+          onBack={() => {
+            setError('')
+            setView(returnTo)
+          }}
+        />
+      </>
+    )
+  }
+
   if (view.name === 'settings') {
     const returnTo = view.returnTo || { name: 'home' as const }
     return (
@@ -698,10 +519,6 @@ function AppMain() {
         initialHome={homePlace}
         initialPlanner={plannerSettings}
         error={error}
-        trips={trips}
-        previewTripId={
-          returnTo.name === 'trip' ? returnTo.tripId : trips[0]?.id
-        }
         onBack={() => {
           setError('')
           setView(returnTo)
@@ -777,6 +594,16 @@ function AppMain() {
             },
           })
         }
+        onOpenAdmin={() =>
+          setView({
+            name: 'admin',
+            returnTo: {
+              name: 'trip',
+              tripId: view.tripId,
+              tab: view.tab || 'plan',
+            },
+          })
+        }
       />
       </>
     )
@@ -808,6 +635,10 @@ function AppMain() {
       onOpenLinks={() => {
         setError('')
         setView({ name: 'links', returnTo: { name: 'home' } })
+      }}
+      onOpenAdmin={() => {
+        setError('')
+        setView({ name: 'admin', returnTo: { name: 'home' } })
       }}
       onOpenTrip={(tripId) => setView({ name: 'trip', tripId })}
       onShowNewTrip={() => {

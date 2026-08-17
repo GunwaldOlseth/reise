@@ -52,6 +52,23 @@ func normalizeConnection(value string) string {
 	}
 }
 
+func normalizeTransportOptions(via *JourneyVia) {
+	if via == nil {
+		return
+	}
+	for i := range via.Options {
+		via.Options[i].Mode = strings.TrimSpace(via.Options[i].Mode)
+		via.Options[i].Title = strings.TrimSpace(via.Options[i].Title)
+		via.Options[i].Company = strings.TrimSpace(via.Options[i].Company)
+		via.Options[i].StartTime = strings.TrimSpace(via.Options[i].StartTime)
+		via.Options[i].EndTime = strings.TrimSpace(via.Options[i].EndTime)
+		via.Options[i].Platform = strings.TrimSpace(via.Options[i].Platform)
+		via.Options[i].Gate = strings.TrimSpace(via.Options[i].Gate)
+		via.Options[i].Minutes = strings.TrimSpace(via.Options[i].Minutes)
+		via.Options[i].Info = strings.TrimSpace(via.Options[i].Info)
+	}
+}
+
 func normalizeSights(sights []JourneySight) {
 	for i := range sights {
 		sights[i].Purpose = normalizePurpose(sights[i].Purpose)
@@ -245,6 +262,7 @@ func normalizeJourney(j *Journey) {
 				existing.Vias[vi].ChangePlace = strings.TrimSpace(existing.Vias[vi].ChangePlace)
 				existing.Vias[vi].ChangePlatform = strings.TrimSpace(existing.Vias[vi].ChangePlatform)
 				existing.Vias[vi].ChangeMinutes = strings.TrimSpace(existing.Vias[vi].ChangeMinutes)
+				normalizeTransportOptions(&existing.Vias[vi])
 				normalizeSights(existing.Vias[vi].Sights)
 				if existing.Vias[vi].ID == "" {
 					existing.Vias[vi].ID = newJourneyID("via")

@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"net/http"
 	"regexp"
@@ -152,49 +151,81 @@ func journeyWeatherLogActive(j Journey, today string) bool {
 	return today >= from && today <= until
 }
 
-// Two buckets a day (morning / evening) is enough for forecast drift.
-func weatherSnapBucket(t time.Time) string {
+// weatherNoonSnapID is one noon reading per calendar day (chart history).
+func weatherNoonSnapID(date string) string {
+	return date + "-12"
+}
+
+// weatherLiveSnapID is the live "now" reading — not shown on the noon chart.
+func weatherLiveSnapID(t time.Time) string {
 	loc, err := time.LoadLocation("Europe/Oslo")
 	if err == nil {
 		t = t.In(loc)
 	}
-	hour := 8
-	if t.Hour() >= 14 {
-		hour = 19
+	return t.Format("2006-01-02") + "-live"
+}
+
+func isNoonOslo(t time.Time) bool {
+	loc, err := time.LoadLocation("Europe/Oslo")
+	if err != nil {
+		return t.Hour() == 12
 	}
-	return fmt.Sprintf("%s-%02d", t.Format("2006-01-02"), hour)
+	return t.In(loc).Hour() == 12
 }
 
 func saveWeatherSnapshot(ctx context.Context, city, country string, days []weatherDay, current *weatherCurrent) {
 	if current == nil && len(days) == 0 {
 		return
 	}
-	saveWeatherSnapshotAt(ctx, city, country, osloNow(), days, current, true)
+	saveWeatherLiveSnapshot(ctx, city, country, days, current)
 }
 
-func weatherSnapExists(ctx context.Context, placeID, snapID string) bool {
-	if db == nil {
-		return false
-	}
-	doc, err := db.Collection(weatherArchiveCol).Doc(placeID).Collection(weatherSnapsCol).Doc(snapID).Get(ctx)
-	return err == nil && doc.Exists()
-}
-
-func saveWeatherSnapshotAt(ctx context.Context, city, country string, at time.Time, days []weatherDay, current *weatherCurrent, overwrite bool) {
+func saveWeatherLiveSnapshot(ctx context.Context, city, country string, days []weatherDay, current *weatherCurrent) {
 	if db == nil || current == nil {
 		return
 	}
-	if at.IsZero() {
-		at = osloNow()
-	}
+	now := osloNow()
 	id := weatherPlaceID(city, country)
-	snapID := weatherSnapBucket(at)
-	if !overwrite && weatherSnapExists(ctx, id, snapID) {
+	snapID := weatherLiveSnapID(now)
+	snap := weatherSnap{
+		FetchedAt: now.Format(time.RFC3339),
+		Days:      days,
+		Current:   current,
+	}
+	ref := db.Collection(weatherArchiveCol).Doc(id)
+	if _, err := ref.Set(ctx, map[string]interface{}{
+		"city":      city,
+		"country":   country,
+		"updatedAt": now,
+	}); err != nil {
+		log.Printf("[Weather] archive meta %s: %v", id, err)
 		return
 	}
+	if _, err := ref.Collection(weatherSnapsCol).Doc(snapID).Set(ctx, snap); err != nil {
+		log.Printf("[Weather] archive live %s/%s: %v", id, snapID, err)
+		return
+	}
+	pruneWeatherSnapsRef(ctx, id)
+}
+
+func saveWeatherNoonSnapshot(ctx context.Context, city, country, date string, current *weatherCurrent) {
+	if db == nil || current == nil || strings.TrimSpace(date) == "" {
+		return
+	}
+	id := weatherPlaceID(city, country)
+	snapID := weatherNoonSnapID(date)
+	if weatherSnapExists(ctx, id, snapID) {
+		return
+	}
+	loc, err := time.LoadLocation("Europe/Oslo")
+	noon := time.Now()
+	if err == nil {
+		noon, _ = time.ParseInLocation("2006-01-02T15:04", date+"T12:00", loc)
+	} else {
+		noon, _ = time.Parse("2006-01-02T15:04", date+"T12:00")
+	}
 	snap := weatherSnap{
-		FetchedAt: at.Format(time.RFC3339),
-		Days:      days,
+		FetchedAt: noon.Format(time.RFC3339),
 		Current:   current,
 	}
 	ref := db.Collection(weatherArchiveCol).Doc(id)
@@ -207,24 +238,42 @@ func saveWeatherSnapshotAt(ctx context.Context, city, country string, at time.Ti
 		return
 	}
 	if _, err := ref.Collection(weatherSnapsCol).Doc(snapID).Set(ctx, snap); err != nil {
-		log.Printf("[Weather] archive snap %s/%s: %v", id, snapID, err)
+		log.Printf("[Weather] archive noon %s/%s: %v", id, snapID, err)
 		return
 	}
 	pruneWeatherSnapsRef(ctx, id)
 }
 
-func persistWeatherObservations(ctx context.Context, city, country string, days []weatherDay, current *weatherCurrent, obs []weatherObservation) {
-	if current != nil {
-		saveWeatherSnapshotAt(ctx, city, country, osloNow(), days, current, true)
+func weatherSnapExists(ctx context.Context, placeID, snapID string) bool {
+	if db == nil {
+		return false
 	}
-	now := osloNow()
-	liveBucket := weatherSnapBucket(now)
+	doc, err := db.Collection(weatherArchiveCol).Doc(placeID).Collection(weatherSnapsCol).Doc(snapID).Get(ctx)
+	return err == nil && doc.Exists()
+}
+
+func saveWeatherSnapshotAt(ctx context.Context, city, country string, at time.Time, days []weatherDay, current *weatherCurrent, overwrite bool) {
+	saveWeatherLiveSnapshot(ctx, city, country, days, current)
+}
+
+func persistWeatherObservations(ctx context.Context, city, country string, days []weatherDay, current *weatherCurrent, obs []weatherObservation, liveOnly bool) {
+	if current != nil {
+		saveWeatherLiveSnapshot(ctx, city, country, days, current)
+	}
+	if liveOnly {
+		return
+	}
+	today := osloTodayISO()
+	if current != nil && isNoonOslo(osloNow()) {
+		saveWeatherNoonSnapshot(ctx, city, country, today, current)
+	}
 	for _, o := range obs {
 		at, err := time.Parse(time.RFC3339, strings.TrimSpace(o.At))
-		if err != nil || !at.Before(now) {
+		if err != nil || !isNoonOslo(at) {
 			continue
 		}
-		if weatherSnapBucket(at) == liveBucket {
+		date := at.Format("2006-01-02")
+		if date >= today {
 			continue
 		}
 		cur := &weatherCurrent{
@@ -233,27 +282,63 @@ func persistWeatherObservations(ctx context.Context, city, country string, days 
 			Summary:     o.Summary,
 			Icon:        o.Icon,
 		}
-		saveWeatherSnapshotAt(ctx, city, country, at, nil, cur, false)
+		saveWeatherNoonSnapshot(ctx, city, country, date, cur)
 	}
 }
 
+func isChartHistoryTime(at time.Time) bool {
+	loc, err := time.LoadLocation("Europe/Oslo")
+	if err != nil {
+		h := at.Hour()
+		return h == 12 || h == 8 || h == 19
+	}
+	h := at.In(loc).Hour()
+	return h == 12 || h == 8 || h == 19
+}
+
+func noonRFC3339(date string) string {
+	loc, err := time.LoadLocation("Europe/Oslo")
+	if err != nil {
+		return date + "T12:00:00Z"
+	}
+	t, err := time.ParseInLocation("2006-01-02T15:04", date+"T12:00", loc)
+	if err != nil {
+		return date + "T12:00:00"
+	}
+	return t.Format(time.RFC3339)
+}
+
 func observationsFromSnaps(snaps []weatherSnap) []weatherObservation {
-	out := make([]weatherObservation, 0, len(snaps))
+	today := osloTodayISO()
+	oldest := addDaysISO(today, -7)
+	byDate := map[string]weatherObservation{}
+	loc, _ := time.LoadLocation("Europe/Oslo")
 	for _, snap := range snaps {
 		if snap.Current == nil {
 			continue
 		}
-		at := strings.TrimSpace(snap.FetchedAt)
-		if at == "" {
+		at := parseWeatherSnapTime(snap)
+		if at.IsZero() || !isChartHistoryTime(at) {
 			continue
 		}
-		out = append(out, weatherObservation{
-			At:          at,
+		date := at.Format("2006-01-02")
+		if loc != nil {
+			date = at.In(loc).Format("2006-01-02")
+		}
+		if date < oldest || date > today {
+			continue
+		}
+		byDate[date] = weatherObservation{
+			At:          noonRFC3339(date),
 			Temperature: snap.Current.Temperature,
 			WeatherCode: snap.Current.WeatherCode,
 			Summary:     snap.Current.Summary,
 			Icon:        snap.Current.Icon,
-		})
+		}
+	}
+	out := make([]weatherObservation, 0, len(byDate))
+	for _, obs := range byDate {
+		out = append(out, obs)
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].At < out[j].At })
 	return out
@@ -267,7 +352,7 @@ func needsPastBackfill(obs []weatherObservation) bool {
 			days[o.At[:10]] = true
 		}
 	}
-	return len(days) < 5
+	return len(days) < 7
 }
 
 func pruneWeatherSnapsRef(ctx context.Context, placeID string) {
@@ -381,7 +466,7 @@ func loadWeatherHistory(ctx context.Context, city, country string) (weatherHisto
 		Country:      country,
 		Snapshots:    []weatherSnap{},
 		Observations: []weatherObservation{},
-		Resolution:   "aktuelt vær to ganger om dagen (08 og 19), fem dager bakover",
+		Resolution:   "kl. 12, sju dager bakover",
 	}
 	if db == nil {
 		return out, nil
@@ -523,8 +608,8 @@ func refreshWeatherArchive(ctx context.Context) (ok, fail int) {
 		}
 		_, _, days := buildWeatherDays(data)
 		current := currentFromMeteo(data)
-		obs := observationsFromHourly(data, current)
-		persistWeatherObservations(ctx, localizeCity(place.Name), localizeCountry(place.Country), days, current, obs)
+		obs := chartObservationsFromHourly(data)
+		persistWeatherObservations(ctx, localizeCity(place.Name), localizeCountry(place.Country), days, current, obs, false)
 		ok++
 	}
 	return ok, fail

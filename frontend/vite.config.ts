@@ -5,6 +5,7 @@ export default defineConfig({
   plugins: [react()],
   server: {
     // Brygge/beer uses 5173 — keep Reise on a fixed port.
+    host: true,
     port: 5174,
     strictPort: true,
     proxy: {

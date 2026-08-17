@@ -1403,6 +1403,9 @@ export function formatViaRouteDetailed(
 export interface PlaceSuggestion {
   name: string;
   country: string;
+  /** English / API spelling for weather and geocoding lookups. */
+  searchName?: string;
+  searchCountry?: string;
   admin1?: string;
   latitude: number;
   longitude: number;
@@ -1519,12 +1522,34 @@ export const api = {
    * week=true also fetches the 7-day forecast. Observations are actual
    * readings (5 days back, then twice a day). refresh=true forces Open-Meteo.
    */
-  getWeather: (city: string, country = '', opts?: { week?: boolean; date?: string; refresh?: boolean }) => {
+  getWeather: (
+    city: string,
+    country = '',
+    opts?: {
+      week?: boolean;
+      date?: string;
+      refresh?: boolean;
+      latitude?: number;
+      longitude?: number;
+      citySearch?: string;
+      countrySearch?: string;
+    },
+  ) => {
     const qs = new URLSearchParams({ city });
     if (country.trim()) qs.set('country', country.trim());
     if (opts?.week) qs.set('week', '1');
     if (opts?.date?.trim()) qs.set('date', opts.date.trim());
     if (opts?.refresh) qs.set('refresh', '1');
+    if (opts?.latitude != null && Number.isFinite(opts.latitude)) {
+      qs.set('lat', String(opts.latitude));
+    }
+    if (opts?.longitude != null && Number.isFinite(opts.longitude)) {
+      qs.set('lng', String(opts.longitude));
+    }
+    if (opts?.citySearch?.trim()) qs.set('citySearch', opts.citySearch.trim());
+    if (opts?.countrySearch?.trim()) {
+      qs.set('countrySearch', opts.countrySearch.trim());
+    }
     return request<WeatherReport>(`/weather?${qs.toString()}`);
   },
 
@@ -1599,7 +1624,7 @@ export const api = {
       body: JSON.stringify({ password }),
     }),
   adminListBackups: (token: string) =>
-    request<{ backups: BackupMeta[] }>('/admin/backups', {
+    request<BackupListResponse>('/admin/backups', {
       headers: { Authorization: `Bearer ${token}` },
     }),
   adminCreateBackup: (token: string) =>
@@ -1613,6 +1638,13 @@ export const api = {
       headers: { Authorization: `Bearer ${token}` },
       body: JSON.stringify({ id }),
     }),
+};
+
+export type BackupListResponse = {
+  backups: BackupMeta[];
+  bucket?: string;
+  gcsCount?: number;
+  localCount?: number;
 };
 
 export type BackupMeta = {

@@ -188,6 +188,7 @@ type JourneyStay struct {
 	Address      string `json:"address,omitempty" firestore:"address,omitempty"`
 	URL          string `json:"url,omitempty" firestore:"url,omitempty"`
 	Price        string `json:"price,omitempty" firestore:"price,omitempty"`
+	Notes        string `json:"notes,omitempty" firestore:"notes,omitempty"`
 	CheckInTime  string `json:"checkInTime,omitempty" firestore:"checkInTime,omitempty"`
 	CheckOutTime string `json:"checkOutTime,omitempty" firestore:"checkOutTime,omitempty"`
 }
@@ -236,9 +237,11 @@ type JourneyCruise struct {
 // JourneyStop is one place on the trip thread (not a single calendar day).
 type JourneyStop struct {
 	ID         string          `json:"id" firestore:"id"`
-	City       string          `json:"city" firestore:"city"`
-	Country    string          `json:"country" firestore:"country"`
-	Latitude   float64         `json:"latitude,omitempty" firestore:"latitude,omitempty"`
+	City          string          `json:"city" firestore:"city"`
+	Country       string          `json:"country" firestore:"country"`
+	CitySearch    string          `json:"citySearch,omitempty" firestore:"citySearch,omitempty"`
+	CountrySearch string          `json:"countrySearch,omitempty" firestore:"countrySearch,omitempty"`
+	Latitude      float64         `json:"latitude,omitempty" firestore:"latitude,omitempty"`
 	Longitude  float64         `json:"longitude,omitempty" firestore:"longitude,omitempty"`
 	Address    string          `json:"address,omitempty" firestore:"address,omitempty"`
 	Station    string          `json:"station,omitempty" firestore:"station,omitempty"`
@@ -281,6 +284,7 @@ type JourneyTransportOption struct {
 	ID         string   `json:"id" firestore:"id"`
 	Mode       string   `json:"mode,omitempty" firestore:"mode,omitempty"`
 	Title      string   `json:"title,omitempty" firestore:"title,omitempty"` // flight nr / line
+	Company    string   `json:"company,omitempty" firestore:"company,omitempty"`
 	StartTime  string   `json:"startTime,omitempty" firestore:"startTime,omitempty"`
 	EndTime    string   `json:"endTime,omitempty" firestore:"endTime,omitempty"`
 	Platform   string   `json:"platform,omitempty" firestore:"platform,omitempty"` // perong (buss/tog)

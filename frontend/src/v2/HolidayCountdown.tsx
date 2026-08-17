@@ -138,28 +138,44 @@ export function CountdownCard({
 
 export function HolidayCountdown({
   startDate,
+  atMs: atMsProp,
+  departureTime,
+  kicker = 'Ferie om',
   detail,
   onOpen,
 }: {
-  startDate: string
+  startDate?: string
+  /** Count down to an exact departure (overrides start-of-day on startDate). */
+  atMs?: number
+  departureTime?: string
+  kicker?: string
   detail?: string
   onOpen?: () => void
 }) {
   const [now, setNow] = useState(() => Date.now())
-  const startMs = osloMidnightMs(startDate)
-  const left = startMs - now
+  const startMs = startDate ? osloMidnightMs(startDate) : NaN
+  const targetMs = Number.isFinite(atMsProp) ? atMsProp! : startMs
+  const left = targetMs - now
 
   useEffect(() => {
-    if (!Number.isFinite(startMs)) return
+    if (!Number.isFinite(targetMs)) return
     const id = window.setInterval(() => setNow(Date.now()), 1000)
     return () => window.clearInterval(id)
-  }, [startMs])
+  }, [targetMs])
 
-  if (!Number.isFinite(startMs) || left <= 0) return null
+  if (!Number.isFinite(targetMs) || left <= 0) return null
+
+  const whenLabel = (() => {
+    const datePart = startDate ? formatDateNO(startDate) : ''
+    const timePart = (departureTime || '').trim()
+    if (datePart && timePart) return `${datePart} · ${timePart}`
+    if (datePart) return `Starter ${datePart}`
+    return ''
+  })()
 
   const body = (
     <>
-      <p className="v2-live-countdown-kicker">Ferie om</p>
+      <p className="v2-live-countdown-kicker">{kicker}</p>
       <div className="v2-live-countdown-units">
         {countdownUnits(left).map((u) => (
           <div key={u.label} className="v2-live-countdown-unit">
@@ -169,8 +185,9 @@ export function HolidayCountdown({
         ))}
       </div>
       <p className="v2-meta">
-        Starter {formatDateNO(startDate)}
-        {detail ? ` · ${detail}` : ''}
+        {whenLabel}
+        {whenLabel && detail ? ' · ' : ''}
+        {detail || ''}
       </p>
     </>
   )

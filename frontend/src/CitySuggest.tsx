@@ -118,16 +118,7 @@ export function CitySuggestFields({
   }, [city, country, cityFocused, editedSinceFocus])
 
   function pick(place: PlaceSuggestion) {
-    onSelectPlace(
-      localizeCity(place.name) || place.name,
-      localizeCountry(place.country) || place.country || country,
-      {
-        ...place,
-        name: localizeCity(place.name) || place.name,
-        country: localizeCountry(place.country) || place.country,
-        admin1: localizeCity(place.admin1) || place.admin1,
-      },
-    )
+    onSelectPlace(place.name, place.country || country, place)
     setCityFocused(false)
     cityFocusedRef.current = false
     editedSinceFocusRef.current = false

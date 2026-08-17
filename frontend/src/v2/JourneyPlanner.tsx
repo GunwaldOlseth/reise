@@ -24,6 +24,7 @@ import {
   emptyJourney,
   formatDateNO,
   formatDurationHM,
+  formatTransportOptionLabel,
   rideDurationMinutes,
   rideIsOvernight,
   freeDaysBetweenStops,
@@ -74,7 +75,6 @@ import {
   stopWarningLabel,
   suggestNextArriveDate,
   summarizeViaHop,
-  formatOptionAltLine,
   legTravelDate,
   syncJourneyLegs,
   transportSegments,
@@ -109,6 +109,7 @@ import { compactNoteHtml } from './noteHtml'
 import { ClockTimeInput } from './ClockTimeInput'
 import { useConfirmDelete } from './ConfirmDelete'
 import { PurposeToggle, TicketToggle } from './PurposeToggle'
+import { TransportCompanyInput } from './TransportCompanyInput'
 import { SightList, SightPreview, PlaceLinkedPreview } from './SightList'
 import './v2.css'
 
@@ -172,6 +173,13 @@ function wizardStepFilled(
   }
 }
 
+function sameJourneyStopsLegs(a: Journey, b: Journey): boolean {
+  return (
+    JSON.stringify(a.stops) === JSON.stringify(b.stops) &&
+    JSON.stringify(a.legs) === JSON.stringify(b.legs)
+  )
+}
+
 export function JourneyPlanner({
   tripId,
   tripName,
@@ -214,15 +222,50 @@ export function JourneyPlanner({
     /** Continue journey from this stop (date suggestion). */
     fromStopId?: string
   }>(null)
-  const [didAutoOnward, setDidAutoOnward] = useState(false)
+  const didAutoOnwardRef = useRef(false)
+  const initialLoadRef = useRef(false)
+  const autoOnwardRef = useRef(autoOnward)
+  autoOnwardRef.current = autoOnward
   /** Expanded place-stop accordion on the thread. */
   const [openPlaceId, setOpenPlaceId] = useState<string | null>(null)
   /** Expanded package/cruise card on the thread. */
   const [openPackId, setOpenPackId] = useState<string | null>(null)
+  const transportCompanyOptionsByMode = useMemo(() => {
+    const values = new Map<string, Set<string>>()
+    const add = (mode: string, company: string) => {
+      const key = mode.trim() || 'any'
+      const normalized = company.trim()
+      if (!normalized) return
+      if (!values.has(key)) values.set(key, new Set<string>())
+      values.get(key)!.add(normalized)
+      if (key !== 'any') {
+        if (!values.has('any')) values.set('any', new Set<string>())
+        values.get('any')!.add(normalized)
+      }
+    }
+    for (const leg of journey.legs || []) {
+      for (const via of transportSegments(leg)) {
+        for (const opt of viaTransportOptions(via)) {
+          add(opt.mode || '', opt.company || '')
+        }
+      }
+    }
+    return Object.fromEntries(
+      [...values.entries()].map(([mode, set]) => [
+        mode,
+        [...set].sort((a, b) => a.localeCompare(b, 'nb')),
+      ]),
+    ) as Record<string, string[]>
+  }, [journey])
   const journeyRef = useRef(journey)
   journeyRef.current = journey
   const placeSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const transportSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const homePlaceKey = useMemo(
+    () =>
+      `${homePlace.city.trim()}|${homePlace.country.trim()}|${homePlace.address.trim()}`,
+    [homePlace.city, homePlace.country, homePlace.address],
+  )
 
   useEffect(() => {
     return () => {
@@ -232,8 +275,13 @@ export function JourneyPlanner({
   }, [])
 
   useEffect(() => {
+    didAutoOnwardRef.current = false
+    initialLoadRef.current = false
+  }, [tripId])
+
+  useEffect(() => {
     let cancelled = false
-    setLoading(true)
+    if (!initialLoadRef.current) setLoading(true)
     setError('')
     void api
       .getJourney(tripId)
@@ -251,12 +299,12 @@ export function JourneyPlanner({
         )
         setJourney(next)
         if (
-          autoOnward &&
-          !didAutoOnward &&
+          autoOnwardRef.current &&
+          !didAutoOnwardRef.current &&
           next.stops.length === 1 &&
           next.stops[0]?.kind === 'home'
         ) {
-          setDidAutoOnward(true)
+          didAutoOnwardRef.current = true
           setWizard({ kind: 'choose' })
         }
       })
@@ -266,19 +314,33 @@ export function JourneyPlanner({
         }
       })
       .finally(() => {
-        if (!cancelled) setLoading(false)
+        if (!cancelled) {
+          setLoading(false)
+          initialLoadRef.current = true
+        }
       })
     return () => {
       cancelled = true
     }
-  }, [tripId, autoOnward, didAutoOnward, homePlace])
+  }, [tripId])
+
+  useEffect(() => {
+    if (!initialLoadRef.current) return
+    setJourney((current) => {
+      const next = journeyWithRegisteredHome(
+        localizeJourneyPlaces(syncJourneyLegs(current)),
+        homePlace,
+      )
+      return sameJourneyStopsLegs(current, next) ? current : next
+    })
+  }, [homePlaceKey])
 
   async function persist(
     next: Journey,
     opts?: { quiet?: boolean },
   ) {
     if (!opts?.quiet) setSaving(true)
-    setError('')
+    if (!opts?.quiet) setError('')
     try {
       const withSights: Journey = {
         ...next,
@@ -314,10 +376,12 @@ export function JourneyPlanner({
         )
         journeyRef.current = synced
         setJourney(synced)
+        onJourneySaved?.()
       }
-      onJourneySaved?.()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Kunne ikke lagre')
+      if (!opts?.quiet) {
+        setError(err instanceof Error ? err.message : 'Kunne ikke lagre')
+      }
       throw err
     } finally {
       if (!opts?.quiet) setSaving(false)
@@ -347,6 +411,7 @@ export function JourneyPlanner({
       }
     }
     const next = syncJourneyLegs(base)
+    if (sameJourneyStopsLegs(journeyRef.current, next)) return
     journeyRef.current = next
     setJourney(next)
     if (placeSaveTimer.current) {
@@ -364,18 +429,26 @@ export function JourneyPlanner({
   }
 
   /** Optimistic transport edits — same quiet debounce as place fields. */
-  function patchTransportLeg(nextLeg: JourneyLeg) {
+  function patchTransportLeg(
+    nextLeg: JourneyLeg,
+    opts?: { immediate?: boolean },
+  ) {
     const next = syncJourneyLegs({
       ...journeyRef.current,
       legs: journeyRef.current.legs.map((l) =>
         l.id === nextLeg.id ? nextLeg : l,
       ),
     })
+    if (sameJourneyStopsLegs(journeyRef.current, next)) return
     journeyRef.current = next
     setJourney(next)
     if (transportSaveTimer.current) {
       clearTimeout(transportSaveTimer.current)
       transportSaveTimer.current = null
+    }
+    if (opts?.immediate) {
+      void persist(journeyRef.current, { quiet: true })
+      return
     }
     transportSaveTimer.current = setTimeout(() => {
       transportSaveTimer.current = null
@@ -417,7 +490,9 @@ export function JourneyPlanner({
 
       <div className="v2-thread">
         {error && <p className="v2-error">{error}</p>}
-        {loading && <p className="v2-meta">Henter reisen…</p>}
+        {loading && journey.stops.length === 0 && (
+          <p className="v2-meta">Henter reisen…</p>
+        )}
         {!loading && journey.stops.length === 0 && (
           <div className="v2-empty">
             <p>
@@ -461,6 +536,7 @@ export function JourneyPlanner({
                   from={prev}
                   to={stop}
                   leg={inboundLeg}
+                  companyOptionsByMode={transportCompanyOptionsByMode}
                   warn={warnings.includes('travel')}
                   requireTransportMode={settings.requireTransportMode}
                   disabled={loading}
@@ -602,9 +678,6 @@ export function JourneyPlanner({
                           </th>
                           <th scope="col">Ank.</th>
                           <th scope="col">Avg.</th>
-                          <th scope="col">
-                            {packType === 'cruise' ? 'I havn' : 'Tid'}
-                          </th>
                         </tr>
                       </thead>
                       <tbody>
@@ -631,7 +704,6 @@ export function JourneyPlanner({
                               <td>{row.place}</td>
                               <td>{row.arrive || '—'}</td>
                               <td>{row.leave || '—'}</td>
-                              <td>{row.portHours || '—'}</td>
                             </tr>
                           )
                         })}
@@ -941,6 +1013,7 @@ function PlaceStopPanel({
     nights: 1,
     hotelName: '',
     address: '',
+    notes: '',
   }
 
   useEffect(() => {
@@ -980,6 +1053,7 @@ function PlaceStopPanel({
       hotelName: (partial.hotelName ?? stay.hotelName ?? '').trim(),
       address: (partial.address ?? stay.address ?? '').trim(),
       price: (partial.price ?? stay.price ?? '').trim(),
+      notes: partial.notes ?? stay.notes ?? '',
     }
     patchStop(
       {
@@ -995,7 +1069,7 @@ function PlaceStopPanel({
     if (!stop.stay) {
       const added: JourneyStop = {
         ...stop,
-        stay: { nights: 1, hotelName: '', address: '', price: '' },
+        stay: { nights: 1, hotelName: '', address: '', price: '', notes: '' },
         sights: normalizeSights(stop.sights),
       }
       onChange(added, { immediate: true, nightsDelta: 1 - nights })
@@ -1164,15 +1238,21 @@ function PlaceStopPanel({
                       city,
                       latitude: undefined,
                       longitude: undefined,
+                      citySearch: undefined,
+                      countrySearch: undefined,
                     })
                   }
-                  onCountryChange={(country) => patchStop({ country })}
+                  onCountryChange={(country) =>
+                    patchStop({ country, countrySearch: undefined })
+                  }
                   onSelectPlace={(city, country, place) =>
                     patchStop({
                       city,
                       country: country || stop.country,
                       latitude: place?.latitude,
                       longitude: place?.longitude,
+                      citySearch: place?.searchName || undefined,
+                      countrySearch: place?.searchCountry || undefined,
                     })
                   }
                 />
@@ -1484,6 +1564,28 @@ function PlaceStopPanel({
                       }
                     />
                   </label>
+                  <label>
+                    Notat
+                    <NoteEditor
+                      value={stay.notes || ''}
+                      disabled={disabled}
+                      placeholder="Notat om hotellet"
+                      onChange={(html) =>
+                        patchStay(
+                          { notes: compactNoteHtml(html) },
+                          true,
+                          { immediate: true },
+                        )
+                      }
+                      onBlur={(html) =>
+                        patchStay(
+                          { notes: compactNoteHtml(html) },
+                          true,
+                          { immediate: true },
+                        )
+                      }
+                    />
+                  </label>
                   {(hotel || hasStay) && (
                     <div className="v2-hotel-remove-row">
                       <button
@@ -1576,6 +1678,7 @@ function TransportBlock({
   from,
   to,
   leg,
+  companyOptionsByMode = {},
   warn,
   requireTransportMode = true,
   disabled,
@@ -1585,14 +1688,16 @@ function TransportBlock({
   from: JourneyStop
   to: JourneyStop
   leg: JourneyLeg
+  companyOptionsByMode?: Record<string, string[]>
   warn: boolean
   requireTransportMode?: boolean
   disabled?: boolean
-  onChange: (leg: JourneyLeg) => void
+  onChange: (leg: JourneyLeg, opts?: { immediate?: boolean }) => void
   onGoalStationChange?: (station: string) => void
 }) {
   const askDelete = useConfirmDelete()
   const [open, setOpen] = useState(false)
+  const [editingOptId, setEditingOptId] = useState<string | null>(null)
   /** Only one city-step open at a time. */
   const [openSegId, setOpenSegId] = useState<string | null>(null)
   const [dragSegId, setDragSegId] = useState<string | null>(null)
@@ -1605,7 +1710,39 @@ function TransportBlock({
   const [draft, setDraft] = useState<JourneyLeg>(() =>
     withTransportSegments(leg, transportSegments(leg)),
   )
+  const legSyncKey = useMemo(
+    () => JSON.stringify({ id: leg.id, vias: leg.vias || [] }),
+    [leg.id, leg.vias],
+  )
   const segments = transportSegments(draft, { sort: false })
+  const companyChoicesByMode = useMemo(() => {
+    const values = new Map<string, Set<string>>()
+    const add = (mode: string, company: string) => {
+      const key = mode.trim() || 'any'
+      const normalized = company.trim()
+      if (!normalized) return
+      if (!values.has(key)) values.set(key, new Set<string>())
+      values.get(key)!.add(normalized)
+    }
+    for (const [mode, list] of Object.entries(companyOptionsByMode)) {
+      for (const company of list) add(mode, company)
+    }
+    for (const via of segments) {
+      for (const opt of viaTransportOptions(via)) {
+        add(opt.mode || '', opt.company || '')
+      }
+    }
+    const fromEntries = Object.fromEntries(
+      [...values.entries()].map(([mode, set]) => [
+        mode,
+        [...set].sort((a, b) => a.localeCompare(b, 'nb')),
+      ]),
+    ) as Record<string, string[]>
+    if (!fromEntries.any) {
+      fromEntries.any = []
+    }
+    return fromEntries
+  }, [companyOptionsByMode, segments])
   const gaps = legTransportGaps(draft, to, { requireTransportMode })
   const filled = gaps.length === 0
   const missingModes =
@@ -1641,6 +1778,7 @@ function TransportBlock({
             return {
               ...o,
               title: walk ? '' : (o.title || '').trim(),
+              company: (o.company || '').trim(),
               startTime: walk
                 ? ''
                 : normalizeCompleteClockTime((o.startTime || '').trim()),
@@ -1693,6 +1831,7 @@ function TransportBlock({
             (o) =>
               o.mode?.trim() ||
               o.title ||
+              o.company ||
               o.startTime ||
               o.endTime ||
               o.platform ||
@@ -1733,12 +1872,15 @@ function TransportBlock({
   function persistNow(
     list: JourneyVia[],
     by: TransportOptionSort = optionSort,
+    immediate = false,
   ) {
     if (persistTimer.current) {
       clearTimeout(persistTimer.current)
       persistTimer.current = null
     }
-    onChange(withTransportSegments(leg, cleanSegments(list, by)))
+    onChange(withTransportSegments(leg, cleanSegments(list, by)), {
+      immediate,
+    })
   }
 
   function schedulePersist(
@@ -1752,17 +1894,36 @@ function TransportBlock({
     }, 450)
   }
 
-  useEffect(() => {
-    if (!open) {
-      if (persistTimer.current) {
-        clearTimeout(persistTimer.current)
-        persistTimer.current = null
-        onChange(withTransportSegments(leg, cleanSegments(latestSegs.current)))
+  function flushTransportDraft(immediate = true) {
+    if (persistTimer.current) {
+      clearTimeout(persistTimer.current)
+      persistTimer.current = null
+    }
+    const cleaned = cleanSegments(latestSegs.current)
+    const before = cleanSegments(transportSegments(leg))
+    if (JSON.stringify(before) !== JSON.stringify(cleaned)) {
+      onChange(withTransportSegments(leg, cleaned), { immediate })
+    }
+    setDraft(withTransportSegments(leg, cleaned))
+    setOpenSegId(null)
+    setEditingOptId(null)
+  }
+
+  function toggleOpen() {
+    setOpen((v) => {
+      if (v) {
+        flushTransportDraft(true)
+        return false
       }
       setDraft(withTransportSegments(leg, transportSegments(leg)))
-      setOpenSegId(null)
-    }
-  }, [leg, open])
+      return true
+    })
+  }
+
+  useEffect(() => {
+    if (open) return
+    setDraft(withTransportSegments(leg, transportSegments(leg)))
+  }, [legSyncKey, open, leg])
 
   useEffect(() => {
     return () => {
@@ -1772,6 +1933,26 @@ function TransportBlock({
 
   function isSegOpen(id: string): boolean {
     return openSegId === id
+  }
+
+  function isOptionEditing(opt: JourneyTransportOption): boolean {
+    if (editingOptId === opt.id) return true
+    return !(
+      opt.mode?.trim() ||
+      opt.title ||
+      opt.company ||
+      opt.startTime ||
+      opt.endTime ||
+      opt.platform ||
+      opt.gate ||
+      opt.minutes ||
+      opt.info ||
+      opt.price ||
+      opt.actualPrice ||
+      opt.taken ||
+      opt.ticket ||
+      optionLineChanges(opt).length > 0
+    )
   }
 
   function toggleSeg(id: string) {
@@ -1786,6 +1967,7 @@ function TransportBlock({
   }
 
   function addPlace(asGoal = false) {
+    setDraft(withTransportSegments(leg, transportSegments(leg)))
     setOpen(true)
     const place = newJourneyVia(segments.length)
     if (asGoal && (to.city.trim() || homeAddress)) {
@@ -1829,11 +2011,13 @@ function TransportBlock({
     // Fly er eksklusivt: erstatter andre reisemåter på samme hopp.
     if (mode === 'flight') {
       setOptions(idx, [next], true)
+      setEditingOptId(next.id)
       return
     }
     const existing = viaTransportOptions(via).filter((o) => o.mode !== 'flight')
     // Nye rader uten tid nederst; sorteres når tid er satt.
     setOptions(idx, [...existing, next], true)
+    setEditingOptId(next.id)
   }
 
   function updateOption(
@@ -1841,6 +2025,7 @@ function TransportBlock({
     optIdx: number,
     partial: Partial<JourneyTransportOption>,
     resort = false,
+    immediate = false,
   ) {
     const via = segments[placeIdx]
     if (!via) return
@@ -1852,6 +2037,7 @@ function TransportBlock({
     // Velger du fly, faller alle andre alternativer bort.
     if (chosen?.mode === 'flight') {
       setOptions(placeIdx, [chosen], true)
+      setEditingOptId(chosen.id)
       return
     }
     const next = merged.filter((o) => o.mode !== 'flight')
@@ -1859,7 +2045,7 @@ function TransportBlock({
     setOptions(
       placeIdx,
       resort ? sortTransportOptions(next, optionSort) : next,
-      modeChange || resort,
+      modeChange || resort || immediate,
     )
   }
 
@@ -1872,7 +2058,7 @@ function TransportBlock({
     const via = segments[placeIdx]
     const opt = via ? viaTransportOptions(via)[optIdx] : null
     if (!opt) return
-    updateOption(placeIdx, optIdx, withOptionChanges(opt, changes), immediate)
+    updateOption(placeIdx, optIdx, withOptionChanges(changes), immediate)
   }
 
   function resortOptions(placeIdx: number) {
@@ -1907,6 +2093,7 @@ function TransportBlock({
       'avgangen'
     void askDelete({ title: `Slette ${label}?` }).then((ok) => {
       if (!ok) return
+      if (opt?.id && editingOptId === opt.id) setEditingOptId(null)
       setOptions(
         placeIdx,
         viaTransportOptions(via).filter((_, i) => i !== optIdx),
@@ -1971,9 +2158,9 @@ function TransportBlock({
             type="button"
             className="v2-transport-summary"
             disabled={disabled}
-            onClick={() => setOpen((v) => !v)}
+            onClick={toggleOpen}
             aria-expanded={open}
-            title={open ? 'Skjul liste' : 'Vis liste'}
+            title={open ? 'Ferdig med redigering' : 'Rediger transport'}
           >
             <span className="v2-transport-label-row">
               <span className="v2-transport-label">{summary}</span>
@@ -2006,9 +2193,9 @@ function TransportBlock({
             type="button"
             className="v2-transport-toggle"
             disabled={disabled}
-            aria-label={open ? 'Skjul liste' : 'Vis liste'}
-            title={open ? 'Skjul liste' : 'Vis liste'}
-            onClick={() => setOpen((v) => !v)}
+            aria-label={open ? 'Ferdig med redigering' : 'Rediger transport'}
+            title={open ? 'Ferdig med redigering' : 'Rediger transport'}
+            onClick={toggleOpen}
           >
             {open ? '▴' : '▾'}
           </button>
@@ -2213,8 +2400,9 @@ function TransportBlock({
                                         oi === 0 ? 'is-first' : undefined
                                       }
                                     >
-                                      {formatOptionAltLine(opt) ||
-                                        `Avgang ${oi + 1}`}
+                                      {formatTransportOptionLabel(opt, {
+                                      abbreviateCompany: true,
+                                    }) || `Avgang ${oi + 1}`}
                                     </span>
                                   ))}
                                 </span>
@@ -2374,10 +2562,14 @@ function TransportBlock({
                         const durationMins = optionDurationMinutes(opt)
                         const overnight = markOvernight && optionIsOvernight(opt)
                         const selected = optionIsTaken(opt)
+                        const editing = isOptionEditing(opt)
+                        const companyModeKey = (opt.mode || 'any').trim() || 'any'
                         return (
                           <div
                             key={opt.id}
-                            className={`v2-hop-row${selected ? ' is-taken' : ''}`}
+                            className={`v2-hop-row${selected ? ' is-taken' : ''}${
+                              editing ? ' is-editing' : ' is-summary'
+                            }`}
                           >
                             <div className="v2-hop-mode">
                               <button
@@ -2455,17 +2647,36 @@ function TransportBlock({
                               )}
                             </div>
                             <div className="v2-hop-opt">
-                              <div
-                                className={`v2-hop-opt-fields${
-                                  isWalk
-                                    ? ' is-walk'
-                                    : isFlight
-                                      ? ' is-flight'
-                                      : isOther
-                                        ? ' is-other'
-                                        : ''
-                                }`}
+                              <button
+                                type="button"
+                                className="v2-hop-summary"
+                                disabled={disabled}
+                                title="Rediger avgangen"
+                                onClick={() => setEditingOptId(opt.id)}
                               >
+                                <span className="v2-hop-summary-main">
+                                  <span className="v2-hop-summary-title">
+                                    {formatTransportOptionLabel(opt, {
+                                      abbreviateCompany: true,
+                                    })}
+                                  </span>
+                                </span>
+                                <span className="v2-hop-summary-action">
+                                  ✎
+                                </span>
+                              </button>
+                              <div className="v2-hop-edit-form">
+                                <div
+                                  className={`v2-hop-opt-fields${
+                                    isWalk
+                                      ? ' is-walk'
+                                      : isFlight
+                                        ? ' is-flight'
+                                        : isOther
+                                          ? ' is-other'
+                                          : ''
+                                  }`}
+                                >
                                 {isWalk ? (
                                   <>
                                     <label className="v2-hop-minutes">
@@ -2502,6 +2713,21 @@ function TransportBlock({
                                 ) : (
                                   <>
                                     <div className="v2-hop-opt-row is-main">
+                                      <TransportCompanyInput
+                                        value={opt.company || ''}
+                                        disabled={disabled}
+                                        modeKey={companyModeKey}
+                                        choicesByMode={companyChoicesByMode}
+                                        onChange={(company) =>
+                                          updateOption(
+                                            idx,
+                                            oi,
+                                            { company },
+                                            false,
+                                            true,
+                                          )
+                                        }
+                                      />
                                       <input
                                         value={opt.title || ''}
                                         disabled={disabled}
@@ -2553,6 +2779,8 @@ function TransportBlock({
                                           aria-label="Gate"
                                         />
                                       )}
+                                    </div>
+                                    <div className="v2-hop-opt-row is-times">
                                       <ClockTimeInput
                                         placeholder="Avgang"
                                         value={opt.startTime || ''}
@@ -2915,35 +3143,52 @@ function TransportBlock({
                                     ) : null}
                                   </>
                                 )}
+                                </div>
                               </div>
                               <div className="v2-hop-opt-side">
-                                <button
-                                  type="button"
-                                  className="v2-via-remove"
-                                  disabled={disabled}
-                                  aria-label="Fjern avgang"
-                                  title="Fjern avgang"
-                                  onClick={() => removeOption(idx, oi)}
-                                >
-                                  <TrashIcon size={15} />
-                                </button>
-                                {modeAllowsLineChange(opt.mode) ? (
-                                  <button
-                                    type="button"
-                                    className="v2-transport-plus is-inline"
-                                    disabled={disabled}
-                                    title="Legg til bytte på samme avgang"
-                                    aria-label="Legg til bytte"
-                                    onClick={() =>
-                                      setOptionChanges(idx, oi, [
-                                        ...optionLineChanges(opt),
-                                        newLineChange(),
-                                      ])
-                                    }
-                                  >
-                                    +
-                                  </button>
-                                ) : null}
+                                {editing ? (
+                                  <>
+                                    {modeAllowsLineChange(opt.mode) ? (
+                                      <button
+                                        type="button"
+                                        className="v2-transport-plus is-inline"
+                                        disabled={disabled}
+                                        title="Legg til bytte på samme avgang"
+                                        aria-label="Legg til bytte"
+                                        onClick={() =>
+                                          setOptionChanges(idx, oi, [
+                                            ...optionLineChanges(opt),
+                                            newLineChange(),
+                                          ])
+                                        }
+                                      >
+                                        +
+                                      </button>
+                                    ) : null}
+                                    <button
+                                      type="button"
+                                      className="v2-via-remove"
+                                      disabled={disabled}
+                                      aria-label="Fjern avgang"
+                                      title="Fjern avgang"
+                                      onClick={() => removeOption(idx, oi)}
+                                    >
+                                      <TrashIcon size={15} />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className="v2-transport-plus is-inline v2-hop-close"
+                                      disabled={disabled}
+                                      aria-label="Lukk redigering"
+                                      title="Lukk redigering"
+                                      onClick={() => setEditingOptId(null)}
+                                    >
+                                      ×
+                                    </button>
+                                  </>
+                                ) : (
+                                  null
+                                )}
                               </div>
                             </div>
                           </div>
@@ -3407,9 +3652,13 @@ function StopWizard({
                   city,
                   latitude: undefined,
                   longitude: undefined,
+                  citySearch: undefined,
+                  countrySearch: undefined,
                 }))
               }
-              onCountryChange={(country) => setStop((p) => ({ ...p, country }))}
+              onCountryChange={(country) =>
+                setStop((p) => ({ ...p, country, countrySearch: undefined }))
+              }
               onSelectPlace={(city, country, place) =>
                 setStop((p) => ({
                   ...p,
@@ -3417,6 +3666,8 @@ function StopWizard({
                   country: country || p.country,
                   latitude: place?.latitude,
                   longitude: place?.longitude,
+                  citySearch: place?.searchName || undefined,
+                  countrySearch: place?.searchCountry || undefined,
                 }))
               }
             />

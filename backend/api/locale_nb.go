@@ -22,7 +22,7 @@ var countryNB = map[string]string{
 	"portugal": "Portugal",
 	"greece": "Hellas", "griechenland": "Hellas", "hellas": "Hellas",
 	"croatia": "Kroatia", "kroatien": "Kroatia", "kroatia": "Kroatia",
-	"slovenia": "Slovenia", "slowenien": "Slovenia",
+	"slovenia": "Slovenia", "slowenien": "Slovenia", "slovenija": "Slovenia",
 	"slovakia": "Slovakia", "slowakei": "Slovakia",
 	"czech republic": "Tsjekkia", "czechia": "Tsjekkia", "tschechien": "Tsjekkia", "tsjekkia": "Tsjekkia",
 	"poland": "Polen", "polen": "Polen",
@@ -135,9 +135,19 @@ func localizeCity(name string) string {
 }
 
 func localizePlace(p placeSuggestion) placeSuggestion {
+	searchName := strings.TrimSpace(p.SearchName)
+	searchCountry := strings.TrimSpace(p.SearchCountry)
+	if searchName == "" {
+		searchName = p.Name
+	}
+	if searchCountry == "" {
+		searchCountry = p.Country
+	}
 	p.Name = localizeCity(p.Name)
 	p.Country = localizeCountry(p.Country)
 	p.Admin1 = localizeCity(p.Admin1)
+	p.SearchName = searchName
+	p.SearchCountry = searchCountry
 	return p
 }
 
@@ -147,4 +157,70 @@ func localizePlaces(list []placeSuggestion) []placeSuggestion {
 		out[i] = localizePlace(p)
 	}
 	return out
+}
+
+// geocodeCountryEnglish maps localized country names to English for Open-Meteo search.
+func geocodeCountryEnglish(name string) string {
+	low := strings.ToLower(strings.TrimSpace(name))
+	if low == "" {
+		return ""
+	}
+	for eng, nb := range countryNB {
+		if low == eng || low == strings.ToLower(nb) {
+			return geocodeEnglishCountry(eng)
+		}
+	}
+	return ""
+}
+
+func geocodeEnglishCountry(key string) string {
+	switch key {
+	case "united kingdom", "great britain":
+		return "United Kingdom"
+	case "united states", "united states of america":
+		return "United States"
+	case "czech republic":
+		return "Czech Republic"
+	case "bosnia and herzegovina", "bosnia-herzegovina":
+		return "Bosnia and Herzegovina"
+	case "north macedonia", "macedonia":
+		return "North Macedonia"
+	default:
+		return englishTitle(key)
+	}
+}
+
+func englishTitle(s string) string {
+	parts := strings.Fields(s)
+	for i, p := range parts {
+		if len(p) > 0 {
+			parts[i] = strings.ToUpper(p[:1]) + p[1:]
+		}
+	}
+	return strings.Join(parts, " ")
+}
+
+// geocodeCityForSearch picks API-friendly city spellings when needed.
+func geocodeCityForSearch(city, countryEn string) string {
+	c := strings.TrimSpace(city)
+	low := strings.ToLower(c)
+	switch low {
+	case "wien":
+		if countryEn == "Austria" || countryEn == "" {
+			return "Vienna"
+		}
+	case "praha":
+		if countryEn == "Czech Republic" || countryEn == "" {
+			return "Prague"
+		}
+	case "moskva":
+		if countryEn == "Russia" || countryEn == "" {
+			return "Moscow"
+		}
+	case "ljubljiana", "ljubljana":
+		if countryEn == "Slovenia" || countryEn == "" {
+			return "Ljubljana"
+		}
+	}
+	return c
 }

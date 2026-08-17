@@ -11,6 +11,10 @@ export type WeatherPlaceRequest = {
   country: string
   week?: boolean
   date?: string
+  latitude?: number
+  longitude?: number
+  citySearch?: string
+  countrySearch?: string
 }
 
 export type WeatherCacheEntry = {
@@ -77,15 +81,19 @@ async function pump() {
     if (!city) continue
     setEntry(key, { status: 'loading', suggestions: [] })
     try {
-      let weather = await api.getWeather(city, item.country.trim(), {
+      const weatherOpts = {
         week: true,
         date: item.date?.trim() || undefined,
         refresh: !!item.force,
-      })
-      if (pastHistoryDays(weather) < 5 && !item.force) {
+        latitude: item.latitude,
+        longitude: item.longitude,
+        citySearch: item.citySearch?.trim() || undefined,
+        countrySearch: item.countrySearch?.trim() || undefined,
+      }
+      let weather = await api.getWeather(city, item.country.trim(), weatherOpts)
+      if (pastHistoryDays(weather) < 7 && !item.force) {
         weather = await api.getWeather(city, item.country.trim(), {
-          week: true,
-          date: item.date?.trim() || undefined,
+          ...weatherOpts,
           refresh: true,
         })
       }
@@ -117,7 +125,7 @@ export function enqueueWeatherPlaces(
     if (
       !opts?.force &&
       current?.status === 'ready' &&
-      pastHistoryDays(current.weather) >= 5
+      pastHistoryDays(current.weather) >= 7
     ) {
       continue
     }

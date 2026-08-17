@@ -72,6 +72,7 @@ export function TripHub({
   onOpenSettings,
   onOpenAppearance,
   onOpenLinks,
+  onOpenAdmin,
   onTripDeleted,
   onTripUpdated,
 }: {
@@ -86,6 +87,7 @@ export function TripHub({
   onOpenSettings: () => void
   onOpenAppearance: () => void
   onOpenLinks: () => void
+  onOpenAdmin: () => void
   onTripDeleted: () => void
   trip?: Trip | null
   onTripUpdated: (trip: Trip) => void
@@ -334,6 +336,16 @@ export function TripHub({
                 <button
                   type="button"
                   role="menuitem"
+                  onClick={() => {
+                    setMenuOpen(false)
+                    onOpenAdmin()
+                  }}
+                >
+                  Admin
+                </button>
+                <button
+                  type="button"
+                  role="menuitem"
                   onClick={() => void handleShare()}
                 >
                   Del liste…
@@ -397,7 +409,7 @@ export function TripHub({
       </nav>
 
       <div className="v2-hub-body">
-        {tab === 'plan' && (
+        <div hidden={tab !== 'plan'}>
           <JourneyPlanner
             tripId={tripId}
             tripName={tripName}
@@ -410,7 +422,7 @@ export function TripHub({
             onOpenSettings={onOpenSettings}
             onJourneySaved={() => setJourneyTick((n) => n + 1)}
           />
-        )}
+        </div>
         {tab === 'live' && (
           <div className="v2-hub-panel">
             {!journeyReady ? (

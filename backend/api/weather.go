@@ -63,13 +63,15 @@ type weatherResponse struct {
 }
 
 type placeSuggestion struct {
-	Name       string  `json:"name"`
-	Country    string  `json:"country"`
-	Admin1     string  `json:"admin1,omitempty"`
-	Latitude   float64 `json:"latitude"`
-	Longitude  float64 `json:"longitude"`
-	Population int     `json:"population,omitempty"`
-	FeatureCode string `json:"featureCode,omitempty"`
+	Name          string  `json:"name"`
+	Country       string  `json:"country"`
+	SearchName    string  `json:"searchName,omitempty"`
+	SearchCountry string  `json:"searchCountry,omitempty"`
+	Admin1        string  `json:"admin1,omitempty"`
+	Latitude      float64 `json:"latitude"`
+	Longitude     float64 `json:"longitude"`
+	Population    int     `json:"population,omitempty"`
+	FeatureCode   string  `json:"featureCode,omitempty"`
 }
 
 type weatherErrorBody struct {
@@ -164,29 +166,16 @@ func parseMeteoHour(raw string) (time.Time, bool) {
 	return time.Time{}, false
 }
 
-func observationFromCurrent(at time.Time, cur *weatherCurrent) weatherObservation {
-	if cur == nil {
-		return weatherObservation{}
+func noonTempAndCode(data meteoPayload, date string) (temp float64, code int, ok bool) {
+	hourlyCodes := data.hourlyCodes()
+	for i, raw := range data.Hourly.Time {
+		t, parsed := parseMeteoHour(raw)
+		if !parsed || t.Format("2006-01-02") != date || t.Hour() != 12 {
+			continue
+		}
+		return atIndex(data.Hourly.Temperature, i), atIndexInt(hourlyCodes, i), true
 	}
-	return weatherObservation{
-		At:          at.Format(time.RFC3339),
-		Temperature: cur.Temperature,
-		WeatherCode: cur.WeatherCode,
-		Summary:     cur.Summary,
-		Icon:        cur.Icon,
-	}
-}
-
-func putObservation(byBucket map[string]weatherObservation, obs weatherObservation, at time.Time) {
-	id := weatherSnapBucket(at)
-	byBucket[id] = obs
-}
-
-func dailyMeanTemp(data meteoPayload, i int) float64 {
-	if i >= 0 && i < len(data.Daily.TemperatureMean) {
-		return data.Daily.TemperatureMean[i]
-	}
-	return (atIndex(data.Daily.TemperatureMin, i) + atIndex(data.Daily.TemperatureMax, i)) / 2
+	return 0, 0, false
 }
 
 func observationAt(at time.Time, temp float64, code int) weatherObservation {
@@ -200,12 +189,12 @@ func observationAt(at time.Time, temp float64, code int) weatherObservation {
 	}
 }
 
-// Past 5 days (08 + 19) from daily actuals, overwritten by hourly when present, plus "now".
-func observationsFromHourly(data meteoPayload, current *weatherCurrent) []weatherObservation {
+// Past 7 days at 12:00 from hourly when present, else daily noon estimate. No "now".
+func chartObservationsFromHourly(data meteoPayload) []weatherObservation {
 	now := osloNow()
 	today := now.Format("2006-01-02")
-	oldest := addDaysISO(today, -5)
-	byBucket := map[string]weatherObservation{}
+	oldest := addDaysISO(today, -7)
+	byDate := map[string]weatherObservation{}
 	codes := data.dailyCodes()
 
 	for i, date := range data.Daily.Time {
@@ -213,41 +202,29 @@ func observationsFromHourly(data meteoPayload, current *weatherCurrent) []weathe
 			continue
 		}
 		code := atIndexInt(codes, i)
-		minT := atIndex(data.Daily.TemperatureMin, i)
 		maxT := atIndex(data.Daily.TemperatureMax, i)
-		mean := dailyMeanTemp(data, i)
-		if minT == 0 && maxT == 0 && mean == 0 {
-			minT, maxT = mean, mean
+		if noonT, noonCode, hasNoon := noonTempAndCode(data, date); hasNoon {
+			maxT, code = noonT, noonCode
 		}
-		morning, _ := time.Parse("2006-01-02T15:04", date+"T08:00")
-		evening, _ := time.Parse("2006-01-02T15:04", date+"T19:00")
-		putObservation(byBucket, observationAt(morning, minT, code), morning)
-		putObservation(byBucket, observationAt(evening, maxT, code), evening)
+		noon, _ := time.Parse("2006-01-02T15:04", date+"T12:00")
+		byDate[date] = observationAt(noon, maxT, code)
 	}
 
 	hourlyCodes := data.hourlyCodes()
 	for i, raw := range data.Hourly.Time {
 		t, ok := parseMeteoHour(raw)
-		if !ok {
-			continue
-		}
-		hour := t.Hour()
-		if hour != 8 && hour != 19 {
+		if !ok || t.Hour() != 12 {
 			continue
 		}
 		date := t.Format("2006-01-02")
-		if date < oldest || date > today || t.After(now) {
+		if date < oldest || date >= today || t.After(now) {
 			continue
 		}
-		putObservation(byBucket, observationAt(t, atIndex(data.Hourly.Temperature, i), atIndexInt(hourlyCodes, i)), t)
+		byDate[date] = observationAt(t, atIndex(data.Hourly.Temperature, i), atIndexInt(hourlyCodes, i))
 	}
 
-	if current != nil {
-		putObservation(byBucket, observationFromCurrent(now, current), now)
-	}
-
-	out := make([]weatherObservation, 0, len(byBucket))
-	for _, obs := range byBucket {
+	out := make([]weatherObservation, 0, len(byDate))
+	for _, obs := range byDate {
 		out = append(out, obs)
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].At < out[j].At })
@@ -317,13 +294,15 @@ func geoResultsToSuggestions(geo geoResult) []placeSuggestion {
 		}
 		seen[key] = true
 		out = append(out, localizePlace(placeSuggestion{
-			Name:        r.Name,
-			Country:     r.Country,
-			Admin1:      r.Admin1,
-			Latitude:    r.Latitude,
-			Longitude:   r.Longitude,
-			Population:  r.Population,
-			FeatureCode: r.FeatureCode,
+			Name:          r.Name,
+			Country:       r.Country,
+			SearchName:    r.Name,
+			SearchCountry: r.Country,
+			Admin1:        r.Admin1,
+			Latitude:      r.Latitude,
+			Longitude:     r.Longitude,
+			Population:    r.Population,
+			FeatureCode:   r.FeatureCode,
 		}))
 	}
 	sort.SliceStable(out, func(i, j int) bool {
@@ -368,6 +347,16 @@ func countryAliases(name string) []string {
 		return []string{"frankrike", "france", "frankreich"}
 	case "norge", "norway", "norwegen":
 		return []string{"norge", "norway", "norwegen"}
+	case "østerrike", "osterreich", "österreich", "austria":
+		return []string{"østerrike", "osterreich", "österreich", "austria"}
+	case "tyskland", "germany", "deutschland":
+		return []string{"tyskland", "germany", "deutschland"}
+	case "ungarn", "hungary":
+		return []string{"ungarn", "hungary"}
+	case "tsjekkia", "czech republic", "czechia", "tschechien":
+		return []string{"tsjekkia", "czech republic", "czechia", "tschechien"}
+	case "slovenia", "slowenien", "slovenija":
+		return []string{"slovenia", "slowenien", "slovenija"}
 	default:
 		if n == "" {
 			return nil
@@ -443,15 +432,38 @@ func mergePlaceSuggestions(lists ...[]placeSuggestion) []placeSuggestion {
 
 // resolvePlace picks a geocoded place, or returns suggestions when the query is ambiguous/not found.
 func resolvePlace(city, country string) (place placeSuggestion, suggestions []placeSuggestion, err error) {
+	return resolvePlaceEx(city, country, "", "")
+}
+
+func resolvePlaceEx(city, country, searchCity, searchCountry string) (place placeSuggestion, suggestions []placeSuggestion, err error) {
 	city = strings.TrimSpace(city)
 	country = strings.TrimSpace(country)
+	searchCity = strings.TrimSpace(searchCity)
+	searchCountry = strings.TrimSpace(searchCountry)
 	if city == "" {
 		return placeSuggestion{}, nil, fmt.Errorf("city is required")
 	}
 
-	query := city
-	if country != "" {
+	countryEn := geocodeCountryEnglish(country)
+	if searchCountry != "" {
+		if en := geocodeCountryEnglish(searchCountry); en != "" {
+			countryEn = en
+		} else if countryEn == "" {
+			countryEn = searchCountry
+		}
+	}
+	if searchCity == "" {
+		searchCity = geocodeCityForSearch(city, countryEn)
+	} else {
+		searchCity = geocodeCityForSearch(searchCity, countryEn)
+	}
+	query := searchCity
+	if countryEn != "" {
+		query = searchCity + ", " + countryEn
+	} else if country != "" {
 		query = city + ", " + country
+	} else if searchCountry != "" {
+		query = searchCity + ", " + searchCountry
 	}
 
 	primary, err := searchPlaces(query, "nb", 8)
@@ -464,24 +476,37 @@ func resolvePlace(city, country string) (place placeSuggestion, suggestions []pl
 			return placeSuggestion{}, nil, err
 		}
 	}
+	if len(primary) == 0 && searchCity != city {
+		fallback := city
+		if countryEn != "" {
+			fallback = city + ", " + countryEn
+		}
+		primary, err = searchPlaces(fallback, "de", 8)
+		if err != nil {
+			return placeSuggestion{}, nil, err
+		}
+	}
 
-	// Exact-ish hit: use first result from the full query.
 	if len(primary) > 0 {
-		return localizePlace(primary[0]), nil, nil
+		best := pickBestPlace(primary, searchCity, countryEn, country)
+		return best, nil, nil
 	}
 
 	// Broader search without country / with prefix — return as choices.
 	var alt []placeSuggestion
-	if country != "" {
-		byCity, err := searchPlaces(city, "nb", 8)
+	if country != "" || countryEn != "" {
+		byCity, err := searchPlaces(searchCity, "nb", 8)
 		if err != nil {
 			return placeSuggestion{}, nil, err
 		}
-		byCityEn, _ := searchPlaces(city, "en", 8)
+		byCityEn, _ := searchPlaces(searchCity, "en", 8)
 		alt = mergePlaceSuggestions(byCity, byCityEn)
+		if countryEn != "" {
+			alt = filterPlacesByCountry(alt, countryEn, country)
+		}
 	}
-	if len(alt) == 0 && len([]rune(city)) >= 3 {
-		runes := []rune(city)
+	if len(alt) == 0 && len([]rune(searchCity)) >= 3 {
+		runes := []rune(searchCity)
 		prefixLen := len(runes)
 		if prefixLen > 4 {
 			prefixLen = max(3, (prefixLen*2)/3)
@@ -493,11 +518,120 @@ func resolvePlace(city, country string) (place placeSuggestion, suggestions []pl
 		}
 		byPrefixEn, _ := searchPlaces(prefix, "en", 8)
 		alt = mergePlaceSuggestions(byPrefix, byPrefixEn)
+		if countryEn != "" {
+			alt = filterPlacesByCountry(alt, countryEn, country)
+		}
 	}
 	if len(alt) > 8 {
 		alt = alt[:8]
 	}
+	if len(alt) > 0 {
+		best := pickBestPlace(alt, searchCity, countryEn, country)
+		if shouldAutoResolvePlace(searchCity, best, countryEn, country) {
+			return best, nil, nil
+		}
+	}
 	return placeSuggestion{}, alt, fmt.Errorf("fant ikke sted")
+}
+
+func shouldAutoResolvePlace(
+	searchCity string,
+	best placeSuggestion,
+	countryEn, countryLocal string,
+) bool {
+	if best.Latitude == 0 && best.Longitude == 0 {
+		return false
+	}
+	if countryEn == "" && countryLocal == "" {
+		return false
+	}
+	if len(filterPlacesByCountry([]placeSuggestion{best}, countryEn, countryLocal)) == 0 {
+		return false
+	}
+	searchLow := strings.ToLower(strings.TrimSpace(searchCity))
+	for _, n := range []string{best.SearchName, best.Name} {
+		low := strings.ToLower(strings.TrimSpace(n))
+		if low == "" {
+			continue
+		}
+		if low == searchLow {
+			return true
+		}
+		plen := min(len(searchLow), len(low), 5)
+		if plen >= 4 && searchLow[:plen] == low[:plen] {
+			return true
+		}
+	}
+	return best.FeatureCode == "PPLC"
+}
+
+func pickBestPlace(
+	list []placeSuggestion,
+	searchCity, countryEn, countryLocal string,
+) placeSuggestion {
+	if len(list) == 0 {
+		return placeSuggestion{}
+	}
+	filtered := list
+	if countryEn != "" || countryLocal != "" {
+		filtered = filterPlacesByCountry(list, countryEn, countryLocal)
+	}
+	if len(filtered) == 0 {
+		filtered = list
+	}
+	searchLow := strings.ToLower(strings.TrimSpace(searchCity))
+	for _, p := range filtered {
+		for _, name := range []string{p.SearchName, p.Name} {
+			if name != "" && strings.EqualFold(name, searchCity) {
+				return p
+			}
+		}
+	}
+	if searchLow != "" {
+		for _, p := range filtered {
+			for _, name := range []string{p.SearchName, p.Name} {
+				if strings.ToLower(strings.TrimSpace(name)) == searchLow {
+					return p
+				}
+			}
+		}
+	}
+	return filtered[0]
+}
+
+func parseWeatherCoords(latStr, lngStr string) (lat, lng float64, ok bool) {
+	if latStr == "" || lngStr == "" {
+		return 0, 0, false
+	}
+	lat, err1 := strconv.ParseFloat(strings.TrimSpace(latStr), 64)
+	lng, err2 := strconv.ParseFloat(strings.TrimSpace(lngStr), 64)
+	if err1 != nil || err2 != nil {
+		return 0, 0, false
+	}
+	if lat < -90 || lat > 90 || lng < -180 || lng > 180 {
+		return 0, 0, false
+	}
+	return lat, lng, true
+}
+
+func filterPlacesByCountry(
+	list []placeSuggestion,
+	countryEn, countryLocal string,
+) []placeSuggestion {
+	if countryEn == "" && countryLocal == "" {
+		return list
+	}
+	out := make([]placeSuggestion, 0, len(list))
+	for _, p := range list {
+		if countriesLooselyMatch(p.Country, countryEn) ||
+			countriesLooselyMatch(p.Country, countryLocal) {
+			out = append(out, p)
+		}
+	}
+	if len(out) > 0 {
+		return out
+	}
+	return list
 }
 
 func atIndex(floats []float64, i int) float64 {
@@ -524,7 +658,7 @@ func fetchForecast(lat, lon float64, days int) (meteoPayload, error) {
 		days = 7
 	}
 	u := fmt.Sprintf(
-		"https://api.open-meteo.com/v1/forecast?latitude=%f&longitude=%f&daily=weather_code,temperature_2m_max,temperature_2m_min,temperature_2m_mean,precipitation_sum&hourly=temperature_2m,weather_code&current=temperature_2m,weather_code&timezone=auto&forecast_days=%d&past_days=5",
+		"https://api.open-meteo.com/v1/forecast?latitude=%f&longitude=%f&daily=weather_code,temperature_2m_max,temperature_2m_min,temperature_2m_mean,precipitation_sum&hourly=temperature_2m,weather_code&current=temperature_2m,weather_code&timezone=auto&forecast_days=%d&past_days=7",
 		lat, lon, days,
 	)
 	var data meteoPayload
@@ -549,9 +683,15 @@ func buildWeatherDays(data meteoPayload) (today *weatherDay, forecast []weatherD
 		}
 		code := atIndexInt(codes, i)
 		summary, icon := weatherCodeInfo(code)
+		maxT := atIndex(data.Daily.TemperatureMax, i)
+		if noonT, noonCode, hasNoon := noonTempAndCode(data, date); hasNoon {
+			maxT = noonT
+			code = noonCode
+			summary, icon = weatherCodeInfo(code)
+		}
 		day := weatherDay{
 			Date:          date,
-			TempMax:       atIndex(data.Daily.TemperatureMax, i),
+			TempMax:       maxT,
 			TempMin:       atIndex(data.Daily.TemperatureMin, i),
 			Precipitation: atIndex(data.Daily.PrecipitationSum, i),
 			WeatherCode:   code,
@@ -669,13 +809,15 @@ func searchNominatim(q string) ([]placeSuggestion, error) {
 			fc = "AIRP"
 		}
 		out = append(out, localizePlace(placeSuggestion{
-			Name:        name,
-			Country:     country,
-			Admin1:      admin1,
-			Latitude:    lat,
-			Longitude:   lon,
-			Population:  0,
-			FeatureCode: fc,
+			Name:          name,
+			Country:       country,
+			SearchName:    name,
+			SearchCountry: country,
+			Admin1:        admin1,
+			Latitude:      lat,
+			Longitude:     lon,
+			Population:    0,
+			FeatureCode:   fc,
 		}))
 	}
 	return out, nil
@@ -832,6 +974,8 @@ func pastDayCount(days []weatherDay) int {
 func getWeather(w http.ResponseWriter, r *http.Request) {
 	city := strings.TrimSpace(r.URL.Query().Get("city"))
 	country := strings.TrimSpace(r.URL.Query().Get("country"))
+	citySearch := strings.TrimSpace(r.URL.Query().Get("citySearch"))
+	countrySearch := strings.TrimSpace(r.URL.Query().Get("countrySearch"))
 	requestedDate := strings.TrimSpace(r.URL.Query().Get("date"))
 	wantWeek := r.URL.Query().Get("week") == "1" || strings.EqualFold(r.URL.Query().Get("week"), "true")
 	forceLive := r.URL.Query().Get("refresh") == "1" || strings.EqualFold(r.URL.Query().Get("refresh"), "true")
@@ -852,31 +996,43 @@ func getWeather(w http.ResponseWriter, r *http.Request) {
 	archivedObs := observationsFromSnaps(hist.Snapshots)
 	if shouldServeWeatherFromArchive(archived, forceLive) &&
 		!needsPastBackfill(archivedObs) &&
-		pastDayCount(archived.Days) >= 5 {
+		pastDayCount(archived.Days) >= 7 {
 		out := weatherResponseFromSnap(city, country, requestedDate, *archived)
 		out.Observations = archivedObs
 		respondWithJSON(w, http.StatusOK, out)
 		return
 	}
 
-	place, suggestions, err := resolvePlace(city, country)
-	if err != nil {
-		log.Printf("[Weather] geocode %q: %v (suggestions=%d)", city, err, len(suggestions))
-		if archived != nil {
-			out := weatherResponseFromSnap(city, country, requestedDate, *archived)
-			out.Observations = archivedObs
-			respondWithJSON(w, http.StatusOK, out)
+	var place placeSuggestion
+	var suggestions []placeSuggestion
+	if lat, lng, ok := parseWeatherCoords(r.URL.Query().Get("lat"), r.URL.Query().Get("lng")); ok {
+		place = placeSuggestion{
+			Name:      city,
+			Country:   country,
+			Latitude:  lat,
+			Longitude: lng,
+		}
+	} else {
+		var resolveErr error
+		place, suggestions, resolveErr = resolvePlaceEx(city, country, citySearch, countrySearch)
+		if resolveErr != nil {
+			log.Printf("[Weather] geocode %q: %v (suggestions=%d)", city, resolveErr, len(suggestions))
+			if archived != nil {
+				out := weatherResponseFromSnap(city, country, requestedDate, *archived)
+				out.Observations = archivedObs
+				respondWithJSON(w, http.StatusOK, out)
+				return
+			}
+			status := http.StatusNotFound
+			if resolveErr.Error() == "city is required" {
+				status = http.StatusBadRequest
+			}
+			respondWithJSON(w, status, weatherErrorBody{
+				Error:       resolveErr.Error(),
+				Suggestions: suggestions,
+			})
 			return
 		}
-		status := http.StatusNotFound
-		if err.Error() == "city is required" {
-			status = http.StatusBadRequest
-		}
-		respondWithJSON(w, status, weatherErrorBody{
-			Error:       err.Error(),
-			Suggestions: suggestions,
-		})
-		return
 	}
 
 	// Default: today only. Full week only when client asks (trip day within 7 days).
@@ -900,11 +1056,11 @@ func getWeather(w http.ResponseWriter, r *http.Request) {
 
 	todayDay, forecast, days := buildWeatherDays(data)
 	current := currentFromMeteo(data)
-	obs := observationsFromHourly(data, current)
+	obs := chartObservationsFromHourly(data)
 
 	out := weatherResponse{
-		City:             localizeCity(place.Name),
-		Country:          localizeCountry(place.Country),
+		City:             localizeCity(city),
+		Country:          localizeCountry(country),
 		Latitude:         place.Latitude,
 		Longitude:        place.Longitude,
 		Today:            todayDay,
@@ -932,7 +1088,7 @@ func getWeather(w http.ResponseWriter, r *http.Request) {
 	if strings.TrimSpace(archiveCity) == "" {
 		archiveCity = out.City
 	}
-	go persistWeatherObservations(context.Background(), archiveCity, country, days, current, obs)
+	go persistWeatherObservations(context.Background(), archiveCity, country, days, current, obs, forceLive)
 
 	respondWithJSON(w, http.StatusOK, out)
 }

@@ -57,6 +57,8 @@ const COUNTRY_NB: Record<string, string> = {
   kroatien: 'Kroatia',
   kroatia: 'Kroatia',
   slovenia: 'Slovenia',
+  slovenija: 'Slovenia',
+  slowenien: 'Slovenia',
   slovakia: 'Slovakia',
   'czech republic': 'Tsjekkia',
   czechia: 'Tsjekkia',
@@ -175,6 +177,64 @@ const CITY_NB: Record<string, string> = {
   kairo: 'Kairo',
   marseilles: 'Marseille',
   lyons: 'Lyon',
+}
+
+/** API-friendly city spellings when only Norwegian display name is stored. */
+const WEATHER_CITY_SEARCH: Record<string, string> = {
+  wien: 'Vienna',
+  praha: 'Prague',
+  moskva: 'Moscow',
+  roma: 'Rome',
+  milano: 'Milan',
+  firenze: 'Florence',
+  venezia: 'Venice',
+  napoli: 'Naples',
+  københavn: 'Copenhagen',
+  göteborg: 'Gothenburg',
+  brussel: 'Brussels',
+  münchen: 'Munich',
+  köln: 'Cologne',
+  genève: 'Geneva',
+  zürich: 'Zurich',
+  lisboa: 'Lisbon',
+  athen: 'Athens',
+  ljubljana: 'Ljubljana',
+  ljubljiana: 'Ljubljana',
+  warszawa: 'Warsaw',
+}
+
+const WEATHER_COUNTRY_SEARCH: Record<string, string> = {
+  østerrike: 'Austria',
+  tyskland: 'Germany',
+  italia: 'Italy',
+  spania: 'Spain',
+  frankrike: 'France',
+  norge: 'Norway',
+  sverige: 'Sweden',
+  danmark: 'Denmark',
+  tsjekkia: 'Czech Republic',
+  ungarn: 'Hungary',
+  polen: 'Poland',
+  hellas: 'Greece',
+  nederland: 'Netherlands',
+  belgia: 'Belgium',
+  sveits: 'Switzerland',
+  storbritannia: 'United Kingdom',
+  irland: 'Ireland',
+  portugal: 'Portugal',
+  kroatia: 'Croatia',
+  slovenia: 'Slovenia',
+  slovenija: 'Slovenia',
+}
+
+export function weatherSearchCity(name?: string | null): string | undefined {
+  const key = (name || '').trim().toLowerCase()
+  return key ? WEATHER_CITY_SEARCH[key] : undefined
+}
+
+export function weatherSearchCountry(name?: string | null): string | undefined {
+  const key = (name || '').trim().toLowerCase()
+  return key ? WEATHER_COUNTRY_SEARCH[key] : undefined
 }
 
 export function localizeCountry(name?: string | null): string {
