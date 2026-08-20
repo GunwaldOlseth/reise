@@ -2179,6 +2179,7 @@ export function packageOf(
         stop.pack.baseLongitude || stop.longitude || undefined,
       detail: stop.pack.detail || '',
       price: stop.pack.price || '',
+      paid: stop.pack.paid,
       costs: [...(stop.pack.costs || [])],
       days: [...(stop.pack.days || [])],
     }
@@ -2194,6 +2195,7 @@ export function packageOf(
     baseLongitude: stop.longitude || undefined,
     detail: c.detail || c.cabinNumber || '',
     price: c.price || '',
+    paid: c.paid,
     costs: [...(c.costs || [])],
     days: [...(c.days || [])],
   }
@@ -2304,6 +2306,7 @@ export function syncPackageDays(
     title: pack.title ?? '',
     detail: pack.detail ?? '',
     price: pack.price ?? '',
+    paid: pack.paid,
     costs: [...(pack.costs || [])],
     days,
   }
@@ -2319,6 +2322,8 @@ export function syncCruiseDays(cruise: JourneyCruise): JourneyCruise {
       baseCountry: cruise.baseCountry || cruise.homeCountry || '',
       detail: cruise.detail || cruise.cabinNumber || '',
       price: cruise.price || '',
+      paid: cruise.paid,
+      costs: cruise.costs || [],
       days: cruise.days || [],
     },
     'cruise',
