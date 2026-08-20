@@ -116,7 +116,7 @@ import { NoteEditor } from './NoteEditor'
 import { compactNoteHtml } from './noteHtml'
 import { ClockTimeInput } from './ClockTimeInput'
 import { useConfirmDelete } from './ConfirmDelete'
-import { PurposeToggle, StayKindToggle, TicketToggle } from './PurposeToggle'
+import { PurposeToggle, StayKindToggle, TicketToggle, PaidToggle } from './PurposeToggle'
 import { TransportCompanyInput } from './TransportCompanyInput'
 import { SightList, SightPreview, PlaceLinkedPreview } from './SightList'
 import './v2.css'
@@ -1718,6 +1718,21 @@ function PlaceStopPanel({
                       />
                     </label>
                   )}
+                  <label className="v2-check-row">
+                    <input
+                      type="checkbox"
+                      checked={stay.paid || false}
+                      disabled={disabled}
+                      onChange={(e) =>
+                        patchStay(
+                          { paid: e.target.checked },
+                          true,
+                          { immediate: true },
+                        )
+                      }
+                    />
+                    Betalt
+                  </label>
                   <label className="full">
                     Notat
                     <NoteEditor
@@ -3018,6 +3033,18 @@ function TransportBlock({
                                             idx,
                                             oi,
                                             { ticket },
+                                            true,
+                                          )
+                                        }
+                                      />
+                                      <PaidToggle
+                                        checked={opt.paid || false}
+                                        disabled={disabled}
+                                        onChange={(paid) =>
+                                          updateOption(
+                                            idx,
+                                            oi,
+                                            { paid },
                                             true,
                                           )
                                         }

@@ -43,6 +43,7 @@ type CruiseCost struct {
 	ID        string `json:"id" firestore:"id"`
 	Title     string `json:"title" firestore:"title"`
 	Price     string `json:"price,omitempty" firestore:"price,omitempty"`
+	Paid      bool   `json:"paid,omitempty" firestore:"paid,omitempty"`
 	Notes     string `json:"notes,omitempty" firestore:"notes,omitempty"`
 	SortOrder int    `json:"sortOrder" firestore:"sortOrder"`
 }
@@ -189,6 +190,7 @@ type JourneyStay struct {
 	Address      string `json:"address,omitempty" firestore:"address,omitempty"`
 	URL          string `json:"url,omitempty" firestore:"url,omitempty"`
 	Price        string `json:"price,omitempty" firestore:"price,omitempty"`
+	Paid         bool   `json:"paid,omitempty" firestore:"paid,omitempty"`
 	Notes        string `json:"notes,omitempty" firestore:"notes,omitempty"`
 	CheckInTime  string `json:"checkInTime,omitempty" firestore:"checkInTime,omitempty"`
 	CheckOutTime string `json:"checkOutTime,omitempty" firestore:"checkOutTime,omitempty"`
@@ -217,6 +219,7 @@ type JourneyPackage struct {
 	BaseLongitude float64            `json:"baseLongitude,omitempty" firestore:"baseLongitude,omitempty"`
 	Detail       string              `json:"detail,omitempty" firestore:"detail,omitempty"`
 	Price        string              `json:"price,omitempty" firestore:"price,omitempty"`
+	Paid         bool                `json:"paid,omitempty" firestore:"paid,omitempty"`
 	Costs        []CruiseCost        `json:"costs,omitempty" firestore:"costs,omitempty"`
 	Days         []JourneyPackageDay `json:"days,omitempty" firestore:"days,omitempty"`
 }
@@ -294,9 +297,10 @@ type JourneyTransportOption struct {
 	Info        string   `json:"info,omitempty" firestore:"info,omitempty"`       // ekstra info (annet)
 	Price       string   `json:"price,omitempty" firestore:"price,omitempty"`
 	ActualPrice string   `json:"actualPrice,omitempty" firestore:"actualPrice,omitempty"`
-	Taken         bool     `json:"taken,omitempty" firestore:"taken,omitempty"`
-	Ticket        bool     `json:"ticket,omitempty" firestore:"ticket,omitempty"`
-	Connection    string   `json:"connection,omitempty" firestore:"connection,omitempty"` // direct | change
+	Taken       bool     `json:"taken,omitempty" firestore:"taken,omitempty"`
+	Ticket      bool     `json:"ticket,omitempty" firestore:"ticket,omitempty"`
+	Paid        bool     `json:"paid,omitempty" firestore:"paid,omitempty"`
+	Connection  string   `json:"connection,omitempty" firestore:"connection,omitempty"` // direct | change
 	ChangePlace    string   `json:"changePlace,omitempty" firestore:"changePlace,omitempty"`
 	ChangeTitle    string   `json:"changeTitle,omitempty" firestore:"changeTitle,omitempty"`
 	ChangeStartTime string  `json:"changeStartTime,omitempty" firestore:"changeStartTime,omitempty"`

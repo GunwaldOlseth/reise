@@ -123,3 +123,28 @@ export function TicketToggle({
     </label>
   )
 }
+
+export function PaidToggle({
+  checked,
+  disabled,
+  onChange,
+}: {
+  checked: boolean
+  disabled?: boolean
+  onChange: (next: boolean) => void
+}) {
+  return (
+    <label
+      className="v2-change-check"
+      title={checked ? 'Betalt' : 'Merk som betalt'}
+    >
+      <input
+        type="checkbox"
+        checked={checked}
+        disabled={disabled}
+        onChange={(e) => onChange(e.target.checked)}
+      />
+      Betalt
+    </label>
+  )
+}

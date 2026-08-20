@@ -33,6 +33,7 @@ function emptySummary(): TripExpenseSummary {
     live: { total: 0, lines: [] },
     byDay: [],
     total: 0,
+    paidTotal: 0,
     pricedCount: 0,
     unparsedCount: 0,
   }
@@ -176,6 +177,7 @@ export function journeyExpenseSummary(journey: Journey): TripExpenseSummary {
       date: stop.arriveDate,
       rawPrice: resolved.raw,
       amount: resolved.amount,
+      paid: cost.paid || false,
     }
     cruiseLines.push(line)
     if (spread && nights > 0 && stop.arriveDate) {
@@ -228,6 +230,7 @@ export function journeyExpenseSummary(journey: Journey): TripExpenseSummary {
           date: stop.arriveDate,
           rawPrice: ticket.raw,
           amount: ticket.amount,
+          paid: pack?.paid || false,
         }
         cruiseLines.push(line)
         cruiseDays += nights
@@ -279,6 +282,7 @@ export function journeyExpenseSummary(journey: Journey): TripExpenseSummary {
           amount: resolved.amount,
           nights: Math.max(1, nights || 1),
           place: stop.city?.trim() || undefined,
+          paid: stay.paid || false,
         }
         hotelLines.push(line)
         if (nights >= 1 && stop.arriveDate) {
@@ -344,6 +348,7 @@ export function journeyExpenseSummary(journey: Journey): TripExpenseSummary {
           useActual && expected && expected !== actual
             ? expected
             : undefined,
+        paid: opt.paid || false,
       }
       transportLines.push(line)
       const acc = dayAcc(date, place)
@@ -402,6 +407,9 @@ export function journeyExpenseSummary(journey: Journey): TripExpenseSummary {
       lines: acc.lines,
     }))
 
+  const allLines = [...cruiseLines, ...hotelLines, ...transportLines, ...liveLines]
+  const paidTotal = allLines.filter((l) => l.paid).reduce((s, l) => s + l.amount, 0)
+
   return {
     cruise: {
       total: cruiseTotal,
@@ -414,6 +422,7 @@ export function journeyExpenseSummary(journey: Journey): TripExpenseSummary {
     live: { total: liveTotal, lines: liveLines },
     byDay,
     total: cruiseTotal + hotelTotal + transportTotal + liveTotal,
+    paidTotal,
     pricedCount,
     unparsedCount,
   }

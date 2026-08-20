@@ -572,6 +572,11 @@ function JourneyExpensesView({
                   ) : null}
                 </span>
                 <span className="expense-line-amount">
+                  {line.paid && (
+                    <span className="expense-paid-mark" title="Betalt" style={{ color: 'var(--color-success)', marginRight: '6px' }}>
+                      ✓
+                    </span>
+                  )}
                   {formatExpenseAmount(line.amount)}
                 </span>
               </li>
@@ -621,10 +626,28 @@ function JourneyExpensesView({
   return (
     <div className="expense-overview">
       <div className="expense-total-card">
-        <p className="expense-total-label">Totalt</p>
-        <p className="expense-total-amount">
-          {formatExpenseAmount(summary.total)}
-        </p>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
+          <div>
+            <p className="expense-total-label">Totalt</p>
+            <p className="expense-total-amount">
+              {formatExpenseAmount(summary.total)}
+            </p>
+          </div>
+          <div style={{ display: 'flex', gap: '1.5rem', textAlign: 'right' }}>
+            <div>
+              <p className="expense-total-label" style={{ color: 'var(--color-success-text)' }}>Betalt</p>
+              <p className="expense-total-amount" style={{ color: 'var(--color-success-text)' }}>
+                {formatExpenseAmount(summary.paidTotal || 0)}
+              </p>
+            </div>
+            <div>
+              <p className="expense-total-label">Gjenstår</p>
+              <p className="expense-total-amount">
+                {formatExpenseAmount(summary.total - (summary.paidTotal || 0))}
+              </p>
+            </div>
+          </div>
+        </div>
         <p className="meta expense-total-breakdown">
           Pakker {formatExpenseAmount(summary.cruise.total)}
           {' · '}

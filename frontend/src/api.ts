@@ -511,6 +511,8 @@ export type ExpenseLine = {
   /** When set, amount comes from actual cost (transport). */
   isActual?: boolean;
   expectedRaw?: string;
+  /** Whether this item has been paid. */
+  paid?: boolean;
 };
 
 export type DayExpenseSummary = {
@@ -537,6 +539,8 @@ export type TripExpenseSummary = {
   live: { total: number; lines: ExpenseLine[] };
   byDay: DayExpenseSummary[];
   total: number;
+  /** Sum of lines where paid === true. */
+  paidTotal: number;
   pricedCount: number;
   unparsedCount: number;
 };

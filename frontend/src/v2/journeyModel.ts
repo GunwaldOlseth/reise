@@ -70,6 +70,7 @@ export interface JourneyStay {
   checkOutTime?: string
   booked?: boolean
   bookedWhere?: string
+  paid?: boolean
 }
 
 export const DEFAULT_HOTEL_CHECK_IN = '15:00'
@@ -178,6 +179,8 @@ export interface JourneyPackage {
   /** Cabin, booking ref, etc. */
   detail?: string
   price?: string
+  /** Whether the package price has been paid. */
+  paid?: boolean
   /** Extra costs for the whole package (spread over nights in overview). */
   costs?: JourneyCost[]
   days?: JourneyPackageDay[]
@@ -188,6 +191,8 @@ export interface JourneyCost {
   id: string
   title: string
   price?: string
+  /** Whether this extra cost is paid. */
+  paid?: boolean
   notes?: string
   sortOrder: number
 }
@@ -361,6 +366,8 @@ export interface JourneyTransportOption {
   taken?: boolean
   /** Ticket is bought for this departure. */
   ticket?: boolean
+  /** Transport price has been paid. */
+  paid?: boolean
   /** This ride is direct, or has a change along the way. */
   connection?: RideConnection
   /** Station/city where this ride changes. */

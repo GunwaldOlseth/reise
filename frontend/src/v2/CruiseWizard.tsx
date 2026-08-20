@@ -370,15 +370,25 @@ export function PackageWizard({
               placeholder={type === 'cruise' ? '8234' : 'Valgfritt'}
             />
           </label>
-          <label className="v2-cruise-price">
-            Pris
-            <input
-              value={pack.price || ''}
-              onChange={(e) => patchPack({ price: e.target.value })}
-              placeholder="12 000 kr"
-              inputMode="decimal"
-            />
-          </label>
+          <div className="v2-cruise-price" style={{ display: 'flex', gap: '1rem', alignItems: 'flex-end' }}>
+            <label style={{ flex: 1 }}>
+              Pris
+              <input
+                value={pack.price || ''}
+                onChange={(e) => patchPack({ price: e.target.value })}
+                placeholder="12 000 kr"
+                inputMode="decimal"
+              />
+            </label>
+            <label className="v2-check-row" style={{ paddingBottom: '8px' }}>
+              <input
+                type="checkbox"
+                checked={pack.paid || false}
+                onChange={(e) => patchPack({ paid: e.target.checked })}
+              />
+              Betalt
+            </label>
+          </div>
         </div>
 
         <div className="v2-cruise-costs">
@@ -422,23 +432,41 @@ export function PackageWizard({
                       }
                     />
                   </label>
-                  <label>
-                    Pris
-                    <input
-                      value={cost.price || ''}
-                      placeholder="500 kr"
-                      inputMode="decimal"
-                      onChange={(e) =>
-                        patchPack({
-                          costs: (pack.costs || []).map((c) =>
-                            c.id === cost.id
-                              ? { ...c, price: e.target.value }
-                              : c,
-                          ),
-                        })
-                      }
-                    />
-                  </label>
+                  <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'flex-end' }}>
+                    <label style={{ flex: 1 }}>
+                      Pris
+                      <input
+                        value={cost.price || ''}
+                        placeholder="500 kr"
+                        inputMode="decimal"
+                        onChange={(e) =>
+                          patchPack({
+                            costs: (pack.costs || []).map((c) =>
+                              c.id === cost.id
+                                ? { ...c, price: e.target.value }
+                                : c,
+                            ),
+                          })
+                        }
+                      />
+                    </label>
+                    <label className="v2-check-row" style={{ paddingBottom: '8px' }}>
+                      <input
+                        type="checkbox"
+                        checked={cost.paid || false}
+                        onChange={(e) =>
+                          patchPack({
+                            costs: (pack.costs || []).map((c) =>
+                              c.id === cost.id
+                                ? { ...c, paid: e.target.checked }
+                                : c,
+                            ),
+                          })
+                        }
+                      />
+                      Betalt
+                    </label>
+                  </div>
                   <button
                     type="button"
                     className="btn btn-ghost btn-sm"
