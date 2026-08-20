@@ -4515,6 +4515,25 @@ html {
   border-top: 1px solid var(--v2-line);
 }
 
+.v2-hotel-check-times {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.45rem;
+  grid-column: 1 / -1;
+}
+
+.v2-hotel-check-times label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  font-size: 0.78rem;
+  color: var(--v2-muted);
+}
+
+.v2-hotel-check-times .v2-clock-input {
+  width: 100%;
+}
+
 .v2-hotel-remove-row {
   grid-column: 1 / -1;
   display: flex;
@@ -4535,6 +4554,14 @@ html {
 
 .v2-activity-kind.is-hotel {
   background: color-mix(in srgb, #4a7a8c 18%, var(--v2-panel));
+  color: var(--v2-ink);
+  min-width: 1.5rem;
+  min-height: 1.5rem;
+  padding: 0.15rem;
+}
+
+.v2-activity-kind.is-airbnb {
+  background: color-mix(in srgb, #c45a4a 18%, var(--v2-panel));
   color: var(--v2-ink);
   min-width: 1.5rem;
   min-height: 1.5rem;
@@ -4562,6 +4589,10 @@ html {
 
 .v2-linked-preview .is-hotel {
   border-color: rgba(120, 170, 210, 0.35);
+}
+
+.v2-linked-preview .is-airbnb {
+  border-color: rgba(196, 90, 74, 0.35);
 }
 
 .v2-linked-preview .is-hotel.is-empty {

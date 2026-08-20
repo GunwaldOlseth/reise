@@ -1,4 +1,4 @@
-import type { PlacePurpose, RideConnection } from './journeyModel'
+import type { PlacePurpose, RideConnection, StayKind } from './journeyModel'
 
 export function PurposeToggle({
   value,
@@ -63,6 +63,39 @@ export function ConnectionToggle({
       />
       Linjebytte
     </label>
+  )
+}
+
+export function StayKindToggle({
+  value,
+  disabled,
+  onChange,
+}: {
+  value: StayKind
+  disabled?: boolean
+  onChange: (next: StayKind) => void
+}) {
+  return (
+    <div className="v2-purpose" role="group" aria-label="Type overnatting">
+      <button
+        type="button"
+        className={`v2-purpose-btn${value === 'hotel' ? ' is-on' : ''}`}
+        disabled={disabled}
+        title="Hotell eller lignende"
+        onClick={() => onChange('hotel')}
+      >
+        Hotell
+      </button>
+      <button
+        type="button"
+        className={`v2-purpose-btn${value === 'airbnb' ? ' is-on' : ''}`}
+        disabled={disabled}
+        title="Airbnb eller feriebolig"
+        onClick={() => onChange('airbnb')}
+      >
+        Airbnb
+      </button>
+    </div>
   )
 }
 

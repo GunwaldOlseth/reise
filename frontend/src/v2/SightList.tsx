@@ -438,11 +438,13 @@ export function SightPreview({ sights }: { sights?: JourneyActivity[] | null }) 
 /** Collapsed preview of hotel + program linked to a city. */
 export function PlaceLinkedPreview({
   hotel,
+  lodgingKind = 'hotel',
   nights,
   warnMissingStay,
   sights,
 }: {
   hotel?: string
+  lodgingKind?: 'hotel' | 'airbnb'
   nights?: number
   warnMissingStay?: boolean
   sights?: JourneyActivity[] | null
@@ -450,20 +452,25 @@ export function PlaceLinkedPreview({
   const list = normalizeSights(sights)
   const hasHotel = !!(hotel || '').trim()
   const hasStay = (nights || 0) >= 1
+  const kindLabel = lodgingKind === 'airbnb' ? 'Airbnb' : 'Hotell'
+  const unsetLabel =
+    lodgingKind === 'airbnb' ? 'Airbnb ikke satt' : 'Hotell ikke satt'
+  const itemClass =
+    lodgingKind === 'airbnb' ? 'is-airbnb' : 'is-hotel'
   if (!hasHotel && !hasStay && !list.length && !warnMissingStay) return null
   return (
     <ul className="v2-sights-preview v2-linked-preview">
       {hasHotel ? (
-        <li className="is-hotel" title="Hotell">
+        <li className={itemClass} title={kindLabel}>
           {hotel!.trim()}
         </li>
       ) : hasStay ? (
-        <li className="is-hotel is-empty" title="Hotell">
-          Hotell ikke satt
+        <li className={`${itemClass} is-empty`} title={kindLabel}>
+          {unsetLabel}
         </li>
       ) : warnMissingStay ? (
-        <li className="is-hotel is-empty" title="Hotell">
-          Uten hotell
+        <li className={`${itemClass} is-empty`} title={kindLabel}>
+          Uten {kindLabel.toLowerCase()}
         </li>
       ) : null}
       {list.map((s) => (

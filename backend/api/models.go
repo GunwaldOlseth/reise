@@ -184,6 +184,7 @@ type ReorderItem struct {
 // JourneyStay is optional lodging attached to a journey stop (a block of nights).
 type JourneyStay struct {
 	Nights       int    `json:"nights" firestore:"nights"`
+	Kind         string `json:"kind,omitempty" firestore:"kind,omitempty"` // hotel | airbnb
 	HotelName    string `json:"hotelName,omitempty" firestore:"hotelName,omitempty"`
 	Address      string `json:"address,omitempty" firestore:"address,omitempty"`
 	URL          string `json:"url,omitempty" firestore:"url,omitempty"`

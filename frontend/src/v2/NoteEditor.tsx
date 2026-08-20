@@ -143,6 +143,14 @@ export function NoteEditor({
         suppressContentEditableWarning
         onInput={() => emit()}
         onBlur={() => onBlur?.(emit())}
+        onPaste={(e) => {
+          if (disabled) return
+          e.preventDefault()
+          const text = e.clipboardData?.getData('text/plain') ?? ''
+          if (!text) return
+          document.execCommand('insertText', false, text)
+          emit()
+        }}
         onKeyDown={(e) => {
           if (e.key === 'Tab') {
             e.preventDefault()

@@ -13,9 +13,13 @@ import {
   packageOf,
   packageTypeLabel,
   stayNights,
+  stayKind,
+  stayKindLabel,
   chosenTransportOption,
   effectiveTransportPrice,
+  formatCityStation,
   legTravelDate,
+  stopGoalLabel,
   type Journey,
   type JourneyCost,
   type JourneyStop,
@@ -32,6 +36,14 @@ function emptySummary(): TripExpenseSummary {
     pricedCount: 0,
     unparsedCount: 0,
   }
+}
+
+function expenseFromLabel(stop?: JourneyStop | null): string {
+  if (!stop) return ''
+  if (stop.kind === 'home') {
+    return (stop.address || stop.city || 'Start').trim()
+  }
+  return formatCityStation(stop.city, stop.station) || stop.city?.trim() || ''
 }
 
 function addDaysIso(iso: string, days: number): string {
@@ -67,13 +79,25 @@ export function journeyExpenseSummary(journey: Journey): TripExpenseSummary {
     lines: ExpenseLine[]
     place: string
     ship: string
+    cityFrom: string
+    cityTo: string
   }
   const byDate = new Map<string, DayAcc>()
 
   function dayAcc(date: string, place: string, ship = ''): DayAcc {
     let acc = byDate.get(date)
     if (!acc) {
-      acc = { cruise: 0, hotel: 0, transport: 0, live: 0, lines: [], place, ship }
+      acc = {
+        cruise: 0,
+        hotel: 0,
+        transport: 0,
+        live: 0,
+        lines: [],
+        place,
+        ship,
+        cityFrom: '',
+        cityTo: '',
+      }
       byDate.set(date, acc)
     } else {
       if (!acc.place && place) acc.place = place
@@ -242,9 +266,11 @@ export function journeyExpenseSummary(journey: Journey): TripExpenseSummary {
       else if (resolved !== 'empty') {
         pricedCount += 1
         const nights = stayNights(stop)
+        const kind = stayKind(stay)
+        const label = stayKindLabel(kind)
         const title = stay.hotelName?.trim()
-          ? `Hotell · ${stay.hotelName}`
-          : `Hotell · ${stop.city || 'Opphold'}`
+          ? `${label} · ${stay.hotelName}`
+          : `${label} · ${stop.city || 'Opphold'}`
         const line: ExpenseLine = {
           id: `${stop.id}:hotel`,
           title,
@@ -320,7 +346,12 @@ export function journeyExpenseSummary(journey: Journey): TripExpenseSummary {
             : undefined,
       }
       transportLines.push(line)
+      const acc = dayAcc(date, place)
       addShare(date, place, 'transport', resolved.amount, line)
+      const fromLabel = expenseFromLabel(from)
+      const toLabel = stopGoalLabel(to, '')
+      if (fromLabel) acc.cityFrom = fromLabel
+      if (toLabel) acc.cityTo = toLabel
     }
   }
 
@@ -360,6 +391,8 @@ export function journeyExpenseSummary(journey: Journey): TripExpenseSummary {
     .map(([date, acc]) => ({
       date,
       place: acc.place,
+      cityFrom: acc.cityFrom || undefined,
+      cityTo: acc.cityTo || undefined,
       ship: acc.ship || undefined,
       cruise: acc.cruise,
       hotel: acc.hotel,

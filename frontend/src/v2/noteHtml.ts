@@ -52,7 +52,12 @@ function serialize(node: Node): string {
     const style = (el.getAttribute('style') || '').toLowerCase()
     const highlighted =
       style.includes('background') || !!el.getAttribute('bgcolor')
-    if (highlighted && inner) return `<mark>${inner}</mark>`
+    if (highlighted && inner) {
+      if (/#d4a84a|rgb\s*\(\s*212\s*,\s*168\s*,\s*74/i.test(style)) {
+        return `<mark>${inner}</mark>`
+      }
+      return inner
+    }
     return inner
   }
   if (!ALLOWED.has(tag)) return inner

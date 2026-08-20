@@ -604,7 +604,7 @@ function JourneyExpensesView({
     }
   }
   const hotelName = (title: string) =>
-    title.replace(/^Hotell\s*·\s*/i, '') || title
+    title.replace(/^(Hotell|Airbnb)\s*·\s*/i, '') || title
   const hotelNightMeta = (h: (typeof hotels)[number]) => {
     const n = Math.max(1, h.nights || 1)
     return n > 1 ? `${n} netter · pr natt` : 'pr natt'
@@ -700,18 +700,29 @@ function JourneyExpensesView({
           <h3 className="expense-by-day-title">Per dag</h3>
           <ul className="expense-day-list">
             {summary.byDay.map((d) => {
+              const routeLabel =
+                d.cityFrom && d.cityTo
+                  ? `${d.cityFrom} → ${d.cityTo}`
+                  : ''
               const cruiseLabel =
                 d.cruise > 0
                   ? [d.place, d.ship].filter(Boolean).join(' · ')
                   : ''
               const placeLabel =
-                cruiseLabel || d.place || (d.ship ? d.ship : '')
+                cruiseLabel ||
+                d.place ||
+                (d.ship ? d.ship : '')
               const rows = [
                 d.hotel > 0
                   ? { label: 'Overnatting', amount: d.hotel }
                   : null,
                 d.transport > 0
-                  ? { label: 'Transport', amount: d.transport }
+                  ? {
+                      label: routeLabel
+                        ? `Transport · ${routeLabel}`
+                        : 'Transport',
+                      amount: d.transport,
+                    }
                   : null,
                 d.cruise > 0
                   ? { label: 'Pakke', amount: d.cruise }

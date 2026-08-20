@@ -21,8 +21,12 @@ import {
   compactCityDocs,
   compactLive,
   confirmShiftAfterNights,
+  defaultJourneyStay,
   emptyJourney,
   formatDateNO,
+  formatHotelStayTimes,
+  hotelCheckInTime,
+  hotelCheckOutTime,
   formatDurationHM,
   formatTransportOptionLabel,
   rideDurationMinutes,
@@ -72,6 +76,10 @@ import {
   stopDepartDate,
   stopShiftLabel,
   showOnwardFromHere,
+  stayKind,
+  stayNameFieldLabel,
+  stayNamePlaceholder,
+  stayUnsetLabel,
   stopWarningLabel,
   suggestNextArriveDate,
   summarizeViaHop,
@@ -108,10 +116,61 @@ import { NoteEditor } from './NoteEditor'
 import { compactNoteHtml } from './noteHtml'
 import { ClockTimeInput } from './ClockTimeInput'
 import { useConfirmDelete } from './ConfirmDelete'
-import { PurposeToggle, TicketToggle } from './PurposeToggle'
+import { PurposeToggle, StayKindToggle, TicketToggle } from './PurposeToggle'
 import { TransportCompanyInput } from './TransportCompanyInput'
 import { SightList, SightPreview, PlaceLinkedPreview } from './SightList'
 import './v2.css'
+
+function normalizeStayClockTimes(stay: JourneyStay): JourneyStay {
+  return {
+    ...stay,
+    checkInTime:
+      normalizeCompleteClockTime(hotelCheckInTime(stay)) ||
+      hotelCheckInTime(stay),
+    checkOutTime:
+      normalizeCompleteClockTime(hotelCheckOutTime(stay)) ||
+      hotelCheckOutTime(stay),
+  }
+}
+
+function HotelCheckTimesRow({
+  checkInTime,
+  checkOutTime,
+  disabled,
+  onChange,
+  onBlur,
+}: {
+  checkInTime: string
+  checkOutTime: string
+  disabled?: boolean
+  onChange: (partial: Pick<JourneyStay, 'checkInTime' | 'checkOutTime'>) => void
+  onBlur?: () => void
+}) {
+  return (
+    <div className="v2-hotel-check-times">
+      <label>
+        Innsjekk
+        <ClockTimeInput
+          placeholder="15:00"
+          value={checkInTime}
+          disabled={disabled}
+          onChange={(value) => onChange({ checkInTime: value })}
+          onBlur={onBlur}
+        />
+      </label>
+      <label>
+        Utsjekk
+        <ClockTimeInput
+          placeholder="11:00"
+          value={checkOutTime}
+          disabled={disabled}
+          onChange={(value) => onChange({ checkOutTime: value })}
+          onBlur={onBlur}
+        />
+      </label>
+    </div>
+  )
+}
 
 type WizardKind = 'onward' | 'home' | 'edit' | 'depart' | 'choose' | 'package'
 type WizardStep = 'destination' | 'dates' | 'stay' | 'travel' | 'notes'
@@ -1009,12 +1068,7 @@ function PlaceStopPanel({
   const [editingHotel, setEditingHotel] = useState(false)
   const nightsAtEditStart = useRef(nights)
   const activityCount = normalizeSights(stop.sights).length
-  const stay: JourneyStay = stop.stay || {
-    nights: 1,
-    hotelName: '',
-    address: '',
-    notes: '',
-  }
+  const stay: JourneyStay = stop.stay || defaultJourneyStay()
 
   useEffect(() => {
     if (!open) {
@@ -1043,7 +1097,7 @@ function PlaceStopPanel({
       patchStop({ stay: null, sights: normalizeSights(stop.sights) }, opts)
       return
     }
-    const nextStay: JourneyStay = {
+    const nextStay: JourneyStay = normalizeStayClockTimes({
       ...stay,
       ...partial,
       nights: Math.max(
@@ -1054,7 +1108,12 @@ function PlaceStopPanel({
       address: (partial.address ?? stay.address ?? '').trim(),
       price: (partial.price ?? stay.price ?? '').trim(),
       notes: partial.notes ?? stay.notes ?? '',
-    }
+      kind: partial.kind ?? stay.kind ?? 'hotel',
+      checkInTime: partial.checkInTime ?? stay.checkInTime,
+      checkOutTime: partial.checkOutTime ?? stay.checkOutTime,
+      booked: partial.booked ?? stay.booked ?? false,
+      bookedWhere: (partial.bookedWhere ?? stay.bookedWhere ?? '').trim(),
+    })
     patchStop(
       {
         stay: nextStay,
@@ -1069,7 +1128,7 @@ function PlaceStopPanel({
     if (!stop.stay) {
       const added: JourneyStop = {
         ...stop,
-        stay: { nights: 1, hotelName: '', address: '', price: '', notes: '' },
+        stay: defaultJourneyStay(),
         sights: normalizeSights(stop.sights),
       }
       onChange(added, { immediate: true, nightsDelta: 1 - nights })
@@ -1096,14 +1155,18 @@ function PlaceStopPanel({
 
   const city = stop.city?.trim() || 'Uten by'
   const hotel = stay.hotelName?.trim() || ''
+  const lodgingKind = stayKind(stay)
   const hotelAddress = stay.address?.trim() || ''
   const hotelPrice = stay.price?.trim() || ''
   const visiting = stopPurpose(stop) === 'visit'
   const hasStay = stayNights(stop) >= 1
   const daysInCity = cityStayDays(stop)
+  const hotelTimes = hasStay ? formatHotelStayTimes(stay) : ''
   const dateSpan =
     stop.arriveDate && nights > 0
-      ? `${formatDateNO(stop.arriveDate)}–${formatDateNO(depart)} (${nights}n)`
+      ? `${formatDateNO(stop.arriveDate)}–${formatDateNO(depart)} (${nights}n)${
+          hotelTimes ? ` · ${hotelTimes}` : ''
+        }`
       : stop.arriveDate
         ? `Ankomst ${formatDateNO(stop.arriveDate)}`
         : nights > 0
@@ -1197,6 +1260,7 @@ function PlaceStopPanel({
       {!open && (
         <PlaceLinkedPreview
           hotel={hotel}
+          lodgingKind={lodgingKind}
           nights={nights}
           warnMissingStay={visiting && warnMissingStay}
           sights={stop.sights}
@@ -1389,16 +1453,36 @@ function PlaceStopPanel({
                       else startAddHotel()
                     }}
                   >
-                    <span className="v2-activity-kind is-hotel" aria-hidden>
-                      <PlaceMetaIcon name="hotel" size={12} />
+                    <span
+                      className={`v2-activity-kind${
+                        lodgingKind === 'airbnb' ? ' is-airbnb' : ' is-hotel'
+                      }`}
+                      aria-hidden
+                    >
+                      <PlaceMetaIcon
+                        name={lodgingKind === 'airbnb' ? 'airbnb' : 'hotel'}
+                        size={12}
+                      />
                     </span>
                     <span className="v2-hotel-row-text">
                       {hotel ? (
                         <>
-                          <span className="v2-hotel-row-name">{hotel}</span>
-                          {(hotelAddress || hotelPrice || nights > 0) && (
+                          <span className="v2-hotel-row-name">
+                            {hotel}
+                            {stay.booked && (
+                              <span
+                                className="v2-hotel-booked-tick"
+                                title={`Booket${stay.bookedWhere ? ` via ${stay.bookedWhere}` : ''}`}
+                                style={{ marginLeft: '6px', color: '#10b981', fontSize: '0.9em', userSelect: 'none' }}
+                              >
+                                ✓
+                              </span>
+                            )}
+                          </span>
+                          {(hotelAddress || hotelPrice || nights > 0 || hotelTimes) && (
                             <span className="v2-hotel-row-addr">
                               {[
+                                hotelTimes,
                                 hotelAddress,
                                 nights > 0
                                   ? `${nights} ${nights === 1 ? 'natt' : 'netter'}`
@@ -1413,7 +1497,7 @@ function PlaceStopPanel({
                       ) : hasStay ? (
                         <>
                           <span className="v2-hotel-row-name">
-                            Hotell ikke satt
+                            {stayUnsetLabel(lodgingKind)}
                           </span>
                           <span className="v2-hotel-row-addr">
                             {nights} {nights === 1 ? 'natt' : 'netter'} · trykk
@@ -1437,12 +1521,22 @@ function PlaceStopPanel({
 
               {editingHotel && (
                 <div className="v2-hotel-card-body form-grid">
+                  <label className="full">
+                    Type
+                    <StayKindToggle
+                      value={lodgingKind}
+                      disabled={disabled}
+                      onChange={(kind) =>
+                        patchStay({ kind }, true, { immediate: true })
+                      }
+                    />
+                  </label>
                   <label>
-                    Hotell
+                    {stayNameFieldLabel(lodgingKind)}
                     <input
                       value={stay.hotelName || ''}
                       disabled={disabled}
-                      placeholder="Hotellnavn"
+                      placeholder={stayNamePlaceholder(lodgingKind)}
                       autoFocus
                       onChange={(e) =>
                         onChange({
@@ -1513,6 +1607,24 @@ function PlaceStopPanel({
                       }}
                     />
                   </label>
+                  <HotelCheckTimesRow
+                    checkInTime={hotelCheckInTime(stay)}
+                    checkOutTime={hotelCheckOutTime(stay)}
+                    disabled={disabled}
+                    onChange={(partial) =>
+                      onChange({
+                        ...stop,
+                        stay: {
+                          ...stay,
+                          nights: stay.nights || 1,
+                          ...partial,
+                        },
+                      })
+                    }
+                    onBlur={() =>
+                      patchStay({}, true, { immediate: true })
+                    }
+                  />
                   <label>
                     Adresse
                     <input
@@ -1564,7 +1676,49 @@ function PlaceStopPanel({
                       }
                     />
                   </label>
-                  <label>
+                  <label className="v2-check-row">
+                    <input
+                      type="checkbox"
+                      checked={stay.booked || false}
+                      disabled={disabled}
+                      onChange={(e) =>
+                        patchStay(
+                          { booked: e.target.checked },
+                          true,
+                          { immediate: true },
+                        )
+                      }
+                    />
+                    Er booket
+                  </label>
+                  {stay.booked && (
+                    <label>
+                      Hvor er det booket?
+                      <input
+                        value={stay.bookedWhere || ''}
+                        disabled={disabled}
+                        placeholder="f.eks. Booking.com"
+                        onChange={(e) =>
+                          onChange({
+                            ...stop,
+                            stay: {
+                              ...stay,
+                              nights: stay.nights || 1,
+                              bookedWhere: e.target.value,
+                            },
+                          })
+                        }
+                        onBlur={(e) =>
+                          patchStay(
+                            { bookedWhere: e.target.value },
+                            true,
+                            { immediate: true },
+                          )
+                        }
+                      />
+                    </label>
+                  )}
+                  <label className="full">
                     Notat
                     <NoteEditor
                       value={stay.notes || ''}
@@ -2402,6 +2556,9 @@ function TransportBlock({
                                     >
                                       {formatTransportOptionLabel(opt, {
                                       abbreviateCompany: true,
+                                      includePrice: true,
+                                      includeHopBadge: true,
+                                      via: seg,
                                     }) || `Avgang ${oi + 1}`}
                                     </span>
                                   ))}
@@ -2658,6 +2815,9 @@ function TransportBlock({
                                   <span className="v2-hop-summary-title">
                                     {formatTransportOptionLabel(opt, {
                                       abbreviateCompany: true,
+                                      includePrice: true,
+                                      includeHopBadge: true,
+                                      via: seg,
                                     })}
                                   </span>
                                 </span>
@@ -3466,11 +3626,8 @@ function StopWizard({
         arriveDate: gapPrefill.arriveDate,
         kind: 'place',
         stay: {
+          ...defaultJourneyStay(),
           nights: gapPrefill.nights,
-          hotelName: '',
-          address: '',
-          checkInTime: '15:00',
-          checkOutTime: '11:00',
         },
         notes: '',
         sortOrder: journey.stops.length,
@@ -3491,13 +3648,13 @@ function StopWizard({
 
   const [stop, setStop] = useState<JourneyStop>(initialStop)
   const [stay, setStay] = useState<JourneyStay>(() =>
-    initialStop.stay || {
-      nights: 1,
-      hotelName: '',
-      address: '',
-      checkInTime: '15:00',
-      checkOutTime: '11:00',
-    },
+    initialStop.stay
+      ? {
+          ...initialStop.stay,
+          checkInTime: hotelCheckInTime(initialStop.stay),
+          checkOutTime: hotelCheckOutTime(initialStop.stay),
+        }
+      : defaultJourneyStay(),
   )
   const hasHotel = !!(stay.hotelName || '').trim()
   const [wantStay, setWantStay] = useState(
@@ -3540,12 +3697,13 @@ function StopWizard({
       stay:
         isGoingHome || !wantStay
           ? null
-          : {
+          : normalizeStayClockTimes({
               ...stay,
               nights: Math.max(1, Math.min(60, Math.floor(stay.nights || 1))),
               hotelName: (stay.hotelName || '').trim(),
               address: (stay.address || '').trim(),
-            },
+              kind: stayKind(stay),
+            }),
       notes: compactNoteHtml(stop.notes || ''),
       docs: compactCityDocs(cityDocsOf(stop)),
     }
@@ -3723,6 +3881,13 @@ function StopWizard({
             </label>
             {wantStay && (
               <>
+                <label className="full">
+                  Type
+                  <StayKindToggle
+                    value={stayKind(stay)}
+                    onChange={(kind) => setStay((p) => ({ ...p, kind }))}
+                  />
+                </label>
                 <label>
                   Antall netter
                   <input
@@ -3747,17 +3912,17 @@ function StopWizard({
                   />
                 </label>
                 <label>
-                  Hotellnavn (valgfritt)
+                  {stayNameFieldLabel(stayKind(stay))} (valgfritt)
                   <input
                     value={stay.hotelName || ''}
                     onChange={(e) =>
                       setStay((p) => ({ ...p, hotelName: e.target.value }))
                     }
-                    placeholder="Hotel Navn"
+                    placeholder={stayNamePlaceholder(stayKind(stay))}
                   />
                 </label>
                 <label>
-                  Hotelladresse
+                  Adresse
                   <input
                     value={stay.address || ''}
                     onChange={(e) =>
@@ -3765,6 +3930,16 @@ function StopWizard({
                     }
                   />
                 </label>
+                <HotelCheckTimesRow
+                  checkInTime={hotelCheckInTime(stay)}
+                  checkOutTime={hotelCheckOutTime(stay)}
+                  onChange={(partial) =>
+                    setStay((p) => ({ ...p, ...partial }))
+                  }
+                  onBlur={() =>
+                    setStay((p) => normalizeStayClockTimes(p))
+                  }
+                />
               </>
             )}
             {!wantStay && (

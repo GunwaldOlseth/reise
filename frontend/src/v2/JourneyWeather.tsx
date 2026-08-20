@@ -6,6 +6,7 @@ import {
   refreshWeatherPlace,
   useWeatherCacheVersion,
   useWeatherPlace,
+  type WeatherPlaceRequest,
 } from './weatherPrefetch'
 import { WeatherTempChart } from './WeatherTempChart'
 import { WeatherDaySpark } from './WeatherCityDetail'

@@ -129,7 +129,7 @@ export function PlaceMetaIcon({
   name,
   size = 14,
 }: {
-  name: 'city' | 'hotel' | 'dates' | 'plan'
+  name: 'city' | 'hotel' | 'airbnb' | 'dates' | 'plan'
   size?: number
 }) {
   const props = {
@@ -153,6 +153,14 @@ export function PlaceMetaIcon({
           <path d="M3 20h18" />
           <path d="M7 11h2" />
           <path d="M7 14h2" />
+        </svg>
+      )
+    case 'airbnb':
+      return (
+        <svg {...props}>
+          <path d="M4 20V10.5l8-6.5 8 6.5V20" />
+          <path d="M4 20h16" />
+          <path d="M9 20v-6h6v6" />
         </svg>
       )
     case 'dates':

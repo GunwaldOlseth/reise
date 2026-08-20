@@ -4,7 +4,13 @@ import {
   type PlannerSettings,
   type TransportOptionSort,
 } from '../userSettings'
-import { arriveTimeSortKey, normalizeClockTime, normalizeDepartures } from '../api'
+import {
+  arriveTimeSortKey,
+  formatExpenseAmount,
+  normalizeClockTime,
+  normalizeDepartures,
+  parsePriceAmount,
+} from '../api'
 import { localizeJourneyPlaces } from '../placeNames'
 import { compactNoteHtml, noteHasContent } from './noteHtml'
 
@@ -53,6 +59,8 @@ export type JourneyLegMode =
 
 export interface JourneyStay {
   nights: number
+  /** hotel (default) or airbnb */
+  kind?: StayKind
   hotelName?: string
   address?: string
   url?: string
@@ -60,6 +68,61 @@ export interface JourneyStay {
   notes?: string
   checkInTime?: string
   checkOutTime?: string
+  booked?: boolean
+  bookedWhere?: string
+}
+
+export const DEFAULT_HOTEL_CHECK_IN = '15:00'
+export const DEFAULT_HOTEL_CHECK_OUT = '11:00'
+
+export type StayKind = 'hotel' | 'airbnb'
+
+export function stayKind(stay?: JourneyStay | null): StayKind {
+  return stay?.kind === 'airbnb' ? 'airbnb' : 'hotel'
+}
+
+export function stayKindLabel(kind: StayKind): string {
+  return kind === 'airbnb' ? 'Airbnb' : 'Hotell'
+}
+
+export function stayNameFieldLabel(kind: StayKind): string {
+  return kind === 'airbnb' ? 'Navn / sted' : 'Hotell'
+}
+
+export function stayNamePlaceholder(kind: StayKind): string {
+  return kind === 'airbnb' ? 'Navn på sted' : 'Hotellnavn'
+}
+
+export function stayUnsetLabel(kind: StayKind): string {
+  return kind === 'airbnb' ? 'Airbnb ikke satt' : 'Hotell ikke satt'
+}
+
+export function defaultJourneyStay(): JourneyStay {
+  return {
+    nights: 1,
+    kind: 'hotel',
+    hotelName: '',
+    address: '',
+    checkInTime: DEFAULT_HOTEL_CHECK_IN,
+    checkOutTime: DEFAULT_HOTEL_CHECK_OUT,
+    booked: false,
+    bookedWhere: '',
+  }
+}
+
+export function hotelCheckInTime(stay?: JourneyStay | null): string {
+  const t = (stay?.checkInTime || '').trim()
+  return t || DEFAULT_HOTEL_CHECK_IN
+}
+
+export function hotelCheckOutTime(stay?: JourneyStay | null): string {
+  const t = (stay?.checkOutTime || '').trim()
+  return t || DEFAULT_HOTEL_CHECK_OUT
+}
+
+export function formatHotelStayTimes(stay?: JourneyStay | null): string {
+  if (!stay) return ''
+  return `Inn ${hotelCheckInTime(stay)} · ut ${hotelCheckOutTime(stay)}`
 }
 
 /** Attraction, excursion or other item at a city / via. */
@@ -963,9 +1026,12 @@ export function journeyOverviewRides(journey: Journey): OverviewRide[] {
       const toLabel =
         via.title.trim() || (last ? overviewStopLabel(to) : '…')
       const opt = chosenTransportOption(via)
+      const badge = transportHopConnectionBadge(via)
       const detail = [
+        badge,
         opt ? formatOptionSummaryBit(opt) : '',
         formatChangeTimeLabel(via, opt),
+        opt ? transportOptionPriceLabel(opt) : '',
       ]
         .filter(Boolean)
         .join(' · ')
@@ -1196,6 +1262,19 @@ export function effectiveTransportPrice(
   return (option?.actualPrice || '').trim() || (option?.price || '').trim()
 }
 
+/** Price label for transport lists (uses actual when set). */
+export function transportOptionPriceLabel(
+  option?: Pick<JourneyTransportOption, 'price' | 'actualPrice'> | null,
+): string {
+  const raw = effectiveTransportPrice(option)
+  if (!raw) return ''
+  const amount = parsePriceAmount(raw)
+  if (amount !== null) return `${formatExpenseAmount(amount)} kr`
+  const trimmed = raw.trim()
+  if (/\bkr\.?\b/i.test(trimmed)) return trimmed
+  return `${trimmed} kr`
+}
+
 /** The alternative we took, or the first one after current sort if none is kvittert. */
 export function chosenTransportOption(
   via: JourneyVia,
@@ -1362,10 +1441,65 @@ function transportCompanyLabel(
   return abbreviate ? abbreviateTransportCompany(trimmed) : trimmed
 }
 
+/** Options on a hop without expanding multi-time departures into separate rows. */
+function transportHopRawOptions(via: JourneyVia): JourneyTransportOption[] {
+  if (via.options?.length) {
+    return via.options.map((o) => ({
+      ...o,
+      departures: [...(o.departures || [])],
+    }))
+  }
+  if (
+    via.mode?.trim() ||
+    via.startTime?.trim() ||
+    via.endTime?.trim() ||
+    (via.departures || []).length
+  ) {
+    return [
+      {
+        id: `${via.id}-opt0`,
+        mode: via.mode || '',
+        title: '',
+        startTime: via.startTime || '',
+        endTime: via.endTime || '',
+        departures: [...(via.departures || [])],
+      } as JourneyTransportOption,
+    ]
+  }
+  return []
+}
+
+/** D/B for one departure row — rutetider/valg med samme type er direkte. */
+export function transportOptionConnectionBadge(
+  option: JourneyTransportOption,
+  via: JourneyVia,
+): 'D' | 'B' | '' {
+  if (!isTransportOptionFilled(option)) return ''
+  const filled = transportHopRawOptions(via).filter(isTransportOptionFilled)
+  const modes = new Set(filled.map((o) => (o.mode || '').trim() || 'other'))
+  if (modes.size > 1) return 'B'
+  if (optionConnection(option, via) === 'change') return 'B'
+  return 'D'
+}
+
+/** D/B for a hop summary (valgt eller første avgang). */
+export function transportHopConnectionBadge(via: JourneyVia): 'D' | 'B' | '' {
+  const opt =
+    chosenTransportOption(via) ||
+    transportHopRawOptions(via).find(isTransportOptionFilled)
+  if (!opt) return ''
+  return transportOptionConnectionBadge(opt, via)
+}
+
 /** One-line label for a transport option in lists (plan, live, overview). */
 export function formatTransportOptionLabel(
   opt: JourneyTransportOption,
-  opts?: { abbreviateCompany?: boolean },
+  opts?: {
+    abbreviateCompany?: boolean
+    includePrice?: boolean
+    includeHopBadge?: boolean
+    via?: JourneyVia
+  },
 ): string {
   const title = (opt.title || '').trim()
   const company = transportCompanyLabel(
@@ -1375,13 +1509,24 @@ export function formatTransportOptionLabel(
   const time = (opt.startTime || '').trim()
   const mins = optionDurationMinutes(opt)
   const dur = mins != null ? formatDurationHM(mins) : ''
+  let base: string
   if (modeIsWalk(opt.mode)) {
     const walk = (opt.minutes || '').trim()
-    return [legModeLabel(opt.mode), walk ? `${walk} min` : '']
-      .filter(Boolean)
-      .join(' · ') || 'Rediger avgang'
+    base =
+      [legModeLabel(opt.mode), walk ? `${walk} min` : '']
+        .filter(Boolean)
+        .join(' · ') || 'Rediger avgang'
+  } else {
+    base = [title, company, time, dur].filter(Boolean).join(' · ') || 'Rediger avgang'
   }
-  return [title, company, time, dur].filter(Boolean).join(' · ') || 'Rediger avgang'
+  const badge =
+    opts?.includeHopBadge && opts.via
+      ? transportOptionConnectionBadge(opt, opts.via)
+      : ''
+  if (badge) base = `${badge} · ${base}`
+  if (!opts?.includePrice) return base
+  const price = transportOptionPriceLabel(opt)
+  return price ? `${base} · ${price}` : base
 }
 
 function formatOptionSummaryBit(
@@ -1490,13 +1635,15 @@ export function summarizeViaHop(
   const to = formatCityStation(via.title, via.station) || via.title.trim() || '…'
   const route = `${fromLabel} → ${to}`
   const options = viaTransportOptions(via)
-  const opt = options[0]
+  const opt = chosenTransportOption(via) || options[0]
   if (!opt) return route
+  const badge = transportHopConnectionBadge(via)
   const mode = opt.mode ? legModeLabel(opt.mode) : ''
   const company = transportCompanyLabel(opt.company || '')
   const mins = optionDurationMinutes(opt)
   const dur = mins != null ? formatDurationHM(mins) : ''
-  const ride = [company, mode, dur].filter(Boolean).join(' · ')
+  const price = transportOptionPriceLabel(opt)
+  const ride = [badge, company, mode, dur, price].filter(Boolean).join(' · ')
   return ride ? `${route} · ${ride}` : route
 }
 
@@ -1508,7 +1655,8 @@ export function formatOptionAltLine(option: JourneyTransportOption): string {
   const nr = modeIsFlight(option.mode) ? (option.title || '').trim() : ''
   const mins = optionDurationMinutes(option)
   const dur = mins != null ? formatDurationHM(mins) : ''
-  return [company, mode, nr, time, dur].filter(Boolean).join(' · ')
+  const price = transportOptionPriceLabel(option)
+  return [company, mode, nr, time, dur, price].filter(Boolean).join(' · ')
 }
 
 export type JourneyLiveKind = 'food' | 'drink' | 'shop' | 'other'

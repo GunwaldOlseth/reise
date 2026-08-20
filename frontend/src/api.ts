@@ -516,6 +516,10 @@ export type ExpenseLine = {
 export type DayExpenseSummary = {
   date: string;
   place: string;
+  /** Origin city/place when the day includes transport. */
+  cityFrom?: string;
+  /** Destination city/place when the day includes transport. */
+  cityTo?: string;
   /** Ship / package title when the day includes cruise share. */
   ship?: string;
   cruise: number;
