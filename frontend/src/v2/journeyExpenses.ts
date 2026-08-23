@@ -17,6 +17,7 @@ import {
   stayKindLabel,
   chosenTransportOption,
   effectiveTransportPrice,
+  effectiveHotelName,
   formatCityStation,
   legTravelDate,
   stopGoalLabel,
@@ -271,8 +272,8 @@ export function journeyExpenseSummary(journey: Journey): TripExpenseSummary {
         const nights = stayNights(stop)
         const kind = stayKind(stay)
         const label = stayKindLabel(kind)
-        const title = stay.hotelName?.trim()
-          ? `${label} · ${stay.hotelName}`
+        const title = effectiveHotelName(stay)
+          ? `${label} · ${effectiveHotelName(stay)}`
           : `${label} · ${stop.city || 'Opphold'}`
         const line: ExpenseLine = {
           id: `${stop.id}:hotel`,

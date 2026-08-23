@@ -94,8 +94,47 @@ export function stayNamePlaceholder(kind: StayKind): string {
   return kind === 'airbnb' ? 'Navn på sted' : 'Hotellnavn'
 }
 
-export function stayUnsetLabel(kind: StayKind): string {
-  return kind === 'airbnb' ? 'Airbnb ikke satt' : 'Hotell ikke satt'
+/** Legacy placeholder some trips saved before the new label. */
+const LEGACY_STAY_ANCHOR_NAMES = new Set(['reiseanker'])
+
+export function isLegacyStayAnchorName(name?: string | null): boolean {
+  const n = (name || '').trim().toLowerCase()
+  return n.length > 0 && LEGACY_STAY_ANCHOR_NAMES.has(n)
+}
+
+/** Hotel / Airbnb name for display and alerts — ignores legacy «reiseanker». */
+export function effectiveHotelName(stay?: JourneyStay | null): string {
+  const n = (stay?.hotelName || '').trim()
+  if (!n || isLegacyStayAnchorName(n)) return ''
+  return n
+}
+
+export const STAY_WITHOUT_HOTEL_LABEL = 'Reisedag uten overnatting'
+
+export function stayUnsetLabel(_kind?: StayKind): string {
+  return STAY_WITHOUT_HOTEL_LABEL
+}
+
+export type MissingHotelStayEntry = {
+  stopId: string
+  city: string
+  arriveDate: string
+  nights: number
+  dateLabel: string
+}
+
+export function stripLegacyStayAnchorFromJourney(journey: Journey): Journey {
+  let changed = false
+  const stops = (journey.stops || []).map((stop) => {
+    const name = (stop.stay?.hotelName || '').trim()
+    if (!stop.stay || !isLegacyStayAnchorName(name)) return stop
+    changed = true
+    return {
+      ...stop,
+      stay: { ...stop.stay, hotelName: '' },
+    }
+  })
+  return changed ? { ...journey, stops } : journey
 }
 
 export function defaultJourneyStay(): JourneyStay {
@@ -2393,7 +2432,7 @@ export function stopDepartDate(stop: JourneyStop): string {
 export function cityMissingHotel(stop: JourneyStop): boolean {
   if (stop.kind === 'home' || isPackageStop(stop)) return false
   if (stopPurpose(stop) !== 'visit') return false
-  if ((stop.stay?.hotelName || '').trim()) return false
+  if (effectiveHotelName(stop.stay)) return false
   if (stop.stay && stayNights(stop) < 1) return false
   return true
 }
@@ -2550,7 +2589,9 @@ export function normalizePlannerJourney(
   homePlace: HomePlace,
 ): Journey {
   return journeyWithRegisteredHome(
-    localizeJourneyPlaces(syncJourneyLegs(journey)),
+    localizeJourneyPlaces(
+      stripLegacyStayAnchorFromJourney(syncJourneyLegs(journey)),
+    ),
     homePlace,
   )
 }
@@ -2601,6 +2642,40 @@ export function formatDateNO(iso: string): string {
   if (Number.isNaN(parsed.getTime())) return iso
   const weekday = WEEKDAYS_NO[parsed.getDay()]
   return `${weekday} ${String(dayNum).padStart(2, '0')}. ${monthName}`
+}
+
+/** Visit cities in `journey` that lack a hotel / overnatting name. */
+export function journeyMissingHotelStays(
+  journey: Journey,
+): MissingHotelStayEntry[] {
+  const stops = [...(journey.stops || [])].sort(
+    (a, b) => a.sortOrder - b.sortOrder,
+  )
+  const out: MissingHotelStayEntry[] = []
+  for (const stop of stops) {
+    if (!cityMissingHotel(stop)) continue
+    const arrive = (stop.arriveDate || '').trim()
+    const nights = stop.stay ? stayNights(stop) : 0
+    const city = stopGoalLabel(stop, 'Uten by')
+    const depart =
+      arrive && nights > 0 ? addDaysIso(arrive, nights) : arrive
+    const dateLabel =
+      arrive && nights > 0
+        ? `${formatDateNO(arrive)}–${formatDateNO(depart)} (${nights} ${
+            nights === 1 ? 'natt' : 'netter'
+          })`
+        : arrive
+          ? formatDateNO(arrive)
+          : 'Dato ikke satt'
+    out.push({
+      stopId: stop.id,
+      city,
+      arriveDate: arrive,
+      nights,
+      dateLabel,
+    })
+  }
+  return out
 }
 
 export function legForGap(
