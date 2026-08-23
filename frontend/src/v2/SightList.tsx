@@ -7,6 +7,7 @@ import {
   activityPurpose,
   newSight,
   normalizeSights,
+  STAY_WITHOUT_HOTEL_LABEL,
   type JourneyActivity,
   type JourneyActivityKind,
 } from './journeyModel'
@@ -453,8 +454,7 @@ export function PlaceLinkedPreview({
   const hasHotel = !!(hotel || '').trim()
   const hasStay = (nights || 0) >= 1
   const kindLabel = lodgingKind === 'airbnb' ? 'Airbnb' : 'Hotell'
-  const unsetLabel =
-    lodgingKind === 'airbnb' ? 'Airbnb ikke satt' : 'Hotell ikke satt'
+  const unsetLabel = STAY_WITHOUT_HOTEL_LABEL
   const itemClass =
     lodgingKind === 'airbnb' ? 'is-airbnb' : 'is-hotel'
   if (!hasHotel && !hasStay && !list.length && !warnMissingStay) return null

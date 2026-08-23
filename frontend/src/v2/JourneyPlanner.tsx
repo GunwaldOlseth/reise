@@ -22,6 +22,7 @@ import {
   compactLive,
   confirmShiftAfterNights,
   defaultJourneyStay,
+  effectiveHotelName,
   emptyJourney,
   formatDateNO,
   formatHotelStayTimes,
@@ -36,6 +37,7 @@ import {
   hasPlanGapBetween,
   insertStopBefore,
   journeyWithRegisteredHome,
+  isLegacyStayAnchorName,
   keepPlacePurpose,
   isPackageStop,
   isPackageType,
@@ -1137,7 +1139,7 @@ function PlaceStopPanel({
   }
 
   function removeHotel() {
-    const hotelName = stay.hotelName?.trim()
+    const hotelName = effectiveHotelName(stay)
     void askDelete({
       title: hotelName
         ? `Slette ${hotelName}?`
@@ -1154,7 +1156,7 @@ function PlaceStopPanel({
   }
 
   const city = stop.city?.trim() || 'Uten by'
-  const hotel = stay.hotelName?.trim() || ''
+  const hotel = effectiveHotelName(stay)
   const lodgingKind = stayKind(stay)
   const hotelAddress = stay.address?.trim() || ''
   const hotelPrice = stay.price?.trim() || ''
@@ -1534,7 +1536,11 @@ function PlaceStopPanel({
                   <label>
                     {stayNameFieldLabel(lodgingKind)}
                     <input
-                      value={stay.hotelName || ''}
+                      value={
+                        isLegacyStayAnchorName(stay.hotelName)
+                          ? ''
+                          : stay.hotelName || ''
+                      }
                       disabled={disabled}
                       placeholder={stayNamePlaceholder(lodgingKind)}
                       autoFocus
@@ -3683,7 +3689,7 @@ function StopWizard({
         }
       : defaultJourneyStay(),
   )
-  const hasHotel = !!(stay.hotelName || '').trim()
+  const hasHotel = !!effectiveHotelName(stay)
   const [wantStay, setWantStay] = useState(
     () => hasHotel || !!initialStop.stay,
   )
@@ -3941,7 +3947,11 @@ function StopWizard({
                 <label>
                   {stayNameFieldLabel(stayKind(stay))} (valgfritt)
                   <input
-                    value={stay.hotelName || ''}
+                    value={
+                      isLegacyStayAnchorName(stay.hotelName)
+                        ? ''
+                        : stay.hotelName || ''
+                    }
                     onChange={(e) =>
                       setStay((p) => ({ ...p, hotelName: e.target.value }))
                     }

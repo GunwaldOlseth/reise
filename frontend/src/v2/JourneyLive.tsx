@@ -9,6 +9,7 @@ import {
   addDaysIso,
   cityStayDays,
   clockMinutesFromMidnight,
+  effectiveHotelName,
   formatDateNO,
   formatChangeTimeLabel,
   formatCityStation,
@@ -284,7 +285,7 @@ function placesOnDate(journey: Journey, date: string): DayPlace[] {
     out.push({
       stop,
       city: stopGoalLabel(stop, 'By'),
-      hotel: stop.stay?.hotelName?.trim() || '',
+      hotel: effectiveHotelName(stop.stay),
       notes: stop.notes,
       arriving: (stop.arriveDate || '').trim() === date,
     })

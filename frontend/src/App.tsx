@@ -39,6 +39,7 @@ import { localizeJourneyPlaces } from './placeNames'
 import { AdminPage } from './v2/AdminPage'
 import { enqueueJourneyWeather } from './v2/JourneyWeather'
 import { cacheJourney } from './v2/journeyCache'
+import { MissingHotelDaysCard } from './v2/MissingHotelDaysCard'
 import './v2/v2.css'
 
 function GoogleLoginButton() {
@@ -159,6 +160,8 @@ function AppearancePage({ onBack }: { onBack: () => void }) {
 function SettingsPage({
   initialHome,
   initialPlanner,
+  trips,
+  focusTripId,
   error,
   onBack,
   onSave,
@@ -166,6 +169,8 @@ function SettingsPage({
 }: {
   initialHome: HomePlace
   initialPlanner: PlannerSettings
+  trips: Trip[]
+  focusTripId?: string
   error?: string
   onBack: () => void
   onSave: (home: HomePlace, planner: PlannerSettings) => void
@@ -240,6 +245,8 @@ function SettingsPage({
         </section>
 
         <UsefulLinksCard onOpenPage={onOpenLinks} />
+
+        <MissingHotelDaysCard trips={trips} focusTripId={focusTripId} />
 
         <section className="v2-settings-card">
           <h2>Planlegger — steg</h2>
@@ -512,12 +519,16 @@ function AppMain() {
 
   if (view.name === 'settings') {
     const returnTo = view.returnTo || { name: 'home' as const }
+    const focusTripId =
+      returnTo.name === 'trip' ? returnTo.tripId : undefined
     return (
       <>
         {alerts}
         <SettingsPage
         initialHome={homePlace}
         initialPlanner={plannerSettings}
+        trips={trips}
+        focusTripId={focusTripId}
         error={error}
         onBack={() => {
           setError('')

@@ -17,6 +17,7 @@ import {
   packageNightsOf,
   packageOf,
   packageTypeLabel,
+  effectiveHotelName,
   stayNights,
   stopDepartDate,
   sortTransportOptions,
@@ -227,7 +228,7 @@ function placeMeta(stop: JourneyStop): string {
   } else if (arrive) {
     bits.push(formatDateNO(arrive))
   }
-  const hotel = (stop.stay?.hotelName || '').trim()
+  const hotel = effectiveHotelName(stop.stay)
   if (hotel) bits.push(hotel)
   const address = (stop.stay?.address || stop.address || '').trim()
   if (address && address !== hotel) bits.push(address)
