@@ -43,6 +43,9 @@ func main() {
 	mux.HandleFunc("GET /api/weather/history", getWeatherHistory)
 	mux.HandleFunc("GET /api/places", getPlaces)
 
+	mux.HandleFunc("POST /api/uploads", uploadImage)
+	mux.HandleFunc("GET /api/uploads/{name}", serveUpload)
+
 	mux.HandleFunc("POST /api/internal/backup", runScheduledBackup)
 	mux.HandleFunc("POST /api/internal/weather-refresh", runScheduledWeatherRefresh)
 	mux.HandleFunc("POST /api/admin/login", adminLogin)

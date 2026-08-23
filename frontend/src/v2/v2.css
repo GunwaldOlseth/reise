@@ -5422,6 +5422,89 @@ html {
   align-items: center;
 }
 
+.v2-live-log-extra {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.55rem;
+  margin-top: 0.1rem;
+}
+
+.v2-live-stars {
+  display: inline-flex;
+  gap: 0.05rem;
+}
+
+.v2-live-star {
+  background: none;
+  border: none;
+  padding: 0 1px;
+  cursor: pointer;
+  font-size: 1.05rem;
+  line-height: 1;
+  color: rgba(232, 244, 242, 0.32);
+}
+
+.v2-live-star.is-on {
+  color: #e8b93d;
+}
+
+.v2-live-star:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.v2-live-photos {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.v2-live-photo {
+  position: relative;
+  width: 56px;
+  height: 56px;
+  border-radius: 0.4rem;
+  overflow: hidden;
+  border: 1px solid rgba(232, 244, 242, 0.16);
+}
+
+.v2-live-photo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.v2-live-photo-del {
+  position: absolute;
+  top: 1px;
+  right: 1px;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: rgba(8, 18, 22, 0.72);
+  color: #fff;
+  font-size: 0.85rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.v2-live-add-photo {
+  white-space: nowrap;
+}
+
+.v2-live-photo-err {
+  flex-basis: 100%;
+  margin: 0;
+  font-size: 0.72rem;
+  color: #e88;
+}
+
 .v2-live-log-row .v2-activity-kind {
   min-width: 3.4rem;
 }

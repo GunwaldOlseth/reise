@@ -193,13 +193,31 @@ func normalizeJourney(j *Journey) {
 		if j.Live[i].ID == "" {
 			j.Live[i].ID = newJourneyID("live")
 		}
+		if j.Live[i].Rating < 0 {
+			j.Live[i].Rating = 0
+		}
+		if j.Live[i].Rating > 5 {
+			j.Live[i].Rating = 5
+		}
+		photos := make([]JourneyPhoto, 0, len(j.Live[i].Photos))
+		for _, p := range j.Live[i].Photos {
+			p.URL = strings.TrimSpace(p.URL)
+			if p.URL == "" {
+				continue
+			}
+			if p.ID == "" {
+				p.ID = newJourneyID("photo")
+			}
+			photos = append(photos, p)
+		}
+		j.Live[i].Photos = photos
 	}
 	kept := make([]JourneyLiveEntry, 0, len(j.Live))
 	for _, e := range j.Live {
 		if e.Date == "" {
 			continue
 		}
-		if e.Title == "" && e.Price == "" && e.Notes == "" {
+		if e.Title == "" && e.Price == "" && e.Notes == "" && e.Rating == 0 && len(e.Photos) == 0 {
 			continue
 		}
 		kept = append(kept, e)
