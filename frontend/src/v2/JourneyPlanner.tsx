@@ -38,6 +38,7 @@ import {
   insertStopBefore,
   journeyWithRegisteredHome,
   isLegacyStayAnchorName,
+  isStayWithoutOvernight,
   keepPlacePurpose,
   isPackageStop,
   isPackageType,
@@ -78,6 +79,7 @@ import {
   stopDepartDate,
   stopShiftLabel,
   showOnwardFromHere,
+  stayAsWithoutOvernight,
   stayKind,
   stayNameFieldLabel,
   stayNamePlaceholder,
@@ -1068,6 +1070,7 @@ function PlaceStopPanel({
   const askDelete = useConfirmDelete()
   const [editingBasics, setEditingBasics] = useState(false)
   const [editingHotel, setEditingHotel] = useState(false)
+  const [removeHotelOpen, setRemoveHotelOpen] = useState(false)
   const nightsAtEditStart = useRef(nights)
   const activityCount = normalizeSights(stop.sights).length
   const stay: JourneyStay = stop.stay || defaultJourneyStay()
@@ -1076,6 +1079,7 @@ function PlaceStopPanel({
     if (!open) {
       setEditingBasics(false)
       setEditingHotel(false)
+      setRemoveHotelOpen(false)
     }
   }, [open])
 
@@ -1099,6 +1103,7 @@ function PlaceStopPanel({
       patchStop({ stay: null, sights: normalizeSights(stop.sights) }, opts)
       return
     }
+    const trimmedHotel = (partial.hotelName ?? stay.hotelName ?? '').trim()
     const nextStay: JourneyStay = normalizeStayClockTimes({
       ...stay,
       ...partial,
@@ -1106,7 +1111,7 @@ function PlaceStopPanel({
         1,
         Math.min(60, Math.floor(partial.nights ?? stay.nights ?? 1)),
       ),
-      hotelName: (partial.hotelName ?? stay.hotelName ?? '').trim(),
+      hotelName: trimmedHotel,
       address: (partial.address ?? stay.address ?? '').trim(),
       price: (partial.price ?? stay.price ?? '').trim(),
       notes: partial.notes ?? stay.notes ?? '',
@@ -1115,6 +1120,9 @@ function PlaceStopPanel({
       checkOutTime: partial.checkOutTime ?? stay.checkOutTime,
       booked: partial.booked ?? stay.booked ?? false,
       bookedWhere: (partial.bookedWhere ?? stay.bookedWhere ?? '').trim(),
+      withoutOvernight: trimmedHotel
+        ? false
+        : (partial.withoutOvernight ?? stay.withoutOvernight ?? false),
     })
     patchStop(
       {
@@ -1138,25 +1146,32 @@ function PlaceStopPanel({
     setEditingHotel(true)
   }
 
-  function removeHotel() {
-    const hotelName = effectiveHotelName(stay)
-    void askDelete({
-      title: hotelName
-        ? `Slette ${hotelName}?`
-        : `Slette hotellet i ${stop.city?.trim() || 'byen'}?`,
-      confirmLabel: 'Fjern',
-    }).then((ok) => {
-      if (!ok) return
-      onChange(
-        { ...stop, stay: null, sights: normalizeSights(stop.sights) },
-        { immediate: true, nightsDelta: 0 - nights },
-      )
-      setEditingHotel(false)
-    })
+  function markWithoutOvernight() {
+    const nextStay = normalizeStayClockTimes(stayAsWithoutOvernight(stay))
+    onChange(
+      {
+        ...stop,
+        stay: nextStay,
+        sights: normalizeSights(stop.sights),
+      },
+      { immediate: true },
+    )
+    setEditingHotel(false)
+    setRemoveHotelOpen(false)
+  }
+
+  function removeStayEntirely() {
+    onChange(
+      { ...stop, stay: null, sights: normalizeSights(stop.sights) },
+      { immediate: true, nightsDelta: 0 - nights },
+    )
+    setEditingHotel(false)
+    setRemoveHotelOpen(false)
   }
 
   const city = stop.city?.trim() || 'Uten by'
   const hotel = effectiveHotelName(stay)
+  const withoutOvernight = isStayWithoutOvernight(stay)
   const lodgingKind = stayKind(stay)
   const hotelAddress = stay.address?.trim() || ''
   const hotelPrice = stay.price?.trim() || ''
@@ -1502,8 +1517,9 @@ function PlaceStopPanel({
                             {stayUnsetLabel(lodgingKind)}
                           </span>
                           <span className="v2-hotel-row-addr">
-                            {nights} {nights === 1 ? 'natt' : 'netter'} · trykk
-                            for å legge inn navn
+                            {withoutOvernight
+                              ? `${nights} ${nights === 1 ? 'natt' : 'netter'} · ingen overnatting`
+                              : `${nights} ${nights === 1 ? 'natt' : 'netter'} · trykk for å legge inn navn`}
                           </span>
                         </>
                       ) : (
@@ -1551,6 +1567,9 @@ function PlaceStopPanel({
                             ...stay,
                             nights: stay.nights || 1,
                             hotelName: e.target.value,
+                            withoutOvernight: e.target.value.trim()
+                              ? false
+                              : stay.withoutOvernight,
                           },
                         })
                       }
@@ -1767,8 +1786,8 @@ function PlaceStopPanel({
                         type="button"
                         className="v2-chip-btn is-danger"
                         disabled={disabled}
-                        title="Fjern hotell / overnatting fra byen"
-                        onClick={removeHotel}
+                        title="Fjern hotell eller velg reisedag uten overnatting"
+                        onClick={() => setRemoveHotelOpen(true)}
                       >
                         Fjern hotell
                       </button>
@@ -1777,6 +1796,66 @@ function PlaceStopPanel({
                 </div>
               )}
             </div>
+            {removeHotelOpen ? (
+              <div
+                className="v2-sheet is-confirm"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby={`v2-remove-hotel-${stop.id}`}
+                onMouseDown={(e) => {
+                  if (e.target === e.currentTarget) setRemoveHotelOpen(false)
+                }}
+              >
+                <div className="v2-sheet-panel is-confirm">
+                  <div className="v2-sheet-head">
+                    <h2 id={`v2-remove-hotel-${stop.id}`}>
+                      {hotel
+                        ? `Fjerne ${hotel}?`
+                        : `Fjerne overnatting i ${city}?`}
+                    </h2>
+                  </div>
+                  <p className="v2-meta" style={{ margin: '0 0 0.85rem' }}>
+                    Velg om dere fortsatt skal ha dager i byen uten hotell, eller
+                    fjerne overnatting helt fra planen.
+                  </p>
+                  <div className="v2-sheet-actions v2-sheet-actions-stack">
+                    <button
+                      type="button"
+                      className="btn btn-primary"
+                      onClick={markWithoutOvernight}
+                    >
+                      Reisedag uten overnatting
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-danger"
+                      onClick={() => {
+                        void askDelete({
+                          title: hotel
+                            ? `Fjerne overnatting for ${hotel}?`
+                            : `Fjerne overnatting i ${city}?`,
+                          message:
+                            'Netter og hotell fjernes fra stoppet. Datoene i byen kan bli kortere.',
+                          confirmLabel: 'Fjern helt',
+                        }).then((ok) => {
+                          if (!ok) return
+                          removeStayEntirely()
+                        })
+                      }}
+                    >
+                      Fjern overnatting helt
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-soft"
+                      onClick={() => setRemoveHotelOpen(false)}
+                    >
+                      Avbryt
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ) : null}
             </>
             )}
 
