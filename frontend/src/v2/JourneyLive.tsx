@@ -1,4 +1,6 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { api, mediaUrl } from '../api'
+import { downscaleImage } from './imageResize'
 import { localizeCity } from '../placeNames'
 import { CityInfoTip } from './CityInfoTip'
 import { CountdownCard, HolidayCountdown, osloWallTimeMs } from './HolidayCountdown'
@@ -36,6 +38,7 @@ import {
   type JourneyActivity,
   type JourneyLiveEntry,
   type JourneyLiveKind,
+  type JourneyPhoto,
   type JourneyStop,
   type JourneyTransportOption,
   type JourneyVia,
@@ -800,11 +803,50 @@ function LiveEntryRow({
   const [price, setPrice] = useState(entry.price || '')
   const [notes, setNotes] = useState(entry.notes || '')
 
+  const fileRef = useRef<HTMLInputElement | null>(null)
+  const [uploading, setUploading] = useState(false)
+  const [photoError, setPhotoError] = useState('')
+
   useEffect(() => {
     setTitle(entry.title)
     setPrice(entry.price || '')
     setNotes(entry.notes || '')
   }, [entry.id, entry.title, entry.price, entry.notes])
+
+  const photos = entry.photos || []
+  const rating = entry.rating || 0
+
+  function setRating(n: number) {
+    if (disabled) return
+    onChange({ rating: rating === n ? 0 : n })
+  }
+
+  async function onPickFiles(files: FileList | null) {
+    if (!files || !files.length || disabled) return
+    setPhotoError('')
+    setUploading(true)
+    const added: JourneyPhoto[] = []
+    try {
+      for (const file of Array.from(files)) {
+        const prepared = await downscaleImage(file)
+        const res = await api.uploadImage(prepared)
+        added.push({ id: crypto.randomUUID(), url: res.url })
+      }
+      if (added.length) onChange({ photos: [...photos, ...added] })
+    } catch (err) {
+      setPhotoError(
+        err instanceof Error ? err.message : 'Kunne ikke laste opp bildet',
+      )
+    } finally {
+      setUploading(false)
+      if (fileRef.current) fileRef.current.value = ''
+    }
+  }
+
+  function removePhoto(id: string) {
+    if (disabled) return
+    onChange({ photos: photos.filter((p) => p.id !== id) })
+  }
 
   return (
     <li className={`v2-live-log-row is-${entry.kind}`}>
@@ -850,6 +892,64 @@ function LiveEntryRow({
       >
         <TrashIcon size={14} />
       </button>
+
+      <div className="v2-live-log-extra">
+        <div className="v2-live-stars" role="group" aria-label="Vurdering">
+          {[1, 2, 3, 4, 5].map((n) => (
+            <button
+              key={n}
+              type="button"
+              className={`v2-live-star${n <= rating ? ' is-on' : ''}`}
+              disabled={disabled}
+              aria-label={`${n} av 5`}
+              aria-pressed={n <= rating}
+              title={`Gi ${n} av 5`}
+              onClick={() => setRating(n)}
+            >
+              {n <= rating ? '★' : '☆'}
+            </button>
+          ))}
+        </div>
+
+        <div className="v2-live-photos">
+          {photos.map((p) => (
+            <span className="v2-live-photo" key={p.id}>
+              <a href={mediaUrl(p.url)} target="_blank" rel="noreferrer">
+                <img src={mediaUrl(p.url)} alt="Bilde" loading="lazy" />
+              </a>
+              {!disabled && (
+                <button
+                  type="button"
+                  className="v2-live-photo-del"
+                  aria-label="Fjern bilde"
+                  title="Fjern bilde"
+                  onClick={() => removePhoto(p.id)}
+                >
+                  ×
+                </button>
+              )}
+            </span>
+          ))}
+          <button
+            type="button"
+            className="v2-chip-btn v2-live-add-photo"
+            disabled={disabled || uploading}
+            title="Legg til bilde"
+            onClick={() => fileRef.current?.click()}
+          >
+            {uploading ? 'Laster opp…' : '+ Bilde'}
+          </button>
+          <input
+            ref={fileRef}
+            type="file"
+            accept="image/*"
+            multiple
+            hidden
+            onChange={(e) => void onPickFiles(e.target.files)}
+          />
+        </div>
+        {photoError ? <p className="v2-live-photo-err">{photoError}</p> : null}
+      </div>
     </li>
   )
 }

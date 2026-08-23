@@ -360,16 +360,24 @@ type JourneyLeg struct {
 	Vias       []JourneyVia `json:"vias,omitempty" firestore:"vias,omitempty"`
 }
 
+// JourneyPhoto is an uploaded image attached to a live log entry.
+type JourneyPhoto struct {
+	ID  string `json:"id" firestore:"id"`
+	URL string `json:"url" firestore:"url"`
+}
+
 // JourneyLiveEntry is an off-plan item logged while travelling (food, drink, shop).
 type JourneyLiveEntry struct {
-	ID        string `json:"id" firestore:"id"`
-	Date      string `json:"date" firestore:"date"`
-	Kind      string `json:"kind" firestore:"kind"` // food | drink | shop | other
-	Title     string `json:"title" firestore:"title"`
-	Price     string `json:"price,omitempty" firestore:"price,omitempty"`
-	Notes     string `json:"notes,omitempty" firestore:"notes,omitempty"`
-	Time      string `json:"time,omitempty" firestore:"time,omitempty"`
-	SortOrder int    `json:"sortOrder" firestore:"sortOrder"`
+	ID        string         `json:"id" firestore:"id"`
+	Date      string         `json:"date" firestore:"date"`
+	Kind      string         `json:"kind" firestore:"kind"` // food | drink | shop | other
+	Title     string         `json:"title" firestore:"title"`
+	Price     string         `json:"price,omitempty" firestore:"price,omitempty"`
+	Notes     string         `json:"notes,omitempty" firestore:"notes,omitempty"`
+	Time      string         `json:"time,omitempty" firestore:"time,omitempty"`
+	Rating    int            `json:"rating,omitempty" firestore:"rating,omitempty"` // 0 = unset, else 1..5
+	Photos    []JourneyPhoto `json:"photos,omitempty" firestore:"photos,omitempty"`
+	SortOrder int            `json:"sortOrder" firestore:"sortOrder"`
 }
 
 // Journey is the trip thread: ordered stops + legs between them (v2 planner).

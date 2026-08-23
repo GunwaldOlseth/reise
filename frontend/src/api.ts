@@ -8,6 +8,20 @@ const API_BASE = (() => {
   return 'http://localhost:8082/api'
 })()
 
+/** Origin of the API base (API_BASE without the trailing /api). */
+const API_ORIGIN = API_BASE.replace(/\/api$/, '')
+
+/**
+ * Resolve a stored media path (e.g. "/api/uploads/ab.jpg") to a full URL that
+ * works from any device. Absolute/data/blob URLs are returned unchanged.
+ */
+export function mediaUrl(pathOrUrl: string): string {
+  const v = (pathOrUrl || '').trim()
+  if (!v) return ''
+  if (/^(https?:|data:|blob:)/i.test(v)) return v
+  return `${API_ORIGIN}${v.startsWith('/') ? '' : '/'}${v}`
+}
+
 export type DayItemType =
   | 'hotel'
   | 'cruise'
@@ -1524,6 +1538,31 @@ export interface WeatherHistory {
 
 export const api = {
   health: () => request<{ status: string }>('/health'),
+
+  /** Upload an image (multipart). Returns a stable "/api/uploads/…" path. */
+  uploadImage: async (file: File) => {
+    const form = new FormData();
+    form.append('file', file);
+    const res = await fetch(`${API_BASE}/uploads`, {
+      method: 'POST',
+      body: form,
+    });
+    if (!res.ok) {
+      let message = `HTTP ${res.status}`;
+      try {
+        const err = (await res.json()) as { error?: string };
+        if (err.error) message = err.error;
+      } catch {
+        // ignore
+      }
+      throw new ApiError(message);
+    }
+    return res.json() as Promise<{
+      id: string;
+      url: string;
+      contentType: string;
+    }>;
+  },
 
   /**
    * Weather for a city. Always includes current weather now.

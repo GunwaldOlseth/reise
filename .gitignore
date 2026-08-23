@@ -15,6 +15,7 @@ backend/api/*.exe
 backend/api/reise-api.exe
 backend/api/main
 backend/api/backups/
+backend/api/uploads/
 
 # Node modules and build files
 node_modules/

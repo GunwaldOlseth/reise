@@ -1668,6 +1668,12 @@ export function formatOptionAltLine(option: JourneyTransportOption): string {
 
 export type JourneyLiveKind = 'food' | 'drink' | 'shop' | 'other'
 
+/** An uploaded image attached to a live log entry. */
+export interface JourneyPhoto {
+  id: string
+  url: string
+}
+
 /** Something that happened on the trip but is not on the plan. */
 export interface JourneyLiveEntry {
   id: string
@@ -1677,6 +1683,9 @@ export interface JourneyLiveEntry {
   price?: string
   notes?: string
   time?: string
+  /** 0 = unset, otherwise 1..5. */
+  rating?: number
+  photos?: JourneyPhoto[]
   sortOrder: number
 }
 
@@ -1708,6 +1717,8 @@ export function newLiveEntry(
     price: '',
     notes: '',
     time: '',
+    rating: 0,
+    photos: [],
     sortOrder,
   }
 }
@@ -1734,6 +1745,10 @@ export function normalizeLive(
         e.kind === 'food' || e.kind === 'drink' || e.kind === 'shop'
           ? e.kind
           : 'other'
+      const rating = Math.max(0, Math.min(5, Math.round(Number(e.rating) || 0)))
+      const photos = (e.photos || [])
+        .map((p) => ({ id: p.id || crypto.randomUUID(), url: (p.url || '').trim() }))
+        .filter((p) => p.url)
       return {
         ...e,
         id: e.id || crypto.randomUUID(),
@@ -1743,6 +1758,8 @@ export function normalizeLive(
         price: e.price || '',
         notes: e.notes || '',
         time: e.time || '',
+        rating,
+        photos,
         sortOrder: i,
       }
     })
@@ -1755,7 +1772,11 @@ export function compactLive(
   return normalizeLive(list).filter(
     (e) =>
       e.date &&
-      (e.title.trim() || (e.price || '').trim() || (e.notes || '').trim()),
+      (e.title.trim() ||
+        (e.price || '').trim() ||
+        (e.notes || '').trim() ||
+        (e.rating || 0) > 0 ||
+        (e.photos || []).length > 0),
   )
 }
 
