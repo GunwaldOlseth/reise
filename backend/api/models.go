@@ -191,6 +191,7 @@ type JourneyStay struct {
 	URL          string `json:"url,omitempty" firestore:"url,omitempty"`
 	Price        string `json:"price,omitempty" firestore:"price,omitempty"`
 	Paid         bool   `json:"paid,omitempty" firestore:"paid,omitempty"`
+	WithoutOvernight bool `json:"withoutOvernight,omitempty" firestore:"withoutOvernight,omitempty"`
 	Notes        string `json:"notes,omitempty" firestore:"notes,omitempty"`
 	CheckInTime  string `json:"checkInTime,omitempty" firestore:"checkInTime,omitempty"`
 	CheckOutTime string `json:"checkOutTime,omitempty" firestore:"checkOutTime,omitempty"`

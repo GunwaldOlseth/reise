@@ -71,6 +71,8 @@ export interface JourneyStay {
   booked?: boolean
   bookedWhere?: string
   paid?: boolean
+  /** User chose no overnight lodging — not a missing hotel. */
+  withoutOvernight?: boolean
 }
 
 export const DEFAULT_HOTEL_CHECK_IN = '15:00'
@@ -107,6 +109,27 @@ export function effectiveHotelName(stay?: JourneyStay | null): string {
   const n = (stay?.hotelName || '').trim()
   if (!n || isLegacyStayAnchorName(n)) return ''
   return n
+}
+
+export function isStayWithoutOvernight(stay?: JourneyStay | null): boolean {
+  return !!stay?.withoutOvernight
+}
+
+/** Clear lodging details but keep nights for a day in the city without overnight. */
+export function stayAsWithoutOvernight(stay: JourneyStay): JourneyStay {
+  return {
+    ...stay,
+    nights: Math.max(1, stay.nights || 1),
+    hotelName: '',
+    address: '',
+    url: '',
+    price: '',
+    notes: '',
+    booked: false,
+    bookedWhere: '',
+    paid: false,
+    withoutOvernight: true,
+  }
 }
 
 export const STAY_WITHOUT_HOTEL_LABEL = 'Reisedag uten overnatting'
@@ -2454,6 +2477,7 @@ export function cityMissingHotel(stop: JourneyStop): boolean {
   if (stop.kind === 'home' || isPackageStop(stop)) return false
   if (stopPurpose(stop) !== 'visit') return false
   if (effectiveHotelName(stop.stay)) return false
+  if (isStayWithoutOvernight(stop.stay)) return false
   if (stop.stay && stayNights(stop) < 1) return false
   return true
 }

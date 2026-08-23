@@ -4935,6 +4935,15 @@ html {
   min-height: 3rem;
 }
 
+.v2-sheet-actions-stack {
+  flex-direction: column;
+}
+
+.v2-sheet-actions-stack .btn {
+  flex: 1 1 auto;
+  width: 100%;
+}
+
 .v2-sheet.is-confirm {
   z-index: 30;
   align-items: center;
