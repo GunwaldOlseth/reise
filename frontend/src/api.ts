@@ -818,6 +818,9 @@ export function tripExpenseSummary(days: TripDay[]): TripExpenseSummary {
     live: { total: 0, lines: [] },
     byDay,
     total: cruiseTotal + hotelTotal + transportTotal,
+    paidTotal: [...cruiseLines, ...hotelLines, ...transportLines]
+      .filter((l) => l.paid)
+      .reduce((s, l) => s + l.amount, 0),
     pricedCount,
     unparsedCount,
   };
