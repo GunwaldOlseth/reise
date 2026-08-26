@@ -4,7 +4,6 @@ import { CitySuggestFields } from '../CitySuggest'
 import { TrashIcon } from '../TransportModeIcon'
 import {
   activityKindLabel,
-  activityPurpose,
   newSight,
   normalizeSights,
   STAY_WITHOUT_HOTEL_LABEL,
@@ -12,7 +11,6 @@ import {
   type JourneyActivityKind,
 } from './journeyModel'
 import { useConfirmDelete } from './ConfirmDelete'
-import { PurposeToggle } from './PurposeToggle'
 
 function ordered(list: JourneyActivity[]): JourneyActivity[] {
   return list.map((s, i) => ({ ...s, sortOrder: i }))
@@ -230,7 +228,6 @@ export function SightList({
           const timeBits = [sight.startTime, sight.endTime]
             .filter(Boolean)
             .join('–')
-          const purpose = activityPurpose(sight)
           if (compact) {
             return (
               <div key={sight.id} className="v2-sight-row">
@@ -251,21 +248,6 @@ export function SightList({
                 >
                   <TrashIcon size={14} />
                 </button>
-                <div className="v2-sight-row-purpose">
-                  <PurposeToggle
-                    compact
-                    value={purpose}
-                    disabled={disabled}
-                    onChange={(next) =>
-                      emit(
-                        draftRef.current.map((s, i) =>
-                          i === idx ? { ...s, purpose: next } : s,
-                        ),
-                        true,
-                      )
-                    }
-                  />
-                </div>
               </div>
             )
           }
@@ -293,15 +275,9 @@ export function SightList({
                     {activityKindLabel(kind)}
                   </span>
                   <span className="v2-activity-title">{title}</span>
-                  {(timeBits ||
-                    sight.notes?.trim() ||
-                    purpose === 'transfer') && (
+                  {(timeBits || sight.notes?.trim()) && (
                     <span className="v2-meta">
-                      {[
-                        timeBits,
-                        sight.notes?.trim(),
-                        purpose === 'transfer' ? 'Ikke stopp' : '',
-                      ]
+                      {[timeBits, sight.notes?.trim()]
                         .filter(Boolean)
                         .join(' · ')}
                     </span>
@@ -332,18 +308,6 @@ export function SightList({
               </div>
               {expanded && (
                 <div className="v2-activity-body">
-                  <PurposeToggle
-                    value={purpose}
-                    disabled={disabled}
-                    onChange={(next) =>
-                      emit(
-                        draftRef.current.map((s, i) =>
-                          i === idx ? { ...s, purpose: next } : s,
-                        ),
-                        true,
-                      )
-                    }
-                  />
                   {nameField(sight, idx, kind, false)}
                   <div className="v2-activity-times">
                     <label>
@@ -413,21 +377,14 @@ export function SightPreview({ sights }: { sights?: JourneyActivity[] | null }) 
       {list.map((s) => (
         <li
           key={s.id}
-          className={[
+          className={
             s.kind === 'excursion'
               ? 'is-excursion'
               : s.kind === 'other'
                 ? 'is-other'
-                : 'is-sight',
-            activityPurpose(s) === 'transfer' ? 'is-transfer' : '',
-          ]
-            .filter(Boolean)
-            .join(' ')}
-          title={
-            activityPurpose(s) === 'transfer'
-              ? `${activityKindLabel(s.kind)} · Ikke stopp`
-              : activityKindLabel(s.kind)
+                : 'is-sight'
           }
+          title={activityKindLabel(s.kind)}
         >
           {s.title}
         </li>
@@ -476,21 +433,14 @@ export function PlaceLinkedPreview({
       {list.map((s) => (
         <li
           key={s.id}
-          className={[
+          className={
             s.kind === 'excursion'
               ? 'is-excursion'
               : s.kind === 'other'
                 ? 'is-other'
-                : 'is-sight',
-            activityPurpose(s) === 'transfer' ? 'is-transfer' : '',
-          ]
-            .filter(Boolean)
-            .join(' ')}
-          title={
-            activityPurpose(s) === 'transfer'
-              ? `${activityKindLabel(s.kind)} · Ikke stopp`
-              : activityKindLabel(s.kind)
+                : 'is-sight'
           }
+          title={activityKindLabel(s.kind)}
         >
           {s.title}
         </li>
