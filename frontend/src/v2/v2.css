@@ -3832,6 +3832,13 @@ html {
   margin-top: 0.35rem;
 }
 
+.v2-pack-inline-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-top: 0.35rem;
+}
+
 .v2-sights {
   margin-top: 0.45rem;
   padding: 0.45rem 0.55rem;
