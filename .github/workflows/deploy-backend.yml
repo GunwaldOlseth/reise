@@ -1,0 +1,65 @@
+name: Deploy backend
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'backend/**'
+      - '.github/workflows/deploy-backend.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-backend
+  cancel-in-progress: true
+
+env:
+  GCP_PROJECT: homey-376215
+  GCP_REGION: europe-north1
+  SERVICE: reise-backend
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/api/go.mod
+          cache-dependency-path: backend/api/go.sum
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Verify backend build
+        working-directory: backend/api
+        run: |
+          go build -o /tmp/reise-backend .
+
+      - name: Deploy to Cloud Run
+        run: |
+          gcloud run deploy "$SERVICE" \
+            --source backend/api \
+            --region "$GCP_REGION" \
+            --project "$GCP_PROJECT" \
+            --allow-unauthenticated \
+            --update-env-vars="FIREBASE_PROJECT_ID=${GCP_PROJECT}" \
+            --quiet
+
+      - name: Show service URL
+        run: |
+          gcloud run services describe "$SERVICE" \
+            --region "$GCP_REGION" \
+            --project "$GCP_PROJECT" \
+            --format='value(status.url)'

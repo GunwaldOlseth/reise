@@ -77,6 +77,21 @@ Tjenester: `reise-backend`, `reise-frontend`. Backend bruker Application Default
 
 Valgfritt: `VITE_GOOGLE_CLIENT_ID=... bash scripts/deploy-cloud-run.sh`
 
+### GitHub Actions
+
+Push til `master` deployer automatisk til Cloud Run når relevante filer endres:
+
+| Workflow | Trigger (paths) | Tjeneste |
+| --- | --- | --- |
+| `deploy-backend.yml` | `backend/**` | `reise-backend` |
+| `deploy-frontend.yml` | `frontend/**` | `reise-frontend` |
+
+Begge kan også kjøres manuelt under **Actions → Run workflow**.
+
+**Repository secret (påkrevd):** `GCP_SA_KEY` — JSON-nøkkel for service account med rettigheter til Cloud Run og Cloud Build (f.eks. `deploy-app@homey-376215.iam.gserviceaccount.com`).
+
+Eksisterende miljøvariabler på backend (`ADMIN_PASSWORD`, `BACKUP_CRON_SECRET`, …) blir ikke fjernet; workflowen oppdaterer bare `FIREBASE_PROJECT_ID`.
+
 ## Sikkerhetskopi (Cloud Storage + Scheduler)
 
 Ingen nye tabeller. Firestore dumpes som JSON-filer til `gs://homey-376215-reise-backups/backups/` kl. **08, 14 og 19** (Europe/Oslo).
