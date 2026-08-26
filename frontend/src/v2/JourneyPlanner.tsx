@@ -740,6 +740,9 @@ export function JourneyPlanner({
                             {packType === 'cruise' ? 'Havn' : 'Sted'}
                           </th>
                           <th scope="col">Ank.</th>
+                          {packType === 'cruise' && (
+                            <th scope="col">A.ab.</th>
+                          )}
                           <th scope="col">Avg.</th>
                         </tr>
                       </thead>
@@ -766,6 +769,9 @@ export function JourneyPlanner({
                               <td className="v2-cruise-day-date">{date}</td>
                               <td>{row.place}</td>
                               <td>{row.arrive || '—'}</td>
+                              {packType === 'cruise' && (
+                                <td>{row.allAboard || '—'}</td>
+                              )}
                               <td>{row.leave || '—'}</td>
                             </tr>
                           )

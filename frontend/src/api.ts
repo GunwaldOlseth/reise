@@ -38,6 +38,7 @@ export interface CruisePortCall {
   date: string;
   arriveTime?: string;
   leaveTime?: string;
+  allAboardTime?: string;
 }
 
 /** Activity for the whole cruise (stored on the cruise DayItem). */
@@ -209,6 +210,8 @@ export interface TripDay {
   arriveTime?: string;
   /** Ship departure from port (cruise), HH:mm. */
   leaveTime?: string;
+  /** Last call for passengers before departure (cruise), HH:mm. */
+  allAboardTime?: string;
   hotelName: string;
   hotelUrl: string;
   address: string;
@@ -234,6 +237,8 @@ export interface CruiseDayPatch {
   arriveTime?: string;
   /** Ship departure from this port (empty on disembark / at sea). */
   leaveTime?: string;
+  /** Last call for passengers before departure (empty on disembark / at sea). */
+  allAboardTime?: string;
 }
 
 export const AT_SEA_LABEL = 'Til sjøs';
@@ -918,18 +923,22 @@ export function cruisePortsFromItinerary(
       date: row.date,
       arriveTime: (row.arriveTime || '').trim(),
       leaveTime: (row.leaveTime || '').trim(),
+      allAboardTime: (row.allAboardTime || '').trim(),
     }))
-    .filter((port) => port.arriveTime || port.leaveTime);
+    .filter(
+      (port) => port.arriveTime || port.leaveTime || port.allAboardTime,
+    );
 }
 
 export function cruisePortTimesOnDate(
   cruise: DayItem,
   date: string,
-): { arriveTime: string; leaveTime: string } {
+): { arriveTime: string; leaveTime: string; allAboardTime: string } {
   const port = (cruise.cruisePorts || []).find((p) => p.date === date);
   return {
     arriveTime: port?.arriveTime?.trim() || '',
     leaveTime: port?.leaveTime?.trim() || '',
+    allAboardTime: port?.allAboardTime?.trim() || '',
   };
 }
 
@@ -946,6 +955,7 @@ export function dayRichnessScore(day: TripDay): number {
   if (day.country.trim()) score += 1;
   if (day.arriveTime?.trim()) score += 1;
   if (day.leaveTime?.trim()) score += 1;
+  if (day.allAboardTime?.trim()) score += 1;
   if (day.notes?.trim()) score += 1;
   score += (day.items?.length || 0) * 10;
   score += (day.viaPoints?.length || 0) * 5;
@@ -1011,6 +1021,7 @@ export async function mergeDuplicateTripDays(
     let atSea = isAtSeaDay(keeper);
     let arriveTime = keeper.arriveTime?.trim() || '';
     let leaveTime = keeper.leaveTime?.trim() || '';
+    let allAboardTime = keeper.allAboardTime?.trim() || '';
     let notes = keeper.notes || '';
     const items = [...(keeper.items || [])];
     const viaPoints = [...(keeper.viaPoints || [])];
@@ -1031,6 +1042,9 @@ export async function mergeDuplicateTripDays(
       }
       if (!leaveTime && other.leaveTime?.trim()) {
         leaveTime = other.leaveTime.trim();
+      }
+      if (!allAboardTime && other.allAboardTime?.trim()) {
+        allAboardTime = other.allAboardTime.trim();
       }
       if (!notes.trim() && other.notes?.trim()) notes = other.notes;
       for (const item of other.items || []) {
@@ -1064,6 +1078,7 @@ export async function mergeDuplicateTripDays(
       atSea,
       arriveTime,
       leaveTime,
+      allAboardTime,
       notes,
       items,
       viaPoints: sortViaPointsByArriveTime(viaPoints),
@@ -1966,13 +1981,19 @@ export async function swapTripDayDates(
   return sortTripDays([...nextById.values()]);
 }
 
-/** Short label for ship port times, e.g. "Ankomst 08:00 · Avgang 18:00". */
+/** Short label for ship port times, e.g. "Ankomst 08:00 · All aboard 17:30 · Avgang 18:00". */
 export function formatShipPortTimes(
-  day: Pick<TripDay, 'arriveTime' | 'leaveTime' | 'atSea' | 'city'>,
+  day: Pick<
+    TripDay,
+    'arriveTime' | 'leaveTime' | 'allAboardTime' | 'atSea' | 'city'
+  >,
 ): string {
   if (isAtSeaDay(day)) return '';
   const parts = [
     day.arriveTime?.trim() ? `Ankomst ${day.arriveTime.trim()}` : '',
+    day.allAboardTime?.trim()
+      ? `All aboard ${day.allAboardTime.trim()}`
+      : '',
     day.leaveTime?.trim() ? `Avgang ${day.leaveTime.trim()}` : '',
   ].filter(Boolean);
   return parts.join(' · ');
@@ -1986,17 +2007,22 @@ export function formatShipPortTimes(
 export function resolveShipPortTimes(
   day: TripDay,
   allDays: TripDay[],
-): Pick<TripDay, 'arriveTime' | 'leaveTime' | 'atSea' | 'city'> {
+): Pick<
+  TripDay,
+  'arriveTime' | 'leaveTime' | 'allAboardTime' | 'atSea' | 'city'
+> {
   if (isAtSeaDay(day)) {
     return {
       city: day.city,
       atSea: true,
       arriveTime: '',
       leaveTime: '',
+      allAboardTime: '',
     };
   }
   let arriveTime = day.arriveTime?.trim() || '';
   let leaveTime = day.leaveTime?.trim() || '';
+  let allAboardTime = day.allAboardTime?.trim() || '';
   let shipPort = '';
 
   const stays = [
@@ -2007,6 +2033,7 @@ export function resolveShipPortTimes(
     const port = cruisePortTimesOnDate(stay.cruise, day.date);
     if (!arriveTime && port.arriveTime) arriveTime = port.arriveTime;
     if (!leaveTime && port.leaveTime) leaveTime = port.leaveTime;
+    if (!allAboardTime && port.allAboardTime) allAboardTime = port.allAboardTime;
   }
 
   if (!leaveTime) {
@@ -2046,6 +2073,7 @@ export function resolveShipPortTimes(
     atSea: false,
     arriveTime,
     leaveTime,
+    allAboardTime,
   };
 }
 
@@ -2457,7 +2485,13 @@ export function buildCruiseDayPatches(
   tripDays: TripDay[],
   embarkForm?: Pick<
     TripDay,
-    'city' | 'country' | 'atSea' | 'date' | 'arriveTime' | 'leaveTime'
+    | 'city'
+    | 'country'
+    | 'atSea'
+    | 'date'
+    | 'arriveTime'
+    | 'leaveTime'
+    | 'allAboardTime'
   >,
 ): CruiseDayPatch[] {
   const nights = cruiseNights(cruise);
@@ -2479,6 +2513,7 @@ export function buildCruiseDayPatches(
     let country = existing?.country?.trim() || '';
     let arriveTime = existing?.arriveTime?.trim() || '';
     let leaveTime = existing?.leaveTime?.trim() || '';
+    let allAboardTime = existing?.allAboardTime?.trim() || '';
     const storedPort = cruisePortTimesOnDate(cruise, date);
     if (!arriveTime && storedPort.arriveTime) {
       arriveTime = storedPort.arriveTime;
@@ -2486,11 +2521,15 @@ export function buildCruiseDayPatches(
     if (!leaveTime && storedPort.leaveTime) {
       leaveTime = storedPort.leaveTime;
     }
+    if (!allAboardTime && storedPort.allAboardTime) {
+      allAboardTime = storedPort.allAboardTime;
+    }
     if (atSea) {
       city = AT_SEA_LABEL;
       country = '';
       arriveTime = '';
       leaveTime = '';
+      allAboardTime = '';
     } else if (!city && isEnd && home) {
       city = home;
     }
@@ -2501,7 +2540,15 @@ export function buildCruiseDayPatches(
     if (!atSea && isDisembark && !arriveTime && cruise.endTime?.trim()) {
       arriveTime = cruise.endTime.trim();
     }
-    patches.push({ date, city, country, atSea, arriveTime, leaveTime });
+    patches.push({
+      date,
+      city,
+      country,
+      atSea,
+      arriveTime,
+      leaveTime,
+      allAboardTime,
+    });
   }
   return patches;
 }
@@ -2534,15 +2581,28 @@ export async function ensureCruiseDays(
   );
 
   /** Fallback ship times from cruisePorts + embark/disembark clocks. */
-  const timeHints = new Map<string, { arrive: string; leave: string }>();
+  const timeHints = new Map<
+    string,
+    { arrive: string; leave: string; allAboard: string }
+  >();
   for (const cruise of cruises) {
     const nights = cruiseNights(cruise);
     const emb = embarkDay.date;
     const dis = addDaysIso(emb, nights);
-    const touch = (date: string, arrive: string, leave: string) => {
-      const cur = timeHints.get(date) || { arrive: '', leave: '' };
+    const touch = (
+      date: string,
+      arrive: string,
+      leave: string,
+      allAboard = '',
+    ) => {
+      const cur = timeHints.get(date) || {
+        arrive: '',
+        leave: '',
+        allAboard: '',
+      };
       if (arrive) cur.arrive = arrive;
       if (leave) cur.leave = leave;
+      if (allAboard) cur.allAboard = allAboard;
       timeHints.set(date, cur);
     };
     if (cruise.startTime?.trim()) touch(emb, '', cruise.startTime.trim());
@@ -2552,6 +2612,7 @@ export async function ensureCruiseDays(
         port.date,
         (port.arriveTime || '').trim(),
         (port.leaveTime || '').trim(),
+        (port.allAboardTime || '').trim(),
       );
     }
   }
@@ -2571,12 +2632,14 @@ export async function ensureCruiseDays(
     let nextAtSea = found ? isAtSeaDay(found) : false;
     let nextArrive = found?.arriveTime?.trim() || '';
     let nextLeave = found?.leaveTime?.trim() || '';
+    let nextAllAboard = found?.allAboardTime?.trim() || '';
 
     const isDisembark = offset === maxOffset;
     if (patch) {
       nextAtSea = patch.atSea;
       nextArrive = patch.atSea ? '' : (patch.arriveTime || '').trim();
       nextLeave = patch.atSea ? '' : (patch.leaveTime || '').trim();
+      nextAllAboard = patch.atSea ? '' : (patch.allAboardTime || '').trim();
       if (patch.atSea) {
         nextCity = AT_SEA_LABEL;
         nextCountry = '';
@@ -2614,12 +2677,14 @@ export async function ensureCruiseDays(
       nextCountry = '';
       nextArrive = '';
       nextLeave = '';
+      nextAllAboard = '';
     } else {
       // Fill gaps from cruisePorts / embark-disembark clocks on the cruise item.
       const hint = timeHints.get(stayDate);
       if (hint) {
         if (!nextArrive && hint.arrive) nextArrive = hint.arrive;
         if (!nextLeave && hint.leave) nextLeave = hint.leave;
+        if (!nextAllAboard && hint.allAboard) nextAllAboard = hint.allAboard;
       }
     }
 
@@ -2629,12 +2694,15 @@ export async function ensureCruiseDays(
       const atSeaChanged = isAtSeaDay(found) !== nextAtSea;
       const arriveChanged = (found.arriveTime || '').trim() !== nextArrive;
       const leaveChanged = (found.leaveTime || '').trim() !== nextLeave;
+      const allAboardChanged =
+        (found.allAboardTime || '').trim() !== nextAllAboard;
       if (
         !cityChanged &&
         !countryChanged &&
         !atSeaChanged &&
         !arriveChanged &&
-        !leaveChanged
+        !leaveChanged &&
+        !allAboardChanged
       ) {
         continue;
       }
@@ -2645,7 +2713,8 @@ export async function ensureCruiseDays(
         offset > 0 &&
         offset < maxOffset &&
         !arriveChanged &&
-        !leaveChanged
+        !leaveChanged &&
+        !allAboardChanged
       ) {
         continue;
       }
@@ -2655,7 +2724,8 @@ export async function ensureCruiseDays(
         found.city.trim() &&
         !atSeaChanged &&
         !arriveChanged &&
-        !leaveChanged
+        !leaveChanged &&
+        !allAboardChanged
       ) {
         continue;
       }
@@ -2668,6 +2738,7 @@ export async function ensureCruiseDays(
         atSea: nextAtSea,
         arriveTime: nextArrive || '',
         leaveTime: nextLeave || '',
+        allAboardTime: nextAllAboard || '',
       });
       byDate.set(stayDate, {
         ...found,
@@ -2676,6 +2747,7 @@ export async function ensureCruiseDays(
         atSea: nextAtSea,
         arriveTime: nextArrive || '',
         leaveTime: nextLeave || '',
+        allAboardTime: nextAllAboard || '',
       });
     } else if (offset > 0) {
       const created = await createDay({
@@ -2685,6 +2757,7 @@ export async function ensureCruiseDays(
         atSea: nextAtSea,
         arriveTime: nextArrive || '',
         leaveTime: nextLeave || '',
+        allAboardTime: nextAllAboard || '',
       });
       byDate.set(stayDate, created);
       nextSort += 1;

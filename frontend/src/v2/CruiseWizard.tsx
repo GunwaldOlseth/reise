@@ -208,7 +208,8 @@ export function PackageWizard({
     const isLast = day.offset === nights
     const times = [
       atHome ? '' : day.arriveTime?.trim(),
-      type === 'cruise' && isLast ? '' : day.leaveTime?.trim(),
+      type === 'cruise' && !isLast ? day.allAboardTime?.trim() : '',
+      type === 'cruise' && !isLast ? day.leaveTime?.trim() : '',
     ].filter(Boolean)
     return times.length ? `${place} · ${times.join('–')}` : place
   }
@@ -559,6 +560,7 @@ export function PackageWizard({
                                 country: '',
                                 arriveTime: '',
                                 leaveTime: '',
+                                allAboardTime: '',
                               })
                             }
                           />
@@ -573,6 +575,16 @@ export function PackageWizard({
                             over. Ingen ankomst — skipet starter her.
                           </p>
                           <div className="v2-cruise-times">
+                            <ClockTimeInput
+                              placeholder="A.ab."
+                              aria-label="All aboard"
+                              value={day.allAboardTime || ''}
+                              onChange={(value) =>
+                                updateDay(day.id, {
+                                  allAboardTime: value,
+                                })
+                              }
+                            />
                             <ClockTimeInput
                               placeholder="Avg."
                               aria-label="Avgang"
@@ -645,6 +657,18 @@ export function PackageWizard({
                                   onChange={(value) =>
                                     updateDay(day.id, {
                                       arriveTime: value,
+                                    })
+                                  }
+                                />
+                              )}
+                              {type === 'cruise' && !isLast && (
+                                <ClockTimeInput
+                                  placeholder="A.ab."
+                                  aria-label="All aboard"
+                                  value={day.allAboardTime || ''}
+                                  onChange={(value) =>
+                                    updateDay(day.id, {
+                                      allAboardTime: value,
                                     })
                                   }
                                 />
