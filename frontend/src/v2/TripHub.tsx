@@ -212,7 +212,7 @@ export function TripHub({
     return () => window.clearTimeout(t)
   }, [shareHint])
 
-  async function handleShare() {
+  async function handlePublish() {
     setMenuOpen(false)
     setShareBusy(true)
     setShareHint('')
@@ -220,20 +220,44 @@ export function TripHub({
       const { token } = await api.ensureShare(tripId)
       const url = sharePageUrl(token)
       const result = await shareOrCopy(url, tripName || 'Reise')
+      if (trip && trip.shareToken !== token) {
+        onTripUpdated({ ...trip, shareToken: token })
+      }
       setShareHint(
         result === 'copied-local'
-          ? 'Lokal — del fra Cloud Run'
+          ? 'Lokal — publiser fra Cloud Run'
           : result === 'copied'
             ? 'Lenke kopiert'
-            : '',
+            : 'Publisert',
       )
     } catch (err) {
       if (err instanceof Error && err.name === 'AbortError') return
-      setShareHint('Kunne ikke dele')
+      setShareHint('Kunne ikke publisere')
     } finally {
       setShareBusy(false)
     }
   }
+
+  async function handleUnpublish() {
+    if (!trip?.shareToken) return
+    setMenuOpen(false)
+    setShareBusy(true)
+    setShareHint('')
+    try {
+      await api.unpublishShare(tripId)
+      onTripUpdated({ ...trip, shareToken: undefined })
+      setShareHint('Avpublisert')
+    } catch {
+      setShareHint('Kunne ikke avpublisere')
+    } finally {
+      setShareBusy(false)
+    }
+  }
+
+  const isPublished = !!trip?.shareToken
+  const publishLabel = shareBusy
+    ? 'Publiserer…'
+    : shareHint || (isPublished ? 'Publisert' : 'Publiser')
 
   return (
     <div className="v2-shell v2-hub">
@@ -259,11 +283,11 @@ export function TripHub({
           <button
             type="button"
             className="btn btn-soft btn-sm"
-            title="Del en kort liste med byer og transport"
+            title="Publiser en kort liste med byer og transport"
             disabled={shareBusy}
-            onClick={() => void handleShare()}
+            onClick={() => void handlePublish()}
           >
-            {shareBusy ? 'Deler…' : shareHint || 'Del'}
+            {publishLabel}
           </button>
           <button
             type="button"
@@ -346,10 +370,19 @@ export function TripHub({
                 <button
                   type="button"
                   role="menuitem"
-                  onClick={() => void handleShare()}
+                  onClick={() => void handlePublish()}
                 >
-                  Del liste…
+                  Publiser liste…
                 </button>
+                {isPublished ? (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => void handleUnpublish()}
+                  >
+                    Avpubliser liste
+                  </button>
+                ) : null}
                 <button
                   type="button"
                   role="menuitem"

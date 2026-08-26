@@ -1735,6 +1735,11 @@ export const api = {
       `/trips/${encodeURIComponent(tripId)}/share`,
       { method: 'POST' },
     ),
+  unpublishShare: (tripId: string) =>
+    request<{ status: string }>(
+      `/trips/${encodeURIComponent(tripId)}/share`,
+      { method: 'DELETE' },
+    ),
   getShare: (token: string) =>
     request<import('./v2/shareItinerary').ShareItinerary>(
       `/share/${encodeURIComponent(token)}`,
