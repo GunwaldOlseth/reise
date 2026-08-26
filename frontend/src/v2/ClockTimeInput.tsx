@@ -3,7 +3,12 @@ import {
   useRef,
   type InputHTMLAttributes,
 } from 'react'
-import { normalizeClockTime, normalizeCompleteClockTime } from '../api'
+import {
+  commitClockTimeInput,
+  formatClockTimeInput,
+  normalizeClockTime,
+  normalizeCompleteClockTime,
+} from '../api'
 
 /** One physical mouse notch (~100px) = one hour or one minute. */
 const WHEEL_PX = 100
@@ -146,11 +151,6 @@ export function ClockTimeInput({
   const wheelTitle =
     rest.title || 'Rull: venstre = time, høyre = minutt. 24-timers klokke.'
 
-  function commit(raw: string) {
-    const next = normalizeClockTime(raw)
-    if (next !== raw) onChange(next)
-  }
-
   return (
     <input
       {...rest}
@@ -164,12 +164,10 @@ export function ClockTimeInput({
       placeholder={rest.placeholder || 'tt:mm'}
       value={value}
       onChange={(e) => {
-        const raw = e.target.value
-        const complete = normalizeCompleteClockTime(raw)
-        const finished = /^\d{2}:\d{2}$/.test(complete)
+        const next = formatClockTimeInput(e.target.value)
+        const finished = isCompleteClock(next)
         const wasFinished = isCompleteClock(value)
-        if (finished && complete !== raw) onChange(complete)
-        else onChange(raw)
+        onChange(next)
         if (finished && !wasFinished) {
           requestAnimationFrame(() => {
             const el = wheelRef.current
@@ -178,7 +176,8 @@ export function ClockTimeInput({
         }
       }}
       onBlur={(e) => {
-        commit(e.target.value)
+        const next = commitClockTimeInput(e.target.value)
+        if (next !== e.target.value) onChange(next)
         onBlur?.(e)
       }}
     />
