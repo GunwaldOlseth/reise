@@ -34,6 +34,13 @@ jobs:
           go-version-file: backend/api/go.mod
           cache-dependency-path: backend/api/go.sum
 
+      - name: Check deploy secret
+        run: |
+          if [ -z "${{ secrets.GCP_SA_KEY }}" ]; then
+            echo "::error::GCP_SA_KEY is not set. Run: bash scripts/setup-github-actions.sh <key.json>"
+            exit 1
+          fi
+
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
         with:
