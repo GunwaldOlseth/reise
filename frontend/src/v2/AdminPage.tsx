@@ -254,7 +254,7 @@ export function AdminPage({
           </button>
           <div>
             <h1>Admin</h1>
-            <p className="v2-meta">Sikkerhetskopi og deling</p>
+            <p className="v2-meta">Sikkerhetskopi og publisering</p>
           </div>
         </div>
       </header>

@@ -77,6 +77,9 @@ export function SharePreviewCard({
   const [loading, setLoading] = useState(false)
   const [hint, setHint] = useState('')
   const [busy, setBusy] = useState(false)
+  const [published, setPublished] = useState(
+    () => !!trips.find((t) => t.id === (initialTripId || trips[0]?.id))?.shareToken,
+  )
   const isDemo = trips.length === 0
 
   useEffect(() => {
@@ -91,6 +94,7 @@ export function SharePreviewCard({
 
   useEffect(() => {
     const trip = trips.find((t) => t.id === tripId)
+    setPublished(!!trip?.shareToken)
     if (!trip) {
       setItinerary(DEMO_SHARE_ITINERARY)
       setJourney(null)
@@ -124,7 +128,7 @@ export function SharePreviewCard({
     }
   }, [tripId, trips])
 
-  async function copyOrShare() {
+  async function copyOrPublish() {
     if (!tripId) return
     setBusy(true)
     setHint('')
@@ -132,30 +136,47 @@ export function SharePreviewCard({
       const { token } = await api.ensureShare(tripId)
       const url = sharePageUrl(token)
       const result = await shareOrCopy(url, itinerary.name || 'Reise')
+      setPublished(true)
       setHint(
         result === 'copied-local'
-          ? 'Lokal lenke kopiert — andre kan ikke åpne den. Del fra Cloud Run.'
+          ? 'Lokal lenke kopiert — andre kan ikke åpne den. Publiser fra Cloud Run.'
           : result === 'copied'
             ? 'Lenke kopiert'
-            : 'Delt',
+            : 'Publisert',
       )
     } catch (err) {
       if (err instanceof Error && err.name === 'AbortError') return
-      setHint('Kunne ikke lage delingslenke')
+      setHint('Kunne ikke lage publiseringslenke')
     } finally {
       setBusy(false)
     }
   }
 
-  async function openSharePage() {
+  async function openPublishPage() {
     if (!tripId) return
     setBusy(true)
     setHint('')
     try {
       const { token } = await api.ensureShare(tripId)
+      setPublished(true)
       window.open(sharePageUrl(token), '_blank', 'noopener,noreferrer')
     } catch {
-      setHint('Kunne ikke åpne delingssiden')
+      setHint('Kunne ikke åpne publiseringssiden')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function unpublish() {
+    if (!tripId) return
+    setBusy(true)
+    setHint('')
+    try {
+      await api.unpublishShare(tripId)
+      setPublished(false)
+      setHint('Avpublisert')
+    } catch {
+      setHint('Kunne ikke avpublisere')
     } finally {
       setBusy(false)
     }
@@ -170,11 +191,12 @@ export function SharePreviewCard({
 
   return (
     <section className="v2-settings-card">
-      <h2>Deling</h2>
+      <h2>Publisering</h2>
       <p className="v2-meta">
         Andre får en kort liste med byer og via-transport. Ingen menyer, og de
         kan ikke redigere. PDF-en har den korte oversikten pluss en fullversjon
         med alle steg — bare første transport på listen.
+        {published ? ' Listen er publisert.' : ''}
       </p>
       {trips.length > 1 ? (
         <label>
@@ -203,18 +225,28 @@ export function SharePreviewCard({
             className="btn btn-primary"
             type="button"
             disabled={busy || !tripId}
-            onClick={() => void copyOrShare()}
+            onClick={() => void copyOrPublish()}
           >
-            {busy ? 'Deler…' : 'Del / kopier lenke'}
+            {busy ? 'Publiserer…' : 'Publiser / kopier lenke'}
           </button>
           <button
             className="btn btn-soft"
             type="button"
             disabled={busy || !tripId}
-            onClick={() => void openSharePage()}
+            onClick={() => void openPublishPage()}
           >
             Åpne som egen side
           </button>
+          {published ? (
+            <button
+              className="btn btn-ghost"
+              type="button"
+              disabled={busy || !tripId}
+              onClick={() => void unpublish()}
+            >
+              Avpubliser
+            </button>
+          ) : null}
           <button
             className="btn btn-ghost"
             type="button"

@@ -112,6 +112,46 @@ func createTripShare(w http.ResponseWriter, r *http.Request) {
 	respondWithJSON(w, http.StatusOK, shareTokenResponse{Token: token})
 }
 
+func deleteTripShare(w http.ResponseWriter, r *http.Request) {
+	ctx := context.Background()
+	id := r.PathValue("id")
+	if id == "" {
+		respondWithError(w, http.StatusBadRequest, "Missing trip ID")
+		return
+	}
+
+	doc, err := db.Collection(tripsCollection).Doc(id).Get(ctx)
+	if err != nil {
+		if status.Code(err) == codes.NotFound {
+			respondWithError(w, http.StatusNotFound, "Trip not found")
+			return
+		}
+		respondWithError(w, http.StatusInternalServerError, "Failed to get trip")
+		return
+	}
+
+	var trip Trip
+	if err := doc.DataTo(&trip); err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Failed to read trip")
+		return
+	}
+	if !validShareToken(trip.ShareToken) {
+		respondWithJSON(w, http.StatusOK, map[string]string{"status": "unpublished"})
+		return
+	}
+
+	if _, err := db.Collection(tripsCollection).Doc(id).Update(ctx, []firestore.Update{
+		{Path: "shareToken", Value: firestore.Delete},
+		{Path: "updatedAt", Value: time.Now().UTC()},
+	}); err != nil {
+		log.Printf("Error removing share token for %s: %v", id, err)
+		respondWithError(w, http.StatusInternalServerError, "Failed to unpublish")
+		return
+	}
+
+	respondWithJSON(w, http.StatusOK, map[string]string{"status": "unpublished"})
+}
+
 func shareTokenExists(ctx context.Context, token string) (bool, error) {
 	iter := db.Collection(tripsCollection).Where("shareToken", "==", token).Limit(1).Documents(ctx)
 	defer iter.Stop()
