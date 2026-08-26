@@ -731,6 +731,31 @@ export function JourneyPlanner({
                       )}
                     </button>
                   )}
+                  {isPack && (
+                    <div className="v2-pack-inline-actions">
+                      <button
+                        type="button"
+                        className="v2-chip-btn"
+                        disabled={saving}
+                        title={
+                          packType === 'cruise'
+                            ? 'Rediger cruise'
+                            : 'Rediger pakke'
+                        }
+                        onClick={() =>
+                          setWizard({
+                            kind: 'package',
+                            stopId: stop.id,
+                            packageType: packType,
+                          })
+                        }
+                      >
+                        {packType === 'cruise'
+                          ? 'Rediger cruise'
+                          : 'Rediger'}
+                      </button>
+                    </div>
+                  )}
                   {isPack && (pack?.days || []).length > 0 && (
                     <table className="v2-cruise-day-table">
                       <thead>
