@@ -120,7 +120,7 @@ function AppearancePage({ onBack }: { onBack: () => void }) {
         <section className="v2-settings-card">
           <h2>Fargetema</h2>
           <p className="v2-meta">
-            Rolige paletter — velg én, den brukes med en gang.
+            Fra rolige naturtoner til elektrisk nordlys.
           </p>
           {(
             [
