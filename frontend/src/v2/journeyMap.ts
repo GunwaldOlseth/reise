@@ -64,6 +64,7 @@ export function journeyMapStopsInOrder(journey: Journey): TripMapStop[] {
       for (const via of vias) {
         const title = via.title?.trim()
         if (!title) continue
+        if (via.hideOnMap) continue
         const opt = chosenTransportOption(via)
         const hopMins = opt ? optionDurationMinutes(opt) : null
         if (samePlaceName(title, destName) || samePlaceName(title, fromName)) {
@@ -95,6 +96,8 @@ export function journeyMapStopsInOrder(journey: Journey): TripMapStop[] {
       pushPackageMapStops(out, stop, destHopMins)
       continue
     }
+
+    if (stop.hideOnMap) continue
 
     const city = stop.city?.trim()
     const address = stop.address?.trim()
@@ -170,6 +173,13 @@ function pushPackageMapStops(
         date,
         key: `sea|${stop.id}|${day.id || offset}`,
       })
+      continue
+    }
+    if (day?.hideOnMap) {
+      lastPort = {
+        offset,
+        leaveTime: day?.leaveTime,
+      }
       continue
     }
     const city =

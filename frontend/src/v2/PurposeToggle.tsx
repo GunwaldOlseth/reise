@@ -36,6 +36,32 @@ export function PurposeToggle({
   )
 }
 
+export function MapHideToggle({
+  value,
+  disabled,
+  onChange,
+}: {
+  value: boolean
+  disabled?: boolean
+  onChange: (hideOnMap: boolean) => void
+}) {
+  return (
+    <button
+      type="button"
+      className={`v2-chip-btn${value ? ' is-on' : ''}`}
+      disabled={disabled}
+      title={
+        value
+          ? 'Stedet skjules på kartet'
+          : 'Merk sted som skjult på kartet'
+      }
+      onClick={() => onChange(!value)}
+    >
+      Ikke på kart
+    </button>
+  )
+}
+
 export function ConnectionToggle({
   value,
   disabled,

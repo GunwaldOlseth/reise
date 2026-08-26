@@ -229,6 +229,8 @@ export interface JourneyPackageDay {
   leaveTime?: string
   /** Cruise: last call for passengers before departure (all aboard). */
   allAboardTime?: string
+  /** Omit this port from the trip map. */
+  hideOnMap?: boolean
 }
 
 /** Multi-day block on the journey thread (cruise, pakketur, charter, …). */
@@ -306,6 +308,8 @@ export interface JourneyStop {
   sights?: JourneyActivity[]
   /** Visit the city, or only change transport there. */
   purpose?: PlacePurpose
+  /** Omit this stop from the trip map. */
+  hideOnMap?: boolean
   /** Legacy single city note; kept in sync with the first document. */
   notes?: string
   /** Extra info documents for the city (tips, restaurants, tickets, …). */
@@ -486,6 +490,8 @@ export interface JourneyVia {
   sights?: JourneyActivity[]
   /** Visit the city, or only change transport there. */
   purpose?: PlacePurpose
+  /** Omit this via place from the trip map. */
+  hideOnMap?: boolean
   /** The hop here is a direct ride, or involves a change. */
   connection?: RideConnection
   /** Station/city where a change happens (when connection is change). */
@@ -2382,6 +2388,7 @@ export function syncPackageDays(
           type === 'cruise' && !isLast && !atSea && !noLeave
             ? normalizeEditableClockTime((existing.allAboardTime || '').trim())
             : '',
+        hideOnMap: atSea ? false : !!existing.hideOnMap,
       })
       continue
     }
@@ -2396,6 +2403,7 @@ export function syncPackageDays(
       arriveTime: '',
       leaveTime: '',
       allAboardTime: '',
+      hideOnMap: false,
     })
   }
   return {
@@ -3099,7 +3107,23 @@ export function keepPlacePurpose(local: Journey, saved: Journey): Journey {
       return {
         ...s,
         purpose: s.purpose || prev?.purpose,
+        hideOnMap: s.hideOnMap ?? prev?.hideOnMap,
         sights: keepActivityPurpose(s.sights, prev?.sights),
+        pack:
+          s.pack && prev?.pack
+            ? {
+                ...s.pack,
+                days: (s.pack.days || []).map((d) => {
+                  const prevDay = (prev.pack?.days || []).find(
+                    (pd) => pd.id === d.id,
+                  )
+                  return {
+                    ...d,
+                    hideOnMap: d.hideOnMap ?? prevDay?.hideOnMap,
+                  }
+                }),
+              }
+            : s.pack,
       }
     }),
     legs: (saved.legs || []).map((l) => ({
@@ -3118,6 +3142,7 @@ export function keepPlacePurpose(local: Journey, saved: Journey): Journey {
         return {
           ...v,
           purpose: v.purpose || prev?.purpose,
+          hideOnMap: v.hideOnMap ?? prev?.hideOnMap,
           connection: v.connection || prev?.connection,
           station: v.station || prev?.station,
           changePlace: v.changePlace || prev?.changePlace,
