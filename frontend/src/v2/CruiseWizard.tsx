@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { CityDocsEditor } from './CityDocsEditor'
 import { useConfirmDelete } from './ConfirmDelete'
 import { MapHideToggle } from './PurposeToggle'
 import { ClockTimeInput } from './ClockTimeInput'
@@ -718,6 +719,13 @@ export function PackageWizard({
                                 />
                               )}
                             </div>
+                            <CityDocsEditor
+                              value={day}
+                              disabled={saving}
+                              onChange={(next) =>
+                                updateDay(day.id, next)
+                              }
+                            />
                           </div>
                         )
                       )}

@@ -238,6 +238,10 @@ export interface JourneyPackageDay {
   allAboardTime?: string
   /** Omit this port from the trip map. */
   hideOnMap?: boolean
+  /** Legacy single port note; kept in sync with the first document. */
+  notes?: string
+  /** Info documents for this port / city day. */
+  docs?: JourneyCityDoc[]
 }
 
 /** Multi-day block on the journey thread (cruise, pakketur, charter, …). */
@@ -331,6 +335,11 @@ export interface JourneyCityDoc {
   sortOrder: number
 }
 
+export type CityDocHolder = {
+  notes?: string
+  docs?: JourneyCityDoc[]
+}
+
 export function newCityDoc(sortOrder = 0, title = ''): JourneyCityDoc {
   return {
     id: crypto.randomUUID(),
@@ -357,7 +366,7 @@ export function normalizeCityDocs(
 
 /** Documents to show, including a legacy `notes` field. */
 export function cityDocsOf(
-  stop: Pick<JourneyStop, 'notes' | 'docs'> | null | undefined,
+  stop: CityDocHolder | null | undefined,
 ): JourneyCityDoc[] {
   const docs = normalizeCityDocs(stop?.docs)
   if (docs.length) return docs
@@ -375,7 +384,7 @@ export function cityDocsOf(
 
 /** Always at least one row in the editor. */
 export function cityDocsForEdit(
-  stop: Pick<JourneyStop, 'notes' | 'docs'> | null | undefined,
+  stop: CityDocHolder | null | undefined,
 ): JourneyCityDoc[] {
   const raw = normalizeCityDocs(stop?.docs, true)
   if (raw.length) return raw
@@ -386,10 +395,10 @@ export function cityDocsForEdit(
   return [{ id: 'notes', title: 'Om byen', body: '', sortOrder: 0 }]
 }
 
-export function withCityDocs(
-  stop: JourneyStop,
+export function applyCityDocs(
+  _holder: CityDocHolder,
   docs: JourneyCityDoc[],
-): JourneyStop {
+): CityDocHolder {
   const list = [...docs].map((d, i) => ({
     ...d,
     id: d.id || crypto.randomUUID(),
@@ -399,9 +408,18 @@ export function withCityDocs(
   }))
   const first = list.find((d) => noteHasContent(d.body)) || list[0]
   return {
-    ...stop,
     docs: list,
     notes: first?.body || '',
+  }
+}
+
+export function withCityDocs(
+  stop: JourneyStop,
+  docs: JourneyCityDoc[],
+): JourneyStop {
+  return {
+    ...stop,
+    ...applyCityDocs(stop, docs),
   }
 }
 
@@ -1014,8 +1032,8 @@ export function journeyVisitPlaces(journey: Journey): {
         addPlace(
           city,
           day?.country || pack?.baseCountry || stop.country,
-          stop.notes,
-          stop.docs,
+          day?.notes,
+          day?.docs,
         )
       }
       addVisitActivities(

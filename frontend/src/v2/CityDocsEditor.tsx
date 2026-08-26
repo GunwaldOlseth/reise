@@ -1,32 +1,32 @@
 import { TrashIcon } from '../TransportModeIcon'
 import { NoteEditor } from './NoteEditor'
 import {
+  applyCityDocs,
   cityDocsForEdit,
   newCityDoc,
-  withCityDocs,
+  type CityDocHolder,
   type JourneyCityDoc,
-  type JourneyStop,
 } from './journeyModel'
 import { compactNoteHtml } from './noteHtml'
 import { useConfirmDelete } from './ConfirmDelete'
 
 export function CityDocsEditor({
-  stop,
+  value,
   disabled,
   onChange,
 }: {
-  stop: JourneyStop
+  value: CityDocHolder
   disabled?: boolean
   onChange: (
-    next: JourneyStop,
+    next: CityDocHolder,
     opts?: { immediate?: boolean },
   ) => void
 }) {
   const askDelete = useConfirmDelete()
-  const docs = cityDocsForEdit(stop)
+  const docs = cityDocsForEdit(value)
 
   function commit(nextDocs: JourneyCityDoc[], immediate?: boolean) {
-    onChange(withCityDocs(stop, nextDocs), { immediate })
+    onChange(applyCityDocs(value, nextDocs), { immediate })
   }
 
   function patchDoc(id: string, partial: Partial<JourneyCityDoc>, immediate?: boolean) {

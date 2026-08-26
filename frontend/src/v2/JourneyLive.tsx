@@ -38,6 +38,7 @@ import {
   withTakenTransportOption,
   type Journey,
   type JourneyActivity,
+  type JourneyCityDoc,
   type JourneyLiveEntry,
   type JourneyLiveKind,
   type JourneyPhoto,
@@ -67,6 +68,7 @@ type DayPlace = {
   city: string
   hotel?: string
   notes?: string
+  docs?: JourneyCityDoc[]
   arriving: boolean
 }
 
@@ -278,7 +280,8 @@ function placesOnDate(journey: Journey, date: string): DayPlace[] {
             pack?.basePlace?.trim() ||
             stop.city ||
             'Pakke',
-          notes: stop.notes,
+          notes: day?.notes,
+          docs: day?.docs,
           arriving: offset === 0,
         })
       }
@@ -561,7 +564,7 @@ export function JourneyLive({
                     <span className="v2-live-hotel-miss"> · uten hotell</span>
                   ) : null}
                 </span>
-                <CityInfoTip text={place.notes} docs={place.stop.docs} />
+                <CityInfoTip text={place.notes} docs={place.docs ?? place.stop.docs} />
               </li>
             ))}
           </ul>
