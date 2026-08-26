@@ -8,6 +8,7 @@ import {
   arriveTimeSortKey,
   formatExpenseAmount,
   normalizeClockTime,
+  normalizeEditableClockTime,
   normalizeDepartures,
   parsePriceAmount,
 } from '../api'
@@ -2373,13 +2374,13 @@ export function syncPackageDays(
         longitude: dayCoords?.longitude,
         arriveTime: atSea || noArrive
           ? ''
-          : normalizeClockTime((existing.arriveTime || '').trim()),
+          : normalizeEditableClockTime((existing.arriveTime || '').trim()),
         leaveTime: atSea || noLeave
           ? ''
-          : normalizeClockTime((existing.leaveTime || '').trim()),
+          : normalizeEditableClockTime((existing.leaveTime || '').trim()),
         allAboardTime:
           type === 'cruise' && !isLast && !atSea && !noLeave
-            ? normalizeClockTime((existing.allAboardTime || '').trim())
+            ? normalizeEditableClockTime((existing.allAboardTime || '').trim())
             : '',
       })
       continue

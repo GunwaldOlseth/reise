@@ -1221,6 +1221,18 @@ export function normalizeCompleteClockTime(raw: string): string {
   return t;
 }
 
+/**
+ * Normalize finished clock times but keep in-progress typing (e.g. "224")
+ * unchanged so sync/re-render does not jump to "02:24" before "2245".
+ */
+export function normalizeEditableClockTime(raw: string): string {
+  const t = (raw || '').trim();
+  if (!t) return '';
+  const complete = normalizeCompleteClockTime(t);
+  if (/^\d{2}:\d{2}$/.test(complete)) return complete;
+  return t;
+}
+
 /** Minutes from midnight for HH:mm / HH:mm:ss; empty/invalid sorts last. */
 export function arriveTimeSortKey(time?: string): number {
   const t = normalizeCompleteClockTime(time || '');

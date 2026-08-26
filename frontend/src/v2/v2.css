@@ -3605,14 +3605,14 @@ html {
 
 .v2-cruise-edit-port {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 6.5rem;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 14rem);
   gap: 0.3rem 0.35rem;
   align-items: end;
 }
 
 .v2-cruise-times {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0.25rem;
 }
 
