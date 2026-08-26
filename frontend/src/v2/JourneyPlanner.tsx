@@ -410,12 +410,33 @@ export function JourneyPlanner({
         live: compactLive(next.live),
         stops: next.stops.map((s) => {
           const docs = compactCityDocs(cityDocsOf(s))
-          return {
+          let stop: JourneyStop = {
             ...s,
             sights: normalizeSights(s.sights),
             docs,
             notes: docs[0]?.body || compactNoteHtml(s.notes || ''),
           }
+          if (isPackageStop(stop)) {
+            const pack = packageOf(stop)
+            if (pack) {
+              stop = {
+                ...stop,
+                pack: {
+                  ...pack,
+                  days: (pack.days || []).map((day) => {
+                    const dayDocs = compactCityDocs(cityDocsOf(day))
+                    return {
+                      ...day,
+                      docs: dayDocs,
+                      notes:
+                        dayDocs[0]?.body || compactNoteHtml(day.notes || ''),
+                    }
+                  }),
+                },
+              }
+            }
+          }
+          return stop
         }),
         legs: next.legs.map((l) => ({
           ...l,
@@ -824,7 +845,34 @@ export function JourneyPlanner({
                             <div className="v2-city-day-head">
                               <span className="v2-cruise-day-date">{date}</span>
                               <span>{place}</span>
+                              {!day.atSea ? (
+                                <CityInfoTip
+                                  text={day.notes}
+                                  docs={day.docs}
+                                  disabled={loading}
+                                />
+                              ) : null}
                             </div>
+                            {!day.atSea ? (
+                              <CityDocsEditor
+                                value={day}
+                                disabled={loading}
+                                onChange={(next, opts) =>
+                                  patchPlaceStop(
+                                    {
+                                      ...stop,
+                                      pack: {
+                                        ...pack!,
+                                        days: (pack?.days || []).map((d) =>
+                                          d.id === day.id ? { ...d, ...next } : d,
+                                        ),
+                                      },
+                                    },
+                                    opts,
+                                  )
+                                }
+                              />
+                            ) : null}
                             <SightList
                               sights={activitiesForDay(stop.sights, day.offset)}
                               dayOffset={day.offset}
@@ -1405,9 +1453,9 @@ function PlaceStopPanel({
               </div>
             )}
             <CityDocsEditor
-              stop={stop}
+              value={stop}
               disabled={disabled}
-              onChange={(next, opts) => onChange(next, opts)}
+              onChange={(next, opts) => onChange({ ...stop, ...next }, opts)}
             />
           </div>
 

@@ -79,8 +79,16 @@ func normalizeCityDocs(stop *JourneyStop) {
 	if stop == nil {
 		return
 	}
-	kept := make([]JourneyCityDoc, 0, len(stop.Docs))
-	for _, d := range stop.Docs {
+	stop.Notes = strings.TrimSpace(stop.Notes)
+	normalizeCityDocHolder(&stop.Notes, &stop.Docs)
+}
+
+func normalizeCityDocHolder(notes *string, docs *[]JourneyCityDoc) {
+	if notes == nil || docs == nil {
+		return
+	}
+	kept := make([]JourneyCityDoc, 0, len(*docs))
+	for _, d := range *docs {
 		d.Title = strings.TrimSpace(d.Title)
 		d.Body = strings.TrimSpace(d.Body)
 		if d.Title == "" && d.Body == "" {
@@ -92,18 +100,18 @@ func normalizeCityDocs(stop *JourneyStop) {
 		d.SortOrder = len(kept)
 		kept = append(kept, d)
 	}
-	if len(kept) == 0 && stop.Notes != "" {
+	if len(kept) == 0 && *notes != "" {
 		kept = append(kept, JourneyCityDoc{
 			ID:        newJourneyID("doc"),
 			Title:     "Om byen",
-			Body:      stop.Notes,
+			Body:      *notes,
 			SortOrder: 0,
 		})
 	}
-	if len(kept) > 0 && stop.Notes == "" {
-		stop.Notes = kept[0].Body
+	if len(kept) > 0 && *notes == "" {
+		*notes = kept[0].Body
 	}
-	stop.Docs = kept
+	*docs = kept
 }
 
 func isPackageKind(kind string) bool {
@@ -162,6 +170,10 @@ func normalizePackageStop(stop *JourneyStop) {
 	}
 	if p.Days == nil {
 		p.Days = []JourneyPackageDay{}
+	}
+	for i := range p.Days {
+		p.Days[i].Notes = strings.TrimSpace(p.Days[i].Notes)
+		normalizeCityDocHolder(&p.Days[i].Notes, &p.Days[i].Docs)
 	}
 	// Prefer pack going forward; drop legacy cruise payload once migrated.
 	stop.Cruise = nil
