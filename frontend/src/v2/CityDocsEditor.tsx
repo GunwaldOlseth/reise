@@ -14,9 +14,11 @@ export function CityDocsEditor({
   value,
   disabled,
   onChange,
+  className,
 }: {
   value: CityDocHolder
   disabled?: boolean
+  className?: string
   onChange: (
     next: CityDocHolder,
     opts?: { immediate?: boolean },
@@ -37,7 +39,7 @@ export function CityDocsEditor({
   }
 
   return (
-    <div className="v2-city-docs">
+    <div className={`v2-city-docs${className ? ` ${className}` : ''}`}>
       <div className="v2-sights-head">
         <span>Dokumenter</span>
         <button

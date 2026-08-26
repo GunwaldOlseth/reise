@@ -3728,6 +3728,27 @@ html[data-theme='plasma'] .v2-shell {
   margin: 0;
 }
 
+.v2-pack-day-programs .v2-city-day {
+  gap: 0.55rem;
+}
+
+.v2-city-docs-in-pack {
+  padding-top: 0.35rem;
+  border-top: 1px solid var(--v2-line);
+}
+
+.v2-city-docs-in-pack .v2-sights-head {
+  margin-top: 0;
+}
+
+.v2-pack-day-programs .v2-city-day-head {
+  flex-wrap: wrap;
+}
+
+.v2-pack-day-programs .v2-city-day-head .v2-city-info {
+  margin-left: auto;
+}
+
 .v2-city-day,
 .v2-pack-day-programs .v2-city-day {
   display: flex;

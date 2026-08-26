@@ -855,6 +855,7 @@ export function JourneyPlanner({
                             </div>
                             {!day.atSea ? (
                               <CityDocsEditor
+                                className="v2-city-docs-in-pack"
                                 value={day}
                                 disabled={loading}
                                 onChange={(next, opts) =>
