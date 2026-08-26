@@ -13,23 +13,42 @@ export const THEME_IDS = [
   'sand',
   'lavendel',
   'stein',
-  'nordlys',
   'skog-lys',
   'kyst-lys',
   'sand-lys',
   'lavendel-lys',
   'stein-lys',
+  'nordlys',
+  'solglod',
+  'neonrosa',
+  'elektrisk',
+  'polarnatt',
+  'plasma',
   'nordlys-lys',
+  'sepia',
+  'blekk',
+  'pergament',
+  'kobber',
+  'bibliotek',
+  'bordeaux',
 ] as const
 
 export type ThemeId = (typeof THEME_IDS)[number]
 export type ThemeTone = 'dark' | 'light'
+export type ThemeGroup = 'nature' | 'vibrant' | 'vintage'
+
+export const THEME_GROUPS: { id: ThemeGroup; label: string }[] = [
+  { id: 'nature', label: 'Natur' },
+  { id: 'vibrant', label: 'Sprek farger' },
+  { id: 'vintage', label: 'Gammeldags' },
+]
 
 export const THEMES: {
   id: ThemeId
   name: string
   blurb: string
   tone: ThemeTone
+  group: ThemeGroup
   swatch: [string, string, string]
 }[] = [
   {
@@ -37,6 +56,7 @@ export const THEMES: {
     name: 'Skog',
     blurb: 'Dyp mose og stille mint',
     tone: 'dark',
+    group: 'nature',
     swatch: ['#162422', '#3dbea5', '#e8f4f2'],
   },
   {
@@ -44,6 +64,7 @@ export const THEMES: {
     name: 'Kyst',
     blurb: 'Nattblått og sjøglass',
     tone: 'dark',
+    group: 'nature',
     swatch: ['#1a222c', '#7aa8b8', '#e6eef2'],
   },
   {
@@ -51,6 +72,7 @@ export const THEMES: {
     name: 'Sand',
     blurb: 'Varm kveld og dempet gull',
     tone: 'dark',
+    group: 'nature',
     swatch: ['#24201a', '#c4a574', '#f3ebe0'],
   },
   {
@@ -58,6 +80,7 @@ export const THEMES: {
     name: 'Lavendel',
     blurb: 'Dusk og støvet lilla',
     tone: 'dark',
+    group: 'nature',
     swatch: ['#1e1c26', '#a89bb8', '#eee8f2'],
   },
   {
@@ -65,20 +88,15 @@ export const THEMES: {
     name: 'Stein',
     blurb: 'Grafitt og varm stein',
     tone: 'dark',
+    group: 'nature',
     swatch: ['#1c1c1c', '#b8b0a4', '#eceae6'],
-  },
-  {
-    id: 'nordlys',
-    name: 'Nordlys',
-    blurb: 'Elektrisk cyan og midnattslilla',
-    tone: 'dark',
-    swatch: ['#0c1020', '#5ef0e0', '#c478ff'],
   },
   {
     id: 'skog-lys',
     name: 'Skog lys',
     blurb: 'Dugg og blek mose',
     tone: 'light',
+    group: 'nature',
     swatch: ['#d4ddd8', '#3d7a6c', '#2a3834'],
   },
   {
@@ -86,6 +104,7 @@ export const THEMES: {
     name: 'Kyst lys',
     blurb: 'Dis og sjøglass',
     tone: 'light',
+    group: 'nature',
     swatch: ['#d2dbe1', '#547888', '#2a343c'],
   },
   {
@@ -93,6 +112,7 @@ export const THEMES: {
     name: 'Sand lys',
     blurb: 'Lin og varmt papir',
     tone: 'light',
+    group: 'nature',
     swatch: ['#e2d6c6', '#8a7048', '#3a3228'],
   },
   {
@@ -100,6 +120,7 @@ export const THEMES: {
     name: 'Lavendel lys',
     blurb: 'Tåke og støvet lilla',
     tone: 'light',
+    group: 'nature',
     swatch: ['#dcd6e2', '#6e6480', '#322e38'],
   },
   {
@@ -107,14 +128,112 @@ export const THEMES: {
     name: 'Stein lys',
     blurb: 'Porselen og kalk',
     tone: 'light',
+    group: 'nature',
     swatch: ['#d8d4ce', '#6e6a60', '#2e2c28'],
+  },
+  {
+    id: 'nordlys',
+    name: 'Nordlys',
+    blurb: 'Elektrisk cyan og midnattslilla',
+    tone: 'dark',
+    group: 'vibrant',
+    swatch: ['#0c1020', '#5ef0e0', '#c478ff'],
+  },
+  {
+    id: 'solglod',
+    name: 'Solglød',
+    blurb: 'Het korall og solnedgang',
+    tone: 'dark',
+    group: 'vibrant',
+    swatch: ['#1a0c08', '#ff8a48', '#ffd060'],
+  },
+  {
+    id: 'neonrosa',
+    name: 'Neonrosa',
+    blurb: 'Magenta neon og nattby',
+    tone: 'dark',
+    group: 'vibrant',
+    swatch: ['#180818', '#ff5ec8', '#ffa0e8'],
+  },
+  {
+    id: 'elektrisk',
+    name: 'Elektrisk',
+    blurb: 'Lime og neongrønt lys',
+    tone: 'dark',
+    group: 'vibrant',
+    swatch: ['#0a1a0c', '#78ff48', '#c8ff80'],
+  },
+  {
+    id: 'polarnatt',
+    name: 'Polarnatt',
+    blurb: 'Isblått og elektrisk blå',
+    tone: 'dark',
+    group: 'vibrant',
+    swatch: ['#040818', '#48a8ff', '#80d0ff'],
+  },
+  {
+    id: 'plasma',
+    name: 'Plasma',
+    blurb: 'Fiolett glød og rosa puls',
+    tone: 'dark',
+    group: 'vibrant',
+    swatch: ['#140818', '#b868ff', '#ff68c8'],
   },
   {
     id: 'nordlys-lys',
     name: 'Nordlys lys',
     blurb: 'Polarsol og isblå dis',
     tone: 'light',
+    group: 'vibrant',
     swatch: ['#dce8f4', '#1a9e94', '#2a2858'],
+  },
+  {
+    id: 'sepia',
+    name: 'Sepia',
+    blurb: 'Gammelt foto og varm brun',
+    tone: 'dark',
+    group: 'vintage',
+    swatch: ['#2a2218', '#c4a070', '#f0e0c8'],
+  },
+  {
+    id: 'blekk',
+    name: 'Blekk',
+    blurb: 'Blått blekk og pergament',
+    tone: 'dark',
+    group: 'vintage',
+    swatch: ['#1a1e28', '#8aa4c8', '#e8e4d8'],
+  },
+  {
+    id: 'pergament',
+    name: 'Pergament',
+    blurb: 'Gulnede sider og voks',
+    tone: 'dark',
+    group: 'vintage',
+    swatch: ['#2e2818', '#b8a060', '#f0e8d0'],
+  },
+  {
+    id: 'kobber',
+    name: 'Kobber',
+    blurb: 'Patinert kobber og malakitt',
+    tone: 'dark',
+    group: 'vintage',
+    swatch: ['#241e18', '#6a9a78', '#c89060'],
+  },
+  {
+    id: 'bibliotek',
+    name: 'Bibliotek',
+    blurb: 'Mørkt tre og grønn lampe',
+    tone: 'dark',
+    group: 'vintage',
+    swatch: ['#141e14', '#5a8a58', '#d8c8a0'],
+  },
+  {
+    id: 'bordeaux',
+    name: 'Bordeaux',
+    blurb: 'Vinkjeller og dyp rød',
+    tone: 'dark',
+    group: 'vintage',
+    swatch: ['#1e1014', '#a85060', '#e8c8c0'],
   },
 ]
 
