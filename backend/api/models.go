@@ -278,6 +278,7 @@ type JourneyCityDoc struct {
 type JourneySight struct {
 	ID         string `json:"id" firestore:"id"`
 	Title      string `json:"title" firestore:"title"`
+	Place      string `json:"place,omitempty" firestore:"place,omitempty"`
 	Notes      string `json:"notes,omitempty" firestore:"notes,omitempty"`
 	URL        string `json:"url,omitempty" firestore:"url,omitempty"`
 	Kind       string `json:"kind,omitempty" firestore:"kind,omitempty"` // sight | excursion | other
@@ -285,6 +286,8 @@ type JourneySight struct {
 	StartTime  string `json:"startTime,omitempty" firestore:"startTime,omitempty"`
 	EndTime    string `json:"endTime,omitempty" firestore:"endTime,omitempty"`
 	Purpose    string `json:"purpose,omitempty" firestore:"purpose,omitempty"` // visit | transfer
+	Price      string `json:"price,omitempty" firestore:"price,omitempty"`
+	Paid       bool   `json:"paid,omitempty" firestore:"paid,omitempty"`
 	SortOrder  int    `json:"sortOrder" firestore:"sortOrder"`
 }
 

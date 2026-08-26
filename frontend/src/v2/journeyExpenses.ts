@@ -7,8 +7,11 @@ import {
 } from '../api'
 import {
   compactLive,
+  activityDisplayName,
+  activityKindLabel,
   isPackageStop,
   liveKindLabel,
+  normalizeSights,
   packageFreeDayLabel,
   packageOf,
   packageTypeLabel,
@@ -24,6 +27,7 @@ import {
   type Journey,
   type JourneyCost,
   type JourneyStop,
+  type JourneyActivity,
 } from './journeyModel'
 
 function emptySummary(): TripExpenseSummary {
@@ -32,6 +36,7 @@ function emptySummary(): TripExpenseSummary {
     hotel: { total: 0, lines: [] },
     transport: { total: 0, lines: [] },
     live: { total: 0, lines: [] },
+    program: { total: 0, lines: [] },
     byDay: [],
     total: 0,
     paidTotal: 0,
@@ -69,6 +74,7 @@ export function journeyExpenseSummary(journey: Journey): TripExpenseSummary {
   const hotelLines: ExpenseLine[] = []
   const transportLines: ExpenseLine[] = []
   const liveLines: ExpenseLine[] = []
+  const programLines: ExpenseLine[] = []
   let cruiseDays = 0
   let unparsedCount = 0
   let pricedCount = 0
@@ -78,6 +84,7 @@ export function journeyExpenseSummary(journey: Journey): TripExpenseSummary {
     hotel: number
     transport: number
     live: number
+    program: number
     lines: ExpenseLine[]
     place: string
     ship: string
@@ -94,6 +101,7 @@ export function journeyExpenseSummary(journey: Journey): TripExpenseSummary {
         hotel: 0,
         transport: 0,
         live: 0,
+        program: 0,
         lines: [],
         place,
         ship,
@@ -111,7 +119,7 @@ export function journeyExpenseSummary(journey: Journey): TripExpenseSummary {
   function addShare(
     date: string,
     place: string,
-    category: 'cruise' | 'hotel' | 'transport' | 'live',
+    category: 'cruise' | 'hotel' | 'transport' | 'live' | 'program',
     share: number,
     line: ExpenseLine,
     ship = '',
@@ -156,6 +164,56 @@ export function journeyExpenseSummary(journey: Journey): TripExpenseSummary {
     const amount = parsePriceAmount(t)
     if (amount === null) return 'unparsed'
     return { amount, raw: t }
+  }
+
+  function addActivityPrice(
+    activity: JourneyActivity,
+    baseDate: string,
+    place: string,
+    idPrefix: string,
+    ship = '',
+    dayOffsetOverride?: number,
+  ) {
+    const resolved = takeAmount(activity.price || '')
+    if (resolved === 'empty') return
+    if (resolved === 'unparsed') {
+      unparsedCount += 1
+      return
+    }
+    pricedCount += 1
+    const kind = activityKindLabel(activity.kind)
+    const label = activityDisplayName(activity)
+    const title = label !== activityKindLabel(activity.kind)
+      ? `${kind} · ${label}`
+      : kind
+    const offset =
+      typeof dayOffsetOverride === 'number'
+        ? dayOffsetOverride
+        : activity.dayOffset ?? 0
+    const date = baseDate ? addDaysIso(baseDate, offset) : ''
+    const line: ExpenseLine = {
+      id: `${idPrefix}:${activity.id}`,
+      title,
+      date,
+      rawPrice: resolved.raw,
+      amount: resolved.amount,
+      place: place || undefined,
+      paid: activity.paid || false,
+    }
+    programLines.push(line)
+    addShare(date, place, 'program', resolved.amount, line, ship)
+  }
+
+  function addActivities(
+    activities: JourneyActivity[] | null | undefined,
+    baseDate: string,
+    place: string,
+    idPrefix: string,
+    ship = '',
+  ) {
+    for (const activity of normalizeSights(activities)) {
+      addActivityPrice(activity, baseDate, place, idPrefix, ship)
+    }
   }
 
   function addPackageCost(
@@ -215,6 +273,24 @@ export function journeyExpenseSummary(journey: Journey): TripExpenseSummary {
   }
 
   for (const stop of stops) {
+    for (const activity of normalizeSights(stop.sights)) {
+      const offset = activity.dayOffset ?? 0
+      const ctx = isPackageStop(stop)
+        ? packageDayPlace(stop, offset)
+        : {
+            place: stop.city || '',
+            ship: (packageOf(stop)?.title || '').trim(),
+          }
+      addActivityPrice(
+        activity,
+        stop.arriveDate,
+        ctx.place || stop.city,
+        stop.id,
+        ctx.ship,
+        offset,
+      )
+    }
+
     if (isPackageStop(stop)) {
       const pack = packageOf(stop)
       const nights = Math.max(1, Math.floor(pack?.nights || 1))
@@ -317,7 +393,10 @@ export function journeyExpenseSummary(journey: Journey): TripExpenseSummary {
     const date = legTravelDate(from, to)
     const place = to?.city || ''
     const vias = [...(leg.vias || [])].sort((a, b) => a.sortOrder - b.sortOrder)
+    const baseDate = legTravelDate(from, to)
     for (const via of vias) {
+      const viaPlace = via.title?.trim() || to?.city || ''
+      addActivities(via.sights, baseDate, viaPlace, via.id)
       const opt = chosenTransportOption(via)
       if (!opt) continue
       const expected = (opt.price || '').trim()
@@ -391,6 +470,7 @@ export function journeyExpenseSummary(journey: Journey): TripExpenseSummary {
   const hotelTotal = hotelLines.reduce((s, l) => s + l.amount, 0)
   const transportTotal = transportLines.reduce((s, l) => s + l.amount, 0)
   const liveTotal = liveLines.reduce((s, l) => s + l.amount, 0)
+  const programTotal = programLines.reduce((s, l) => s + l.amount, 0)
 
   const byDay: DayExpenseSummary[] = [...byDate.entries()]
     .sort(([a], [b]) => a.localeCompare(b))
@@ -404,11 +484,23 @@ export function journeyExpenseSummary(journey: Journey): TripExpenseSummary {
       hotel: acc.hotel,
       transport: acc.transport,
       live: acc.live,
-      total: acc.cruise + acc.hotel + acc.transport + acc.live,
+      program: acc.program,
+      total:
+        acc.cruise +
+        acc.hotel +
+        acc.transport +
+        acc.live +
+        acc.program,
       lines: acc.lines,
     }))
 
-  const allLines = [...cruiseLines, ...hotelLines, ...transportLines, ...liveLines]
+  const allLines = [
+    ...cruiseLines,
+    ...hotelLines,
+    ...transportLines,
+    ...liveLines,
+    ...programLines,
+  ]
   const paidTotal = allLines.filter((l) => l.paid).reduce((s, l) => s + l.amount, 0)
 
   return {
@@ -421,8 +513,14 @@ export function journeyExpenseSummary(journey: Journey): TripExpenseSummary {
     hotel: { total: hotelTotal, lines: hotelLines },
     transport: { total: transportTotal, lines: transportLines },
     live: { total: liveTotal, lines: liveLines },
+    program: { total: programTotal, lines: programLines },
     byDay,
-    total: cruiseTotal + hotelTotal + transportTotal + liveTotal,
+    total:
+      cruiseTotal +
+      hotelTotal +
+      transportTotal +
+      liveTotal +
+      programTotal,
     paidTotal,
     pricedCount,
     unparsedCount,

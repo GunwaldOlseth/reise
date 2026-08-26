@@ -547,6 +547,7 @@ export type DayExpenseSummary = {
   hotel: number;
   transport: number;
   live: number;
+  program: number;
   total: number;
   lines: ExpenseLine[];
 };
@@ -556,6 +557,7 @@ export type TripExpenseSummary = {
   hotel: { total: number; lines: ExpenseLine[] };
   transport: { total: number; lines: ExpenseLine[] };
   live: { total: number; lines: ExpenseLine[] };
+  program: { total: number; lines: ExpenseLine[] };
   byDay: DayExpenseSummary[];
   total: number;
   /** Sum of lines where paid === true. */
@@ -806,6 +808,7 @@ export function tripExpenseSummary(days: TripDay[]): TripExpenseSummary {
       hotel: acc.hotel,
       transport: acc.transport,
       live: acc.live,
+      program: 0,
       total: acc.cruise + acc.hotel + acc.transport + acc.live,
       lines: acc.lines,
     }))
@@ -821,6 +824,7 @@ export function tripExpenseSummary(days: TripDay[]): TripExpenseSummary {
     hotel: { total: hotelTotal, lines: hotelLines },
     transport: { total: transportTotal, lines: transportLines },
     live: { total: 0, lines: [] },
+    program: { total: 0, lines: [] },
     byDay,
     total: cruiseTotal + hotelTotal + transportTotal,
     paidTotal: [...cruiseLines, ...hotelLines, ...transportLines]
