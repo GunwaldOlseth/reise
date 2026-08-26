@@ -1,32 +1,29 @@
 import { TrashIcon } from '../TransportModeIcon'
 import { NoteEditor } from './NoteEditor'
 import {
-  cityDocsForEdit,
   newCityDoc,
-  withCityDocs,
   type JourneyCityDoc,
-  type JourneyStop,
 } from './journeyModel'
 import { compactNoteHtml } from './noteHtml'
 import { useConfirmDelete } from './ConfirmDelete'
 
 export function CityDocsEditor({
-  stop,
+  docs,
   disabled,
+  firstTitle = 'Om byen',
+  firstPlaceholder = 'Tips, område, hvorfor vi er her…',
   onChange,
 }: {
-  stop: JourneyStop
+  docs: JourneyCityDoc[]
   disabled?: boolean
-  onChange: (
-    next: JourneyStop,
-    opts?: { immediate?: boolean },
-  ) => void
+  firstTitle?: string
+  firstPlaceholder?: string
+  onChange: (docs: JourneyCityDoc[], opts?: { immediate?: boolean }) => void
 }) {
   const askDelete = useConfirmDelete()
-  const docs = cityDocsForEdit(stop)
 
   function commit(nextDocs: JourneyCityDoc[], immediate?: boolean) {
-    onChange(withCityDocs(stop, nextDocs), { immediate })
+    onChange(nextDocs, { immediate })
   }
 
   function patchDoc(id: string, partial: Partial<JourneyCityDoc>, immediate?: boolean) {
@@ -62,7 +59,7 @@ export function CityDocsEditor({
               <input
                 value={doc.title}
                 disabled={disabled}
-                placeholder={i === 0 ? 'Om byen' : 'Tittel'}
+                placeholder={i === 0 ? firstTitle : 'Tittel'}
                 aria-label="Dokumenttittel"
                 onChange={(e) => patchDoc(doc.id, { title: e.target.value })}
                 onBlur={(e) =>
@@ -99,9 +96,7 @@ export function CityDocsEditor({
               value={doc.body}
               disabled={disabled}
               placeholder={
-                i === 0
-                  ? 'Tips, område, hvorfor vi er her…'
-                  : 'Skriv notatet her…'
+                i === 0 ? firstPlaceholder : 'Skriv notatet her…'
               }
               onChange={(html) => patchDoc(doc.id, { body: html })}
               onBlur={(html) =>

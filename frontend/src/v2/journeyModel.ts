@@ -238,6 +238,8 @@ export interface JourneyPackageDay {
   allAboardTime?: string
   /** Omit this port from the trip map. */
   hideOnMap?: boolean
+  /** Info documents for this port / day (tips, tickets, …). */
+  docs?: JourneyCityDoc[]
 }
 
 /** Multi-day block on the journey thread (cruise, pakketur, charter, …). */
@@ -414,6 +416,33 @@ export function compactCityDocs(
     body: compactNoteHtml(d.body),
     sortOrder: i,
   }))
+}
+
+/** Always at least one row in the package-day editor. */
+export function packageDayDocsForEdit(
+  day: Pick<JourneyPackageDay, 'docs'> | null | undefined,
+): JourneyCityDoc[] {
+  const raw = normalizeCityDocs(day?.docs, true)
+  if (raw.length) return raw
+  return [{ id: 'notes', title: 'Om havnen', body: '', sortOrder: 0 }]
+}
+
+export function withPackageDayDocs(
+  day: JourneyPackageDay,
+  docs: JourneyCityDoc[],
+): JourneyPackageDay {
+  const list = [...docs].map((d, i) => ({
+    ...d,
+    id: d.id || crypto.randomUUID(),
+    title: d.title || '',
+    body: d.body || '',
+    sortOrder: i,
+  }))
+  const compact = compactCityDocs(list)
+  return {
+    ...day,
+    docs: compact.length ? compact : undefined,
+  }
 }
 
 /** One way to travel between two places (bus OR train, etc.). */
@@ -3147,6 +3176,7 @@ export function keepPlacePurpose(local: Journey, saved: Journey): Journey {
                   return {
                     ...d,
                     hideOnMap: d.hideOnMap ?? prevDay?.hideOnMap,
+                    docs: d.docs?.length ? d.docs : prevDay?.docs,
                   }
                 }),
               }

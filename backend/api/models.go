@@ -211,6 +211,7 @@ type JourneyPackageDay struct {
 	LeaveTime     string  `json:"leaveTime,omitempty" firestore:"leaveTime,omitempty"`
 	AllAboardTime string  `json:"allAboardTime,omitempty" firestore:"allAboardTime,omitempty"`
 	HideOnMap     bool    `json:"hideOnMap,omitempty" firestore:"hideOnMap,omitempty"`
+	Docs          []JourneyCityDoc `json:"docs,omitempty" firestore:"docs,omitempty"`
 }
 
 // JourneyPackage is a multi-day block (cruise, pakketur, charter, roadtrip, other).

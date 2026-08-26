@@ -18,6 +18,7 @@ import {
   addDaysIso,
   cityStayDays,
   cityDocsOf,
+  cityDocsForEdit,
   compactCityDocs,
   compactLive,
   confirmShiftAfterNights,
@@ -61,7 +62,10 @@ import {
   packageNightsOf,
   packageOf,
   packageDayTableRow,
+  packageDayDocsForEdit,
   packageTypeLabel,
+  withCityDocs,
+  withPackageDayDocs,
   removeStop,
   replaceDayActivities,
   reorderTransportSegments,
@@ -410,11 +414,24 @@ export function JourneyPlanner({
         live: compactLive(next.live),
         stops: next.stops.map((s) => {
           const docs = compactCityDocs(cityDocsOf(s))
+          const pack = s.pack
+            ? {
+                ...s.pack,
+                days: (s.pack.days || []).map((d) => {
+                  const dayDocs = compactCityDocs(d.docs)
+                  return {
+                    ...d,
+                    docs: dayDocs.length ? dayDocs : undefined,
+                  }
+                }),
+              }
+            : s.pack
           return {
             ...s,
             sights: normalizeSights(s.sights),
             docs,
             notes: docs[0]?.body || compactNoteHtml(s.notes || ''),
+            pack,
           }
         }),
         legs: next.legs.map((l) => ({
@@ -847,6 +864,36 @@ export function JourneyPlanner({
                                 )
                               }
                             />
+                            {!day.atSea && (
+                              <CityDocsEditor
+                                docs={packageDayDocsForEdit(day)}
+                                disabled={loading}
+                                firstTitle={
+                                  packType === 'cruise' ? 'Om havnen' : 'Om stedet'
+                                }
+                                firstPlaceholder={
+                                  packType === 'cruise'
+                                    ? 'Havnetips, transport til sentrum, billettinfo…'
+                                    : 'Tips, område, praktisk info…'
+                                }
+                                onChange={(nextDocs, opts) =>
+                                  patchPlaceStop(
+                                    {
+                                      ...stop,
+                                      pack: {
+                                        ...pack!,
+                                        days: (pack?.days || []).map((d) =>
+                                          d.id === day.id
+                                            ? withPackageDayDocs(d, nextDocs)
+                                            : d,
+                                        ),
+                                      },
+                                    },
+                                    { immediate: opts?.immediate },
+                                  )
+                                }
+                              />
+                            )}
                           </div>
                         )
                       })}
@@ -1405,9 +1452,11 @@ function PlaceStopPanel({
               </div>
             )}
             <CityDocsEditor
-              stop={stop}
+              docs={cityDocsForEdit(stop)}
               disabled={disabled}
-              onChange={(next, opts) => onChange(next, opts)}
+              onChange={(nextDocs, opts) =>
+                onChange(withCityDocs(stop, nextDocs), opts)
+              }
             />
           </div>
 
