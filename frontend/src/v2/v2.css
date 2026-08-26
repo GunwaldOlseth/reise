@@ -128,6 +128,32 @@ html[data-theme='stein'] {
   --v2-hover: #e6e4de;
 }
 
+html[data-theme='nordlys'] {
+  color-scheme: dark;
+  --v2-scheme: dark;
+  --v2-bg: #0c1020;
+  --v2-panel: #141830;
+  --v2-ink: #eef2ff;
+  --v2-muted: rgba(238, 242, 255, 0.68);
+  --v2-label: rgba(238, 242, 255, 0.92);
+  --v2-accent: #5ef0e0;
+  --v2-accent-ink: #061018;
+  --v2-warn: #f0c060;
+  --v2-danger: #ff7b8a;
+  --v2-line: rgba(238, 242, 255, 0.14);
+  --v2-field: #0a0e1a;
+  --v2-option-bg: #eef8ff;
+  --v2-option-ink: #0e1428;
+  --v2-glow-1: rgba(94, 240, 224, 0.24);
+  --v2-glow-2: rgba(196, 120, 255, 0.2);
+  --v2-scrim: rgba(12, 16, 32, 0.98);
+  --v2-scrim-mid: rgba(12, 16, 32, 0.9);
+  --v2-nav: rgba(12, 16, 32, 0.92);
+  --v2-shade: rgba(0, 0, 0, 0.2);
+  --v2-hover: #d8f8f4;
+  --v2-weather-forecast: #7ee8ff;
+}
+
 html[data-theme='skog-lys'] {
   color-scheme: light;
   --v2-scheme: light;
@@ -253,6 +279,32 @@ html[data-theme='stein-lys'] {
   --v2-hover: #ccc8c0;
 }
 
+html[data-theme='nordlys-lys'] {
+  color-scheme: light;
+  --v2-scheme: light;
+  --v2-bg: #dce8f4;
+  --v2-panel: #e8f0fa;
+  --v2-ink: #1a1e3a;
+  --v2-muted: rgba(26, 30, 58, 0.72);
+  --v2-label: rgba(26, 30, 58, 0.88);
+  --v2-accent: #1a9e94;
+  --v2-accent-ink: #e8faf8;
+  --v2-warn: #9a7018;
+  --v2-danger: #c44a5a;
+  --v2-line: rgba(26, 30, 58, 0.14);
+  --v2-field: #f2f6fc;
+  --v2-option-bg: #f2f6fc;
+  --v2-option-ink: #1a1e3a;
+  --v2-glow-1: rgba(94, 200, 190, 0.18);
+  --v2-glow-2: rgba(160, 120, 220, 0.14);
+  --v2-scrim: rgba(220, 232, 244, 0.96);
+  --v2-scrim-mid: rgba(220, 232, 244, 0.88);
+  --v2-nav: rgba(220, 232, 244, 0.92);
+  --v2-shade: rgba(26, 30, 58, 0.06);
+  --v2-hover: #c8dae8;
+  --v2-weather-forecast: #4090b8;
+}
+
 html {
   --v2-line-strong: color-mix(in srgb, var(--v2-ink) 28%, transparent);
   --v2-wash: color-mix(in srgb, var(--v2-ink) 8%, transparent);
@@ -269,6 +321,30 @@ html {
   display: flex;
   flex-direction: column;
   padding-bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
+}
+
+html[data-theme='nordlys'] .v2-shell {
+  background:
+    radial-gradient(70% 45% at 85% 95%, rgba(196, 100, 255, 0.14), transparent 55%),
+    radial-gradient(120% 80% at 10% -10%, var(--v2-glow-1), transparent 55%),
+    radial-gradient(90% 60% at 100% 0%, var(--v2-glow-2), transparent 45%),
+    linear-gradient(165deg, #0c1020 0%, #101428 45%, #0a1428 100%);
+}
+
+html[data-theme='nordlys-lys'] .v2-shell {
+  background:
+    radial-gradient(80% 50% at 75% 0%, rgba(94, 200, 190, 0.18), transparent 50%),
+    radial-gradient(60% 40% at 15% 100%, rgba(180, 140, 220, 0.12), transparent 45%),
+    radial-gradient(120% 80% at 10% -10%, var(--v2-glow-1), transparent 55%),
+    radial-gradient(90% 60% at 100% 0%, var(--v2-glow-2), transparent 45%),
+    linear-gradient(175deg, #e8eefc 0%, #dce8f4 50%, #d4e4f0 100%);
+}
+
+html[data-theme='nordlys'] .v2-theme-card.is-active,
+html[data-theme='nordlys-lys'] .v2-theme-card.is-active {
+  box-shadow:
+    0 0 0 1px var(--v2-accent),
+    0 0 18px color-mix(in srgb, var(--v2-accent) 35%, transparent);
 }
 
 .v2-shell.is-embedded {

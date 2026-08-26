@@ -13,11 +13,13 @@ export const THEME_IDS = [
   'sand',
   'lavendel',
   'stein',
+  'nordlys',
   'skog-lys',
   'kyst-lys',
   'sand-lys',
   'lavendel-lys',
   'stein-lys',
+  'nordlys-lys',
 ] as const
 
 export type ThemeId = (typeof THEME_IDS)[number]
@@ -66,6 +68,13 @@ export const THEMES: {
     swatch: ['#1c1c1c', '#b8b0a4', '#eceae6'],
   },
   {
+    id: 'nordlys',
+    name: 'Nordlys',
+    blurb: 'Elektrisk cyan og midnattslilla',
+    tone: 'dark',
+    swatch: ['#0c1020', '#5ef0e0', '#c478ff'],
+  },
+  {
     id: 'skog-lys',
     name: 'Skog lys',
     blurb: 'Dugg og blek mose',
@@ -99,6 +108,13 @@ export const THEMES: {
     blurb: 'Porselen og kalk',
     tone: 'light',
     swatch: ['#d8d4ce', '#6e6a60', '#2e2c28'],
+  },
+  {
+    id: 'nordlys-lys',
+    name: 'Nordlys lys',
+    blurb: 'Polarsol og isblå dis',
+    tone: 'light',
+    swatch: ['#dce8f4', '#1a9e94', '#2a2858'],
   },
 ]
 
