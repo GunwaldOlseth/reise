@@ -7,6 +7,7 @@ import { CountdownCard, HolidayCountdown, osloWallTimeMs } from './HolidayCountd
 import { nextScheduledDeparture } from './transportSchedule'
 import {
   activitiesForDay,
+  activityDisplayName,
   activityKindLabel,
   addDaysIso,
   cityStayDays,
@@ -699,7 +700,7 @@ export function JourneyLive({
                 >
                   {activityKindLabel(sight.kind)}
                 </span>
-                <strong>{sight.title}</strong>
+                <strong>{activityDisplayName(sight)}</strong>
                 <span className="v2-meta">
                   {[
                     [sight.startTime, sight.endTime].filter(Boolean).join('–'),

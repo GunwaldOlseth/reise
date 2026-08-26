@@ -7,6 +7,7 @@ import {
 } from '../api'
 import {
   compactLive,
+  activityDisplayName,
   activityKindLabel,
   isPackageStop,
   liveKindLabel,
@@ -181,8 +182,9 @@ export function journeyExpenseSummary(journey: Journey): TripExpenseSummary {
     }
     pricedCount += 1
     const kind = activityKindLabel(activity.kind)
-    const title = activity.title.trim()
-      ? `${kind} · ${activity.title.trim()}`
+    const label = activityDisplayName(activity)
+    const title = label !== activityKindLabel(activity.kind)
+      ? `${kind} · ${label}`
       : kind
     const offset =
       typeof dayOffsetOverride === 'number'

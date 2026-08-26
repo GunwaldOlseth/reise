@@ -197,7 +197,10 @@ export type JourneySight = JourneyActivity
 
 export interface JourneyActivity {
   id: string
+  /** City (with place search suggestions in the UI). */
   title: string
+  /** Specific place / venue — plain text, no suggestions. */
+  place?: string
   notes?: string
   url?: string
   /** Default sight (severdighet). */
@@ -1888,6 +1891,18 @@ export function activityKindLabel(kind?: JourneyActivityKind | string): string {
   }
 }
 
+/** Primary label for an activity in lists, previews and expenses. */
+export function activityDisplayName(
+  activity: Pick<JourneyActivity, 'title' | 'place' | 'kind'> | null | undefined,
+): string {
+  const city = (activity?.title || '').trim()
+  const place = (activity?.place || '').trim()
+  if (place && city) return `${place} · ${city}`
+  if (place) return place
+  if (city) return city
+  return activityKindLabel(activity?.kind)
+}
+
 export function newSight(
   sortOrder = 0,
   kind: JourneyActivityKind = 'sight',
@@ -1896,6 +1911,7 @@ export function newSight(
   return {
     id: newSightId(),
     title: '',
+    place: '',
     notes: '',
     url: '',
     kind,
@@ -1924,6 +1940,7 @@ export function normalizeSights(
         ...s,
         id: s.id || newSightId(),
         title: s.title || '',
+        place: (s.place || '').trim(),
         notes: s.notes || '',
         url: s.url || '',
         kind,
@@ -1946,6 +1963,7 @@ export function normalizeSights(
     .filter(
       (s) =>
         s.title.trim() ||
+        s.place.trim() ||
         s.notes.trim() ||
         s.url.trim() ||
         s.startTime.trim() ||

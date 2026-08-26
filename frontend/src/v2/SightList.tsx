@@ -3,6 +3,7 @@ import { ClockTimeInput } from './ClockTimeInput'
 import { CitySuggestFields } from '../CitySuggest'
 import { TrashIcon } from '../TransportModeIcon'
 import {
+  activityDisplayName,
   activityKindLabel,
   activityPurpose,
   newSight,
@@ -21,6 +22,7 @@ function ordered(list: JourneyActivity[]): JourneyActivity[] {
 function isBlank(s: JourneyActivity): boolean {
   return (
     !s.title.trim() &&
+    !(s.place || '').trim() &&
     !(s.notes || '').trim() &&
     !(s.url || '').trim() &&
     !(s.startTime || '').trim() &&
@@ -117,6 +119,7 @@ export function SightList({
           ? {
               ...s,
               title: s.title.trim(),
+              place: (s.place || '').trim(),
               notes: (s.notes || '').trim(),
               url: (s.url || '').trim(),
               price: (s.price || '').trim(),
@@ -127,25 +130,17 @@ export function SightList({
     )
   }
 
-  function nameField(
+  function cityField(
     sight: JourneyActivity,
     idx: number,
-    kind: JourneyActivityKind,
     compactField: boolean,
   ) {
-    const placeholder = compactField
-      ? activityKindLabel(kind)
-      : kind === 'excursion'
-        ? 'F.eks. Cinque Terre-tur'
-        : kind === 'other'
-          ? 'F.eks. Middag, billetter…'
-          : 'F.eks. Castello'
     return (
       <CitySuggestFields
         city={sight.title || ''}
         country={suggestCountry}
-        cityLabel="Navn"
-        cityPlaceholder={placeholder}
+        cityLabel="By"
+        cityPlaceholder="F.eks. Roma"
         showCountry={false}
         hideHint
         hideLabel={compactField}
@@ -165,6 +160,47 @@ export function SightList({
     )
   }
 
+  function placeField(
+    sight: JourneyActivity,
+    idx: number,
+    kind: JourneyActivityKind,
+    compactField: boolean,
+  ) {
+    const placeholder = compactField
+      ? 'Sted'
+      : kind === 'excursion'
+        ? 'F.eks. Cinque Terre-tur'
+        : kind === 'other'
+          ? 'F.eks. Middag, billetter…'
+          : 'F.eks. Castello'
+    if (compactField) {
+      return (
+        <input
+          className="v2-activity-place-inline"
+          value={sight.place || ''}
+          disabled={disabled}
+          placeholder={placeholder}
+          title="Sted"
+          onChange={(e) => update(idx, { place: e.target.value })}
+          onBlur={() => commit(idx)}
+        />
+      )
+    }
+    return (
+      <label>
+        Sted
+        <input
+          value={sight.place || ''}
+          disabled={disabled}
+          placeholder={placeholder}
+          title="Sted"
+          onChange={(e) => update(idx, { place: e.target.value })}
+          onBlur={() => commit(idx)}
+        />
+      </label>
+    )
+  }
+
   function add(kind: JourneyActivityKind) {
     const row = newSight(draft.length, kind, dayOffset)
     setDraft((prev) => ordered([...prev, row]))
@@ -174,7 +210,7 @@ export function SightList({
   function remove(idx: number) {
     const row = draft[idx]
     const id = row?.id
-    const name = row?.title.trim() || activityKindLabel(row?.kind)
+    const name = activityDisplayName(row) || activityKindLabel(row?.kind)
     void askDelete({ title: `Slette ${name}?` }).then((ok) => {
       if (!ok) return
       emit(
@@ -228,7 +264,7 @@ export function SightList({
         {draft.map((sight, idx) => {
           const kind = normalizeKind(sight.kind)
           const expanded = openId === sight.id
-          const title = sight.title.trim() || activityKindLabel(kind)
+          const title = activityDisplayName(sight)
           const timeBits = [sight.startTime, sight.endTime]
             .filter(Boolean)
             .join('–')
@@ -242,7 +278,8 @@ export function SightList({
                 >
                   {kind === 'excursion' ? 'U' : kind === 'other' ? 'A' : 'S'}
                 </span>
-                {nameField(sight, idx, kind, true)}
+                {cityField(sight, idx, true)}
+                {placeField(sight, idx, kind, true)}
                 <input
                   className="v2-hop-price"
                   inputMode="decimal"
@@ -370,7 +407,8 @@ export function SightList({
                       )
                     }
                   />
-                  {nameField(sight, idx, kind, false)}
+                  {cityField(sight, idx, false)}
+                  {placeField(sight, idx, kind, false)}
                   <div className="v2-activity-times">
                     <label>
                       Fra
@@ -483,7 +521,7 @@ export function SightPreview({ sights }: { sights?: JourneyActivity[] | null }) 
               : activityKindLabel(s.kind)
           }
         >
-          {s.title}
+          {activityDisplayName(s)}
         </li>
       ))}
     </ul>
@@ -546,7 +584,7 @@ export function PlaceLinkedPreview({
               : activityKindLabel(s.kind)
           }
         >
-          {s.title}
+          {activityDisplayName(s)}
         </li>
       ))}
     </ul>

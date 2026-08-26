@@ -276,6 +276,7 @@ type JourneyCityDoc struct {
 type JourneySight struct {
 	ID         string `json:"id" firestore:"id"`
 	Title      string `json:"title" firestore:"title"`
+	Place      string `json:"place,omitempty" firestore:"place,omitempty"`
 	Notes      string `json:"notes,omitempty" firestore:"notes,omitempty"`
 	URL        string `json:"url,omitempty" firestore:"url,omitempty"`
 	Kind       string `json:"kind,omitempty" firestore:"kind,omitempty"` // sight | excursion | other
