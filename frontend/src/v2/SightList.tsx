@@ -12,7 +12,7 @@ import {
   type JourneyActivityKind,
 } from './journeyModel'
 import { useConfirmDelete } from './ConfirmDelete'
-import { PurposeToggle } from './PurposeToggle'
+import { PurposeToggle, PaidToggle } from './PurposeToggle'
 
 function ordered(list: JourneyActivity[]): JourneyActivity[] {
   return list.map((s, i) => ({ ...s, sortOrder: i }))
@@ -24,7 +24,8 @@ function isBlank(s: JourneyActivity): boolean {
     !(s.notes || '').trim() &&
     !(s.url || '').trim() &&
     !(s.startTime || '').trim() &&
-    !(s.endTime || '').trim()
+    !(s.endTime || '').trim() &&
+    !(s.price || '').trim()
   )
 }
 
@@ -118,6 +119,7 @@ export function SightList({
               title: s.title.trim(),
               notes: (s.notes || '').trim(),
               url: (s.url || '').trim(),
+              price: (s.price || '').trim(),
             }
           : s,
       ),
@@ -241,6 +243,28 @@ export function SightList({
                   {kind === 'excursion' ? 'U' : kind === 'other' ? 'A' : 'S'}
                 </span>
                 {nameField(sight, idx, kind, true)}
+                <input
+                  className="v2-hop-price"
+                  inputMode="decimal"
+                  placeholder="Pris"
+                  value={sight.price || ''}
+                  disabled={disabled}
+                  title="Pris"
+                  onChange={(e) => update(idx, { price: e.target.value })}
+                  onBlur={() => emit(draftRef.current, true)}
+                />
+                <PaidToggle
+                  checked={sight.paid || false}
+                  disabled={disabled}
+                  onChange={(paid) =>
+                    emit(
+                      draftRef.current.map((s, i) =>
+                        i === idx ? { ...s, paid } : s,
+                      ),
+                      true,
+                    )
+                  }
+                />
                 <button
                   type="button"
                   className="v2-via-remove"
@@ -295,11 +319,13 @@ export function SightList({
                   <span className="v2-activity-title">{title}</span>
                   {(timeBits ||
                     sight.notes?.trim() ||
+                    sight.price?.trim() ||
                     purpose === 'transfer') && (
                     <span className="v2-meta">
                       {[
                         timeBits,
                         sight.notes?.trim(),
+                        sight.price?.trim(),
                         purpose === 'transfer' ? 'Ikke stopp' : '',
                       ]
                         .filter(Boolean)
@@ -395,6 +421,34 @@ export function SightList({
                       onBlur={() => commit(idx)}
                     />
                   </label>
+                  <div className="v2-activity-prices">
+                    <label>
+                      Pris
+                      <input
+                        value={sight.price || ''}
+                        disabled={disabled}
+                        placeholder="500 kr"
+                        inputMode="decimal"
+                        title="Pris"
+                        onChange={(e) =>
+                          update(idx, { price: e.target.value })
+                        }
+                        onBlur={() => commit(idx)}
+                      />
+                    </label>
+                    <PaidToggle
+                      checked={sight.paid || false}
+                      disabled={disabled}
+                      onChange={(paid) =>
+                        emit(
+                          draftRef.current.map((s, i) =>
+                            i === idx ? { ...s, paid } : s,
+                          ),
+                          true,
+                        )
+                      }
+                    />
+                  </div>
                 </div>
               )}
             </div>

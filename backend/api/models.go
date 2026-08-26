@@ -283,6 +283,8 @@ type JourneySight struct {
 	StartTime  string `json:"startTime,omitempty" firestore:"startTime,omitempty"`
 	EndTime    string `json:"endTime,omitempty" firestore:"endTime,omitempty"`
 	Purpose    string `json:"purpose,omitempty" firestore:"purpose,omitempty"` // visit | transfer
+	Price      string `json:"price,omitempty" firestore:"price,omitempty"`
+	Paid       bool   `json:"paid,omitempty" firestore:"paid,omitempty"`
 	SortOrder  int    `json:"sortOrder" firestore:"sortOrder"`
 }
 

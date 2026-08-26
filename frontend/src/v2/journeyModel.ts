@@ -211,6 +211,10 @@ export interface JourneyActivity {
   endTime?: string
   /** Visit this place, or only change transport there. */
   purpose?: PlacePurpose
+  /** Price for utgifter (excursion, sight, other). */
+  price?: string
+  /** Whether the activity price is paid. */
+  paid?: boolean
   sortOrder: number
 }
 
@@ -1899,6 +1903,8 @@ export function newSight(
     startTime: '',
     endTime: '',
     purpose: 'visit',
+    price: '',
+    paid: false,
     sortOrder,
   }
 }
@@ -1932,6 +1938,8 @@ export function normalizeSights(
           ? normalizeClockTime(s.endTime) || s.endTime
           : '',
         purpose: activityPurpose(s),
+        price: (s.price || '').trim(),
+        paid: s.paid || false,
         sortOrder: i,
       }
     })
@@ -1941,7 +1949,8 @@ export function normalizeSights(
         s.notes.trim() ||
         s.url.trim() ||
         s.startTime.trim() ||
-        s.endTime.trim(),
+        s.endTime.trim() ||
+        s.price.trim(),
     )
 }
 

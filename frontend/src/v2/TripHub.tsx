@@ -655,6 +655,8 @@ function JourneyExpensesView({
           {' · '}
           Transport {formatExpenseAmount(summary.transport.total)}
           {' · '}
+          Program {formatExpenseAmount(summary.program.total)}
+          {' · '}
           Underveis {formatExpenseAmount(summary.live.total)}
         </p>
       </div>
@@ -713,6 +715,11 @@ function JourneyExpensesView({
         lines={summary.transport.lines}
       />
       <CategoryBlock
+        title="Utflukter og severdigheter"
+        total={summary.program.total}
+        lines={summary.program.lines}
+      />
+      <CategoryBlock
         title="Underveis"
         total={summary.live.total}
         lines={summary.live.lines}
@@ -749,6 +756,9 @@ function JourneyExpensesView({
                   : null,
                 d.cruise > 0
                   ? { label: 'Pakke', amount: d.cruise }
+                  : null,
+                d.program > 0
+                  ? { label: 'Program', amount: d.program }
                   : null,
                 d.live > 0
                   ? { label: 'Underveis', amount: d.live }
