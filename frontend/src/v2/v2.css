@@ -3276,8 +3276,10 @@ html {
 
 .v2-cruise-day-table td:nth-child(3),
 .v2-cruise-day-table td:nth-child(4),
+.v2-cruise-day-table td:nth-child(5),
 .v2-cruise-day-table th:nth-child(3),
-.v2-cruise-day-table th:nth-child(4) {
+.v2-cruise-day-table th:nth-child(4),
+.v2-cruise-day-table th:nth-child(5) {
   white-space: nowrap;
   width: 1%;
 }

@@ -226,6 +226,8 @@ export interface JourneyPackageDay {
   longitude?: number
   arriveTime?: string
   leaveTime?: string
+  /** Cruise: last call for passengers before departure (all aboard). */
+  allAboardTime?: string
 }
 
 /** Multi-day block on the journey thread (cruise, pakketur, charter, …). */
@@ -2164,6 +2166,7 @@ export function packageDayTableRow(
 ): {
   place: string
   arrive: string
+  allAboard: string
   leave: string
   portHours: string
   atSea: boolean
@@ -2172,6 +2175,7 @@ export function packageDayTableRow(
     return {
       place: opts.freeLabel,
       arrive: '',
+      allAboard: '',
       leave: '',
       portHours: '',
       atSea: true,
@@ -2192,7 +2196,14 @@ export function packageDayTableRow(
     opts.type === 'cruise' && isLast
       ? ''
       : (day.leaveTime || '').trim()
+  const allAboardRaw =
+    opts.type === 'cruise' && !isLast
+      ? (day.allAboardTime || '').trim()
+      : ''
   const arrive = arriveRaw ? normalizeClockTime(arriveRaw) || arriveRaw : ''
+  const allAboard = allAboardRaw
+    ? normalizeClockTime(allAboardRaw) || allAboardRaw
+    : ''
   const leave = leaveRaw ? normalizeClockTime(leaveRaw) || leaveRaw : ''
   const mins =
     arrive && leave
@@ -2203,6 +2214,7 @@ export function packageDayTableRow(
   return {
     place,
     arrive,
+    allAboard,
     leave,
     portHours: mins != null ? formatPackagePortHours(mins) : '',
     atSea: false,
@@ -2223,13 +2235,14 @@ export function formatPackageDayListLine(
   const row = packageDayTableRow(day, opts)
   if (row.atSea) return row.place
   const parts: string[] = [row.place]
-  if (row.arrive && row.leave) {
-    parts.push(`${row.arrive}–${row.leave}`)
-  } else if (row.arrive) {
-    parts.push(`Ank. ${row.arrive}`)
-  } else if (row.leave) {
-    parts.push(`Avg. ${row.leave}`)
-  }
+  const timeBits = [
+    row.arrive ? `Ank. ${row.arrive}` : '',
+    opts.type === 'cruise' && row.allAboard
+      ? `All aboard ${row.allAboard}`
+      : '',
+    row.leave ? `Avg. ${row.leave}` : '',
+  ].filter(Boolean)
+  if (timeBits.length) parts.push(timeBits.join(' · '))
   return parts.join(' · ')
 }
 
@@ -2364,6 +2377,10 @@ export function syncPackageDays(
         leaveTime: atSea || noLeave
           ? ''
           : normalizeClockTime((existing.leaveTime || '').trim()),
+        allAboardTime:
+          type === 'cruise' && !isLast && !atSea && !noLeave
+            ? normalizeClockTime((existing.allAboardTime || '').trim())
+            : '',
       })
       continue
     }
@@ -2377,6 +2394,7 @@ export function syncPackageDays(
       longitude: fillBase ? baseCoords?.longitude : undefined,
       arriveTime: '',
       leaveTime: '',
+      allAboardTime: '',
     })
   }
   return {

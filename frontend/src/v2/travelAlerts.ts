@@ -145,17 +145,19 @@ function collectCruiseEvents(journey: Journey, date: string): TimeAlertEvent[] {
         ? addDaysIso(stop.arriveDate, day.offset)
         : ''
       if (dayDate !== date) continue
+      const aboard = (day.allAboardTime || '').trim()
       const leave = (day.leaveTime || '').trim()
-      if (!leave) continue
-      const atMs = osloWallTimeMs(date, leave)
+      const alertTime = aboard || leave
+      if (!alertTime) continue
+      const atMs = osloWallTimeMs(date, alertTime)
       if (!Number.isFinite(atMs)) continue
       const port = placeName(day.city || pack?.basePlace || stop.city)
       out.push({
-        id: `cruise:${stop.id}:${day.id || day.offset}:${date}:${leave}`,
+        id: `cruise:${stop.id}:${day.id || day.offset}:${date}:${alertTime}`,
         kind: 'cruise',
         atMs,
-        title: `Cruiseavgang om kort tid`,
-        body: `${ship} · ${port} · ${leave}`,
+        title: aboard ? `All aboard om kort tid` : `Cruiseavgang om kort tid`,
+        body: `${ship} · ${port} · ${alertTime}`,
       })
     }
   }

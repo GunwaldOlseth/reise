@@ -23,9 +23,10 @@ const (
 
 // CruisePortCall is ship arrive/leave for one port day on a cruise.
 type CruisePortCall struct {
-	Date       string `json:"date" firestore:"date"` // YYYY-MM-DD
-	ArriveTime string `json:"arriveTime" firestore:"arriveTime"`
-	LeaveTime  string `json:"leaveTime" firestore:"leaveTime"`
+	Date          string `json:"date" firestore:"date"` // YYYY-MM-DD
+	ArriveTime    string `json:"arriveTime" firestore:"arriveTime"`
+	LeaveTime     string `json:"leaveTime" firestore:"leaveTime"`
+	AllAboardTime string `json:"allAboardTime" firestore:"allAboardTime"`
 }
 
 // CruiseActivity is an activity or note for the whole cruise (not a single port day).
@@ -206,8 +207,9 @@ type JourneyPackageDay struct {
 	Country    string  `json:"country,omitempty" firestore:"country,omitempty"`
 	Latitude   float64 `json:"latitude,omitempty" firestore:"latitude,omitempty"`
 	Longitude  float64 `json:"longitude,omitempty" firestore:"longitude,omitempty"`
-	ArriveTime string  `json:"arriveTime,omitempty" firestore:"arriveTime,omitempty"`
-	LeaveTime  string  `json:"leaveTime,omitempty" firestore:"leaveTime,omitempty"`
+	ArriveTime    string  `json:"arriveTime,omitempty" firestore:"arriveTime,omitempty"`
+	LeaveTime     string  `json:"leaveTime,omitempty" firestore:"leaveTime,omitempty"`
+	AllAboardTime string  `json:"allAboardTime,omitempty" firestore:"allAboardTime,omitempty"`
 }
 
 // JourneyPackage is a multi-day block (cruise, pakketur, charter, roadtrip, other).
