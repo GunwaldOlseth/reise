@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useConfirmDelete } from './ConfirmDelete'
 import { ClockTimeInput } from './ClockTimeInput'
 import { CitySuggestFields } from '../CitySuggest'
+import { normalizeClockTime } from '../api'
 import {
   addDaysIso,
   emptyPackage,
@@ -222,8 +223,20 @@ export function PackageWizard({
 
   async function finish() {
     setLocalError('')
+    const finalizedDays = (pack.days || []).map((day) => ({
+      ...day,
+      arriveTime: day.arriveTime
+        ? normalizeClockTime(day.arriveTime.trim()) || day.arriveTime.trim()
+        : '',
+      leaveTime: day.leaveTime
+        ? normalizeClockTime(day.leaveTime.trim()) || day.leaveTime.trim()
+        : '',
+      allAboardTime: day.allAboardTime
+        ? normalizeClockTime(day.allAboardTime.trim()) || day.allAboardTime.trim()
+        : '',
+    }))
     const nextPack = {
-      ...syncPackageDays(pack, type),
+      ...syncPackageDays({ ...pack, days: finalizedDays }, type),
       title: (pack.title || '').trim(),
       detail: (pack.detail || '').trim(),
       price: (pack.price || '').trim(),
