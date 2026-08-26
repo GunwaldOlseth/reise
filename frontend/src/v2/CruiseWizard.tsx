@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useConfirmDelete } from './ConfirmDelete'
+import { MapHideToggle } from './PurposeToggle'
 import { ClockTimeInput } from './ClockTimeInput'
 import { CitySuggestFields } from '../CitySuggest'
 import { normalizeClockTime } from '../api'
@@ -212,7 +213,10 @@ export function PackageWizard({
       type === 'cruise' && !isLast ? day.allAboardTime?.trim() : '',
       type === 'cruise' && !isLast ? day.leaveTime?.trim() : '',
     ].filter(Boolean)
-    return times.length ? `${place} · ${times.join('–')}` : place
+    const bits = [place]
+    if (day.hideOnMap) bits.push('Ikke på kart')
+    if (times.length) bits.push(times.join('–'))
+    return bits.join(' · ')
   }
 
   function dayRoleLabel(day: JourneyPackageDay, nights: number): string {
@@ -569,6 +573,7 @@ export function PackageWizard({
                             onChange={(e) =>
                               updateDay(day.id, {
                                 atSea: e.target.checked,
+                                hideOnMap: false,
                                 city: e.target.checked ? freeLabel : '',
                                 country: '',
                                 arriveTime: '',
@@ -588,6 +593,12 @@ export function PackageWizard({
                             over. Ingen ankomst — skipet starter her.
                           </p>
                           <div className="v2-cruise-times">
+                            <MapHideToggle
+                              value={!!day.hideOnMap}
+                              onChange={(hideOnMap) =>
+                                updateDay(day.id, { hideOnMap })
+                              }
+                            />
                             <ClockTimeInput
                               placeholder="A.ab."
                               aria-label="All aboard"
@@ -614,47 +625,55 @@ export function PackageWizard({
                       ) : (
                         !day.atSea && (
                           <div className="v2-cruise-edit-port">
-                            <CitySuggestFields
-                              city={day.city || ''}
-                              country={day.country || ''}
-                              cityLabel={placeLabel}
-                              cityPlaceholder={`${placeLabel}…`}
-                              showCountry={false}
-                              hideHint
-                              onCityChange={(city) =>
-                                updateDay(day.id, {
-                                  city,
-                                  latitude: undefined,
-                                  longitude: undefined,
-                                  ...(type === 'cruise' &&
-                                  homePort &&
-                                  !isLast &&
-                                  city.trim().toLowerCase() ===
-                                    homePort.toLowerCase()
-                                    ? { arriveTime: '' }
-                                    : {}),
-                                })
-                              }
-                              onCountryChange={(country) =>
-                                updateDay(day.id, { country })
-                              }
-                              onSelectPlace={(city, country, place) =>
-                                updateDay(day.id, {
-                                  city,
-                                  country: country || '',
-                                  latitude: place?.latitude,
-                                  longitude: place?.longitude,
-                                  ...(type === 'cruise' &&
-                                  homePort &&
-                                  !isLast &&
-                                  city.trim().toLowerCase() ===
-                                    homePort.toLowerCase()
-                                    ? { arriveTime: '' }
-                                    : {}),
-                                })
-                              }
-                              className="city-suggest-via"
-                            />
+                            <div className="v2-cruise-edit-place">
+                              <CitySuggestFields
+                                city={day.city || ''}
+                                country={day.country || ''}
+                                cityLabel={placeLabel}
+                                cityPlaceholder={`${placeLabel}…`}
+                                showCountry={false}
+                                hideHint
+                                onCityChange={(city) =>
+                                  updateDay(day.id, {
+                                    city,
+                                    latitude: undefined,
+                                    longitude: undefined,
+                                    ...(type === 'cruise' &&
+                                    homePort &&
+                                    !isLast &&
+                                    city.trim().toLowerCase() ===
+                                      homePort.toLowerCase()
+                                      ? { arriveTime: '' }
+                                      : {}),
+                                  })
+                                }
+                                onCountryChange={(country) =>
+                                  updateDay(day.id, { country })
+                                }
+                                onSelectPlace={(city, country, place) =>
+                                  updateDay(day.id, {
+                                    city,
+                                    country: country || '',
+                                    latitude: place?.latitude,
+                                    longitude: place?.longitude,
+                                    ...(type === 'cruise' &&
+                                    homePort &&
+                                    !isLast &&
+                                    city.trim().toLowerCase() ===
+                                      homePort.toLowerCase()
+                                      ? { arriveTime: '' }
+                                      : {}),
+                                  })
+                                }
+                                className="city-suggest-via"
+                              />
+                              <MapHideToggle
+                                value={!!day.hideOnMap}
+                                onChange={(hideOnMap) =>
+                                  updateDay(day.id, { hideOnMap })
+                                }
+                              />
+                            </div>
                             <div className="v2-cruise-times">
                               {!(
                                 type === 'cruise' &&

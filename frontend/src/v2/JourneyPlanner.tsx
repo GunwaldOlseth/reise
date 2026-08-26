@@ -120,7 +120,7 @@ import { NoteEditor } from './NoteEditor'
 import { compactNoteHtml } from './noteHtml'
 import { ClockTimeInput } from './ClockTimeInput'
 import { useConfirmDelete } from './ConfirmDelete'
-import { PurposeToggle, StayKindToggle, TicketToggle, PaidToggle } from './PurposeToggle'
+import { PurposeToggle, StayKindToggle, TicketToggle, PaidToggle, MapHideToggle } from './PurposeToggle'
 import { TransportCompanyInput } from './TransportCompanyInput'
 import { SightList, SightPreview, PlaceLinkedPreview } from './SightList'
 import './v2.css'
@@ -1242,6 +1242,8 @@ function PlaceStopPanel({
               ) : null}
               {stopPurpose(stop) === 'transfer' ? (
                 <span className="v2-place-bit-text">Ikke stopp</span>
+              ) : stop.hideOnMap ? (
+                <span className="v2-place-bit-text">Ikke på kart</span>
               ) : hotel ? (
                 <span className="v2-place-bit">
                   <PlaceMetaIcon name="hotel" size={13} />
@@ -1312,6 +1314,13 @@ function PlaceStopPanel({
                   disabled={disabled}
                   onChange={(purpose) =>
                     patchStop({ purpose }, { immediate: true })
+                  }
+                />
+                <MapHideToggle
+                  value={!!stop.hideOnMap}
+                  disabled={disabled}
+                  onChange={(hideOnMap) =>
+                    patchStop({ hideOnMap }, { immediate: true })
                   }
                 />
                 <CitySuggestFields
@@ -2733,6 +2742,15 @@ function TransportBlock({
                                 disabled={disabled}
                                 onChange={(purpose) =>
                                   updateSegment(idx, { purpose }, true)
+                                }
+                              />
+                            ) : null}
+                            {!goal ? (
+                              <MapHideToggle
+                                value={!!seg.hideOnMap}
+                                disabled={disabled}
+                                onChange={(hideOnMap) =>
+                                  updateSegment(idx, { hideOnMap }, true)
                                 }
                               />
                             ) : null}

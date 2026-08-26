@@ -210,6 +210,7 @@ type JourneyPackageDay struct {
 	ArriveTime    string  `json:"arriveTime,omitempty" firestore:"arriveTime,omitempty"`
 	LeaveTime     string  `json:"leaveTime,omitempty" firestore:"leaveTime,omitempty"`
 	AllAboardTime string  `json:"allAboardTime,omitempty" firestore:"allAboardTime,omitempty"`
+	HideOnMap     bool    `json:"hideOnMap,omitempty" firestore:"hideOnMap,omitempty"`
 }
 
 // JourneyPackage is a multi-day block (cruise, pakketur, charter, roadtrip, other).
@@ -261,6 +262,7 @@ type JourneyStop struct {
 	Docs       []JourneyCityDoc `json:"docs,omitempty" firestore:"docs,omitempty"`
 	Sights     []JourneySight   `json:"sights,omitempty" firestore:"sights,omitempty"`
 	Purpose    string          `json:"purpose,omitempty" firestore:"purpose,omitempty"` // visit | transfer
+	HideOnMap  bool            `json:"hideOnMap,omitempty" firestore:"hideOnMap,omitempty"`
 	SortOrder  int             `json:"sortOrder" firestore:"sortOrder"`
 }
 
@@ -342,6 +344,7 @@ type JourneyVia struct {
 	Options   []JourneyTransportOption `json:"options,omitempty" firestore:"options,omitempty"`
 	Sights    []JourneySight           `json:"sights,omitempty" firestore:"sights,omitempty"`
 	Purpose    string                   `json:"purpose,omitempty" firestore:"purpose,omitempty"`       // visit | transfer
+	HideOnMap  bool                     `json:"hideOnMap,omitempty" firestore:"hideOnMap,omitempty"`
 	Connection string                   `json:"connection,omitempty" firestore:"connection,omitempty"` // direct | change
 	ChangePlace    string               `json:"changePlace,omitempty" firestore:"changePlace,omitempty"`
 	ChangePlatform string               `json:"changePlatform,omitempty" firestore:"changePlatform,omitempty"`
