@@ -1233,6 +1233,47 @@ export function normalizeEditableClockTime(raw: string): string {
   return t;
 }
 
+function isCompleteClockHHmm(value: string): boolean {
+  return /^\d{2}:\d{2}$/.test(value);
+}
+
+/**
+ * Live value for clock inputs. Formats compact "2245" → "22:45", keeps "224",
+ * and recovers from bad states like "02:245" when more digits are entered.
+ */
+export function formatClockTimeInput(raw: string): string {
+  const t = (raw || '').trim();
+  if (!t) return '';
+  const complete = normalizeCompleteClockTime(t);
+  if (isCompleteClockHHmm(complete)) return complete;
+
+  const digits = t.replace(/\D/g, '');
+  if (digits.length >= 4) {
+    const fromFour = normalizeCompleteClockTime(digits.slice(-4));
+    if (isCompleteClockHHmm(fromFour)) return fromFour;
+  }
+  if (!t.includes(':') && digits) return digits;
+  return t;
+}
+
+/**
+ * Finalize a clock field on blur. Never turns in-progress "224" into "02:24".
+ */
+export function commitClockTimeInput(raw: string): string {
+  const t = (raw || '').trim();
+  if (!t) return '';
+  const live = formatClockTimeInput(t);
+  if (isCompleteClockHHmm(live)) return live;
+
+  const digits = t.replace(/\D/g, '');
+  if (digits.length === 3 && !t.includes(':')) {
+    return t;
+  }
+
+  const norm = normalizeClockTime(t);
+  return isCompleteClockHHmm(norm) ? norm : t;
+}
+
 /** Minutes from midnight for HH:mm / HH:mm:ss; empty/invalid sorts last. */
 export function arriveTimeSortKey(time?: string): number {
   const t = normalizeCompleteClockTime(time || '');
