@@ -18,6 +18,7 @@ import {
   savePlannerSettings,
   saveTheme,
   THEMES,
+  THEME_GROUPS,
   type HomePlace,
   type PlannerSettings,
   type ThemeId,
@@ -120,35 +121,46 @@ function AppearancePage({ onBack }: { onBack: () => void }) {
         <section className="v2-settings-card">
           <h2>Fargetema</h2>
           <p className="v2-meta">
-            Fra rolige naturtoner til elektrisk nordlys.
+            Natur, sprek farger og gammeldags uttrykk.
           </p>
-          {(
-            [
-              ['Mørke', 'dark'],
-              ['Lyse', 'light'],
-            ] as const
-          ).map(([label, tone]) => (
-            <div key={tone}>
-              <p className="v2-theme-group">{label}</p>
-              <div className="v2-theme-grid">
-                {THEMES.filter((t) => t.tone === tone).map((t) => (
-                  <button
-                    key={t.id}
-                    type="button"
-                    className={`v2-theme-card${theme === t.id ? ' is-active' : ''}`}
-                    title={t.blurb}
-                    onClick={() => setTheme(saveTheme(t.id))}
-                  >
-                    <span className="v2-theme-swatches" aria-hidden>
-                      {t.swatch.map((c) => (
-                        <span key={c} style={{ background: c }} />
+          {THEME_GROUPS.map((group) => (
+            <div key={group.id}>
+              <p className="v2-theme-section">{group.label}</p>
+              {(
+                [
+                  ['Mørke', 'dark'],
+                  ['Lyse', 'light'],
+                ] as const
+              ).map(([label, tone]) => {
+                const items = THEMES.filter(
+                  (t) => t.group === group.id && t.tone === tone,
+                )
+                if (items.length === 0) return null
+                return (
+                  <div key={`${group.id}-${tone}`}>
+                    <p className="v2-theme-group">{label}</p>
+                    <div className="v2-theme-grid">
+                      {items.map((t) => (
+                        <button
+                          key={t.id}
+                          type="button"
+                          className={`v2-theme-card${theme === t.id ? ' is-active' : ''}`}
+                          title={t.blurb}
+                          onClick={() => setTheme(saveTheme(t.id))}
+                        >
+                          <span className="v2-theme-swatches" aria-hidden>
+                            {t.swatch.map((c) => (
+                              <span key={c} style={{ background: c }} />
+                            ))}
+                          </span>
+                          <strong>{t.name}</strong>
+                          <span className="v2-meta">{t.blurb}</span>
+                        </button>
                       ))}
-                    </span>
-                    <strong>{t.name}</strong>
-                    <span className="v2-meta">{t.blurb}</span>
-                  </button>
-                ))}
-              </div>
+                    </div>
+                  </div>
+                )
+              })}
             </div>
           ))}
         </section>
