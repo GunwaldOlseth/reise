@@ -58,11 +58,11 @@ fi
 
 if [[ "$CHECK" == true ]]; then
   echo "==> Checking Actions secrets on $REPO"
-  if gh secret list --repo "$REPO" 2>/dev/null | awk '{print $1}' | grep -qx GCP_SA_KEY; then
-    echo "==> GCP_SA_KEY is configured"
+  if gh secret list --repo "$REPO" 2>/dev/null | awk '{print $1}' | grep -qx SA_REISE; then
+    echo "==> SA_REISE is configured"
     exit 0
   fi
-  echo "==> GCP_SA_KEY is NOT set on $REPO" >&2
+  echo "==> SA_REISE is NOT set on $REPO" >&2
   echo "    Run: bash scripts/setup-github-actions.sh [--trigger]" >&2
   exit 1
 fi
@@ -95,16 +95,16 @@ if ! python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); assert d.get("
   exit 1
 fi
 
-echo "==> Setting GCP_SA_KEY secret on $REPO"
-if ! gh secret set GCP_SA_KEY --repo "$REPO" <"$KEY_FILE"; then
+echo "==> Setting SA_REISE secret on $REPO"
+if ! gh secret set SA_REISE --repo "$REPO" <"$KEY_FILE"; then
   echo "" >&2
   echo "Failed to set secret. Common causes:" >&2
   echo "  - gh is logged in as a bot/integration without admin access" >&2
   echo "  - Run: gh auth login  (as repo owner/admin)" >&2
-  echo "  - Or add manually: GitHub → Settings → Secrets → Actions → GCP_SA_KEY" >&2
+  echo "  - Or add manually: GitHub → Settings → Secrets → Actions → SA_REISE" >&2
   exit 1
 fi
-echo "==> GCP_SA_KEY configured"
+echo "==> SA_REISE configured"
 
 if [[ "$TRIGGER" == true ]]; then
   echo "==> Triggering deploy workflows on master"

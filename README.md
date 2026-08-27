@@ -88,7 +88,7 @@ Push til `master` deployer automatisk til Cloud Run når relevante filer endres:
 
 Begge kan også kjøres manuelt under **Actions → Run workflow**.
 
-**Repository secret (påkrevd):** `GCP_SA_KEY` — JSON-nøkkel for service account med rettigheter til Cloud Run og Cloud Build (f.eks. `deploy-app@homey-376215.iam.gserviceaccount.com`).
+**Repository secret (påkrevd):** `SA_REISE` — JSON-nøkkel for service account med rettigheter til Cloud Run og Cloud Build (f.eks. `deploy-app@homey-376215.iam.gserviceaccount.com`).
 
 Engangsoppsett (lokalt, med `gh` innlogget som repo-admin):
 
@@ -100,7 +100,7 @@ Med nøkkelfil: `bash scripts/setup-github-actions.sh path/to/deploy-app-key.jso
 
 Sjekk om secret finnes: `bash scripts/setup-github-actions.sh --check`
 
-Alternativt: **Settings → Secrets and variables → Actions → New repository secret** → navn `GCP_SA_KEY`, verdi = hele JSON-filen.
+Alternativt: **Settings → Secrets and variables → Actions → New repository secret** → navn `SA_REISE`, verdi = hele JSON-filen.
 
 Eksisterende miljøvariabler på backend (`ADMIN_PASSWORD`, `BACKUP_CRON_SECRET`, …) blir ikke fjernet; workflowen oppdaterer bare `FIREBASE_PROJECT_ID`.
 
