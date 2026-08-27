@@ -5773,6 +5773,7 @@ html[data-theme='plasma'] .v2-shell {
 .v2-live-ride-main {
   display: flex;
   align-items: flex-start;
+  justify-content: space-between;
   gap: 0.55rem;
 }
 

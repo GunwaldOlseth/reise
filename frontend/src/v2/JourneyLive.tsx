@@ -25,6 +25,7 @@ import {
   newLiveEntry,
   normalizeLive,
   optionIsTaken,
+  packageFreeDayLabel,
   packageOf,
   stopDepartDate,
   stopGoalLabel,
@@ -251,6 +252,7 @@ function placesOnDate(journey: Journey, date: string): DayPlace[] {
           stop,
           city: stop.city || 'Hjem',
           notes: stop.notes,
+          docs: stop.docs,
           arriving: true,
         })
       }
@@ -268,7 +270,9 @@ function placesOnDate(journey: Journey, date: string): DayPlace[] {
         if (day?.atSea) {
           out.push({
             stop,
-            city: 'Til sjøs',
+            city: packageFreeDayLabel(stop.kind),
+            notes: day?.notes,
+            docs: day?.docs,
             arriving: offset === 0,
           })
           continue
@@ -294,6 +298,7 @@ function placesOnDate(journey: Journey, date: string): DayPlace[] {
       city: stopGoalLabel(stop, 'By'),
       hotel: effectiveHotelName(stop.stay),
       notes: stop.notes,
+      docs: stop.docs,
       arriving: (stop.arriveDate || '').trim() === date,
     })
   }
@@ -564,7 +569,7 @@ export function JourneyLive({
                     <span className="v2-live-hotel-miss"> · uten hotell</span>
                   ) : null}
                 </span>
-                <CityInfoTip text={place.notes} docs={place.docs ?? place.stop.docs} />
+                <CityInfoTip text={place.notes} docs={place.docs} />
               </li>
             ))}
           </ul>
@@ -593,6 +598,7 @@ export function JourneyLive({
                             : '')}
                       </span>
                     </div>
+                    <CityInfoTip text={ride.via.notes} />
                   </div>
                   <ul className="v2-live-ride-opts">
                     {ride.options.map((option) => {
@@ -704,14 +710,12 @@ export function JourneyLive({
                   {activityKindLabel(sight.kind)}
                 </span>
                 <strong>{activityDisplayName(sight)}</strong>
-                <span className="v2-meta">
-                  {[
-                    [sight.startTime, sight.endTime].filter(Boolean).join('–'),
-                    sight.notes?.trim(),
-                  ]
-                    .filter(Boolean)
-                    .join(' · ')}
-                </span>
+                {sight.startTime || sight.endTime ? (
+                  <span className="v2-meta">
+                    {[sight.startTime, sight.endTime].filter(Boolean).join('–')}
+                  </span>
+                ) : null}
+                <CityInfoTip text={sight.notes} />
               </li>
             ))}
           </ul>
