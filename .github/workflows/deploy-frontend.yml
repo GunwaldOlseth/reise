@@ -37,15 +37,15 @@ jobs:
 
       - name: Check deploy secret
         run: |
-          if [ -z "${{ secrets.GCP_SA_KEY }}" ]; then
-            echo "::error::GCP_SA_KEY is not set. Run: bash scripts/setup-github-actions.sh <key.json>"
+          if [ -z "${{ secrets.SA_REISE }}" ]; then
+            echo "::error::SA_REISE is not set. Add the deploy service account JSON in GitHub → Settings → Secrets → Actions, or run: bash scripts/setup-github-actions.sh <key.json>"
             exit 1
           fi
 
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
         with:
-          credentials_json: ${{ secrets.GCP_SA_KEY }}
+          credentials_json: ${{ secrets.SA_REISE }}
 
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
