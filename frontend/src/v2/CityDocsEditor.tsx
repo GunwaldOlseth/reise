@@ -120,17 +120,20 @@ export function CityDocsEditor({
   return (
     <div className="v2-city-docs">
       {showSectionHead && sectionLabel ? (
-        <div className="v2-sights-head">
-          <span>{sectionLabel}</span>
-          <button
-            type="button"
-            className="v2-chip-btn"
-            disabled={disabled}
-            title="Nytt dokument"
-            onClick={() => addDocument()}
-          >
-            + Dokument
-          </button>
+        <div className="v2-city-docs-head">
+          <span className="v2-city-docs-head-label">
+            {sectionLabel}
+            <button
+              type="button"
+              className="v2-city-docs-add"
+              disabled={disabled}
+              aria-label="Nytt dokument"
+              title="Nytt dokument"
+              onClick={() => addDocument()}
+            >
+              +
+            </button>
+          </span>
         </div>
       ) : null}
       <ul className="v2-city-docs-list">
@@ -175,7 +178,7 @@ export function CityDocsEditor({
                       onMouseDown={(e) => e.preventDefault()}
                       onClick={() => addDocument()}
                     >
-                      + Dokument
+                      +
                     </button>
                   ) : null}
                   {docs.length > 1 ? (
