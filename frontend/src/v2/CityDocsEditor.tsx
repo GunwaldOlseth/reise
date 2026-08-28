@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from 'react'
 import { TrashIcon } from '../TransportModeIcon'
 import { NoteEditor } from './NoteEditor'
 import {
@@ -10,6 +11,68 @@ import {
 import { compactNoteHtml } from './noteHtml'
 import { useConfirmDelete } from './ConfirmDelete'
 
+function CityDocTitle({
+  doc,
+  index,
+  editing,
+  disabled,
+  placeholder,
+  onChange,
+  onCommit,
+  onEndEdit,
+}: {
+  doc: JourneyCityDoc
+  index: number
+  editing: boolean
+  disabled?: boolean
+  placeholder: string
+  onChange: (title: string) => void
+  onCommit: (title: string) => void
+  onEndEdit: () => void
+}) {
+  const inputRef = useRef<HTMLInputElement>(null)
+  const display = doc.title.trim() || placeholder
+
+  useEffect(() => {
+    if (!editing) return
+    const el = inputRef.current
+    if (!el) return
+    el.focus()
+    el.select()
+  }, [editing])
+
+  if (editing) {
+    return (
+      <input
+        ref={inputRef}
+        className="v2-city-doc-title-input"
+        value={doc.title}
+        disabled={disabled}
+        placeholder={index === 0 ? placeholder : 'Tittel'}
+        aria-label="Dokumenttittel"
+        onChange={(e) => onChange(e.target.value)}
+        onBlur={(e) => {
+          onCommit(e.target.value.trim())
+          onEndEdit()
+        }}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault()
+            onCommit((e.target as HTMLInputElement).value.trim())
+            onEndEdit()
+          }
+          if (e.key === 'Escape') {
+            e.preventDefault()
+            onEndEdit()
+          }
+        }}
+      />
+    )
+  }
+
+  return <div className="v2-city-doc-title">{display}</div>
+}
+
 export function CityDocsEditor({
   value,
   disabled,
@@ -20,6 +83,7 @@ export function CityDocsEditor({
 }: {
   value: CityDocHolder
   disabled?: boolean
+  /** Section label above the list. Empty string = compact (activity notes). */
   heading?: string
   firstTitlePlaceholder?: string
   firstBodyPlaceholder?: string
@@ -30,6 +94,11 @@ export function CityDocsEditor({
 }) {
   const askDelete = useConfirmDelete()
   const docs = cityDocsForEdit(value, firstTitlePlaceholder)
+  const compact = heading === ''
+  const [titleEditId, setTitleEditId] = useState<string | null>(null)
+
+  const showSectionHead = !compact || docs.length > 1
+  const sectionLabel = compact && docs.length > 1 ? 'Dokumenter' : heading
 
   function commit(nextDocs: JourneyCityDoc[], immediate?: boolean) {
     onChange(applyCityDocs(value, nextDocs), { immediate })
@@ -42,44 +111,41 @@ export function CityDocsEditor({
     )
   }
 
+  function addDocument() {
+    const newDoc = newCityDoc(docs.length, '')
+    commit([...docs, newDoc])
+    setTitleEditId(newDoc.id)
+  }
+
   return (
     <div className="v2-city-docs">
-      <div className="v2-sights-head">
-        <span>{heading}</span>
-        <button
-          type="button"
-          className="v2-chip-btn"
-          disabled={disabled}
-          title="Nytt dokument"
-          onClick={() =>
-            commit([
-              ...docs,
-              newCityDoc(docs.length, `Notat ${docs.length + 1}`),
-            ])
-          }
-        >
-          + Dokument
-        </button>
-      </div>
+      {showSectionHead && sectionLabel ? (
+        <div className="v2-sights-head">
+          <span>{sectionLabel}</span>
+          <button
+            type="button"
+            className="v2-chip-btn"
+            disabled={disabled}
+            title="Nytt dokument"
+            onClick={() => addDocument()}
+          >
+            + Dokument
+          </button>
+        </div>
+      ) : null}
       <ul className="v2-city-docs-list">
         {docs.map((doc, i) => (
           <li key={doc.id} className="v2-city-doc">
-            <div className="v2-city-doc-head">
-              <input
-                value={doc.title}
-                disabled={disabled}
-                placeholder={i === 0 ? firstTitlePlaceholder : 'Tittel'}
-                aria-label="Dokumenttittel"
-                onChange={(e) => patchDoc(doc.id, { title: e.target.value })}
-                onBlur={(e) =>
-                  patchDoc(
-                    doc.id,
-                    { title: e.target.value.trim() },
-                    true,
-                  )
-                }
-              />
-            </div>
+            <CityDocTitle
+              doc={doc}
+              index={i}
+              editing={titleEditId === doc.id}
+              disabled={disabled}
+              placeholder={i === 0 ? firstTitlePlaceholder : 'Notat'}
+              onChange={(title) => patchDoc(doc.id, { title })}
+              onCommit={(title) => patchDoc(doc.id, { title }, true)}
+              onEndEdit={() => setTitleEditId(null)}
+            />
             <NoteEditor
               value={doc.body}
               disabled={disabled}
@@ -87,28 +153,59 @@ export function CityDocsEditor({
                 i === 0 ? firstBodyPlaceholder : 'Skriv notatet her…'
               }
               toolbarExtra={
-                docs.length > 1 ? (
+                <>
                   <button
                     type="button"
-                    className="v2-note-tool v2-note-tool-del"
+                    className="v2-note-tool v2-note-tool-title"
                     disabled={disabled}
-                    aria-label="Slett dokument"
-                    title="Slett dokument"
+                    aria-label="Rediger tittel"
+                    title="Rediger tittel"
                     onMouseDown={(e) => e.preventDefault()}
-                    onClick={() => {
-                      const name = doc.title.trim() || 'dokumentet'
-                      void askDelete({ title: `Slette ${name}?` }).then((ok) => {
-                        if (!ok) return
-                        commit(
-                          docs.filter((d) => d.id !== doc.id),
-                          true,
-                        )
-                      })
-                    }}
+                    onClick={() => setTitleEditId(doc.id)}
                   >
-                    <TrashIcon size={14} />
+                    T
                   </button>
-                ) : undefined
+                  {compact && docs.length === 1 ? (
+                    <button
+                      type="button"
+                      className="v2-note-tool v2-note-tool-add"
+                      disabled={disabled}
+                      aria-label="Nytt dokument"
+                      title="Nytt dokument"
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => addDocument()}
+                    >
+                      + Dokument
+                    </button>
+                  ) : null}
+                  {docs.length > 1 ? (
+                    <button
+                      type="button"
+                      className="v2-note-tool v2-note-tool-del"
+                      disabled={disabled}
+                      aria-label="Slett dokument"
+                      title="Slett dokument"
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => {
+                        const name =
+                          doc.title.trim() ||
+                          (i === 0 ? firstTitlePlaceholder : 'dokumentet')
+                        void askDelete({ title: `Slette ${name}?` }).then(
+                          (ok) => {
+                            if (!ok) return
+                            if (titleEditId === doc.id) setTitleEditId(null)
+                            commit(
+                              docs.filter((d) => d.id !== doc.id),
+                              true,
+                            )
+                          },
+                        )
+                      }}
+                    >
+                      <TrashIcon size={14} />
+                    </button>
+                  ) : null}
+                </>
               }
               onChange={(html) => patchDoc(doc.id, { body: html })}
               onBlur={(html) =>
