@@ -72,6 +72,8 @@ func normalizeTransportOptions(via *JourneyVia) {
 func normalizeSights(sights []JourneySight) {
 	for i := range sights {
 		sights[i].Purpose = normalizePurpose(sights[i].Purpose)
+		sights[i].Notes = strings.TrimSpace(sights[i].Notes)
+		normalizeCityDocHolder(&sights[i].Notes, &sights[i].Docs)
 	}
 }
 

@@ -4424,9 +4424,13 @@ html[data-theme='plasma'] .v2-shell {
 
 .v2-activity-head {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-columns: minmax(0, 1fr) auto auto auto;
   gap: 0.25rem;
   align-items: stretch;
+}
+
+.v2-activity-body .v2-city-docs {
+  margin-top: 0.15rem;
 }
 
 .v2-activity-summary {

@@ -201,7 +201,6 @@ export interface JourneyActivity {
   title: string
   /** Specific place / venue — plain text, no suggestions. */
   place?: string
-  notes?: string
   url?: string
   /** Default sight (severdighet). */
   kind?: JourneyActivityKind
@@ -218,6 +217,10 @@ export interface JourneyActivity {
   price?: string
   /** Whether the activity price is paid. */
   paid?: boolean
+  /** Legacy single note; kept in sync with the first document. */
+  notes?: string
+  /** Info documents for this activity. */
+  docs?: JourneyCityDoc[]
   sortOrder: number
 }
 
@@ -385,14 +388,24 @@ export function cityDocsOf(
 /** Always at least one row in the editor. */
 export function cityDocsForEdit(
   stop: CityDocHolder | null | undefined,
+  defaultFirstTitle = 'Om byen',
 ): JourneyCityDoc[] {
   const raw = normalizeCityDocs(stop?.docs, true)
   if (raw.length) return raw
   const note = (stop?.notes || '').trim()
   if (noteHasContent(note)) {
-    return [{ id: 'notes', title: 'Om byen', body: note, sortOrder: 0 }]
+    return [
+      {
+        id: 'notes',
+        title: defaultFirstTitle,
+        body: note,
+        sortOrder: 0,
+      },
+    ]
   }
-  return [{ id: 'notes', title: 'Om byen', body: '', sortOrder: 0 }]
+  return [
+    { id: 'notes', title: defaultFirstTitle, body: '', sortOrder: 0 },
+  ]
 }
 
 export function applyCityDocs(
@@ -1949,6 +1962,15 @@ export function newSight(
   }
 }
 
+export function compactActivity(activity: JourneyActivity): JourneyActivity {
+  const docs = compactCityDocs(cityDocsOf(activity))
+  return {
+    ...activity,
+    docs,
+    notes: docs[0]?.body || compactNoteHtml(activity.notes || ''),
+  }
+}
+
 export function normalizeSights(
   list?: JourneyActivity[] | null,
 ): JourneyActivity[] {
@@ -1981,6 +2003,7 @@ export function normalizeSights(
         purpose: activityPurpose(s),
         price: (s.price || '').trim(),
         paid: s.paid || false,
+        docs: normalizeCityDocs(s.docs),
         sortOrder: i,
       }
     })
@@ -1989,6 +2012,7 @@ export function normalizeSights(
         s.title.trim() ||
         s.place.trim() ||
         s.notes.trim() ||
+        cityDocsOf(s).some((d) => noteHasContent(d.body)) ||
         s.url.trim() ||
         s.startTime.trim() ||
         s.endTime.trim() ||
