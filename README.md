@@ -37,7 +37,13 @@ npm install
 npm run dev
 ```
 
-Åpne Vite-URL-en (typisk `http://localhost:5173`). API-kall går til `http://localhost:8082/api` via `VITE_API_URL` (se `.env.example`).
+Åpne **`http://localhost:5174/`** (Reise bruker port **5174**, ikke 5173 — beer/brygge bruker 5173).
+
+API-kall går til `http://localhost:8082/api` via Vite-proxy (se `frontend/vite.config.ts`) eller `VITE_API_URL` i `.env.local` (se `.env.example`).
+
+**Én kommando (Windows):** `powershell -File scripts/start-dev.ps1` — starter backend og frontend i egne vinduer.
+
+**Produksjon (alltid oppdatert):** https://reise-frontend-624978663833.europe-north1.run.app/
 
 ## Firestore
 
