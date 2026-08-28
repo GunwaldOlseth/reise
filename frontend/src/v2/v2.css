@@ -4424,9 +4424,28 @@ html[data-theme='plasma'] .v2-shell {
 
 .v2-activity-head {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   gap: 0.25rem;
   align-items: stretch;
+}
+
+.v2-activity-actions {
+  display: flex;
+  align-items: center;
+  align-self: center;
+  gap: 0.25rem;
+  padding-right: 0.2rem;
+}
+
+.v2-activity-actions .v2-city-info-btn {
+  width: 2.1rem;
+  height: 2.1rem;
+}
+
+.v2-activity-head .v2-seg-toggle {
+  min-height: 2.1rem;
+  width: 2.1rem;
+  font-size: 1rem;
 }
 
 .v2-activity-body .v2-city-docs {
@@ -4804,7 +4823,8 @@ html[data-theme='plasma'] .v2-shell {
 
 .v2-transport:has(.v2-city-info.is-open),
 .v2-place-panel:has(.v2-city-info.is-open),
-.v2-overview-list li:has(.v2-city-info.is-open) {
+.v2-overview-list li:has(.v2-city-info.is-open),
+.v2-activity-card:has(.v2-city-info.is-open) {
   z-index: 16;
   overflow: visible;
 }
