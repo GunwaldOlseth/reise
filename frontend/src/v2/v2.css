@@ -4676,9 +4676,27 @@ html[data-theme='plasma'] .v2-shell {
   display: flex;
   flex-wrap: wrap;
   gap: 0.25rem;
+  align-items: center;
   padding: 0.3rem 0.35rem;
   border-bottom: 1px solid var(--v2-line);
   background: color-mix(in srgb, var(--v2-panel) 70%, var(--v2-field));
+}
+
+.v2-note-tools-end {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.v2-note-tool-del {
+  color: var(--v2-label);
+}
+
+.v2-note-tool-del:hover:not(:disabled) {
+  color: #f87171;
+  border-color: color-mix(in srgb, #f87171 35%, transparent);
+  background: color-mix(in srgb, #f87171 12%, transparent);
 }
 
 .v2-note-tool {

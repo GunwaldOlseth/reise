@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, type ReactNode } from 'react'
 import { compactNoteHtml, noteHasContent, sanitizeNoteHtml } from './noteHtml'
 
 type Tool = 'bold' | 'highlight' | 'list' | 'indent' | 'outdent' | 'star'
@@ -13,12 +13,15 @@ export function NoteEditor({
   placeholder,
   onChange,
   onBlur,
+  toolbarExtra,
 }: {
   value: string
   disabled?: boolean
   placeholder?: string
   onChange: (html: string) => void
   onBlur?: (html: string) => void
+  /** Optional controls on the right side of the formatting toolbar. */
+  toolbarExtra?: ReactNode
 }) {
   const box = useRef<HTMLDivElement>(null)
   const last = useRef(sanitizeNoteHtml(value || ''))
@@ -131,6 +134,9 @@ export function NoteEditor({
         >
           ←
         </button>
+        {toolbarExtra ? (
+          <div className="v2-note-tools-end">{toolbarExtra}</div>
+        ) : null}
       </div>
       <div
         ref={box}
