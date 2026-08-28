@@ -1,11 +1,14 @@
 import { useEffect, useRef, useState } from 'react'
 import { ClockTimeInput } from './ClockTimeInput'
+import { CityDocsEditor } from './CityDocsEditor'
+import { CityInfoTip } from './CityInfoTip'
 import { CitySuggestFields } from '../CitySuggest'
 import { TrashIcon } from '../TransportModeIcon'
 import {
   activityDisplayName,
   activityKindLabel,
   activityPurpose,
+  cityDocsOf,
   newSight,
   normalizeSights,
   STAY_WITHOUT_HOTEL_LABEL,
@@ -14,6 +17,11 @@ import {
 } from './journeyModel'
 import { useConfirmDelete } from './ConfirmDelete'
 import { PurposeToggle, PaidToggle } from './PurposeToggle'
+import { noteHasContent } from './noteHtml'
+
+function hasActivityContent(s: JourneyActivity): boolean {
+  return cityDocsOf(s).some((d) => noteHasContent(d.body))
+}
 
 function ordered(list: JourneyActivity[]): JourneyActivity[] {
   return list.map((s, i) => ({ ...s, sortOrder: i }))
@@ -23,7 +31,7 @@ function isBlank(s: JourneyActivity): boolean {
   return (
     !s.title.trim() &&
     !(s.place || '').trim() &&
-    !(s.notes || '').trim() &&
+    !hasActivityContent(s) &&
     !(s.url || '').trim() &&
     !(s.startTime || '').trim() &&
     !(s.endTime || '').trim() &&
@@ -355,13 +363,12 @@ export function SightList({
                   </span>
                   <span className="v2-activity-title">{title}</span>
                   {(timeBits ||
-                    sight.notes?.trim() ||
+                    hasActivityContent(sight) ||
                     sight.price?.trim() ||
                     purpose === 'transfer') && (
                     <span className="v2-meta">
                       {[
                         timeBits,
-                        sight.notes?.trim(),
                         sight.price?.trim(),
                         purpose === 'transfer' ? 'Ikke stopp' : '',
                       ]
@@ -370,6 +377,11 @@ export function SightList({
                     </span>
                   )}
                 </button>
+                <CityInfoTip
+                  text={sight.notes}
+                  docs={sight.docs}
+                  disabled={disabled}
+                />
                 <button
                   type="button"
                   className="v2-seg-toggle"
@@ -437,17 +449,20 @@ export function SightList({
                       />
                     </label>
                   </div>
-                  <label>
-                    Notat
-                    <input
-                      value={sight.notes || ''}
-                      disabled={disabled}
-                      placeholder="Møtested, billett, tips…"
-                      title="Notat"
-                      onChange={(e) => update(idx, { notes: e.target.value })}
-                      onBlur={() => commit(idx)}
-                    />
-                  </label>
+                  <CityDocsEditor
+                    value={sight}
+                    disabled={disabled}
+                    firstTitlePlaceholder="Notat"
+                    firstBodyPlaceholder="Møtested, billett, tips…"
+                    onChange={(next, opts) =>
+                      emit(
+                        draftRef.current.map((s, i) =>
+                          i === idx ? { ...s, ...next } : s,
+                        ),
+                        opts?.immediate ?? true,
+                      )
+                    }
+                  />
                   <label>
                     Lenke
                     <input

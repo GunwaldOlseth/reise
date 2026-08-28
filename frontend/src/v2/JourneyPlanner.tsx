@@ -18,6 +18,7 @@ import {
   addDaysIso,
   cityStayDays,
   cityDocsOf,
+  compactActivity,
   compactCityDocs,
   compactLive,
   confirmShiftAfterNights,
@@ -412,7 +413,7 @@ export function JourneyPlanner({
           const docs = compactCityDocs(cityDocsOf(s))
           let stop: JourneyStop = {
             ...s,
-            sights: normalizeSights(s.sights),
+            sights: normalizeSights(s.sights).map(compactActivity),
             docs,
             notes: docs[0]?.body || compactNoteHtml(s.notes || ''),
           }
@@ -442,7 +443,7 @@ export function JourneyPlanner({
           ...l,
           vias: (l.vias || []).map((v) => ({
             ...v,
-            sights: normalizeSights(v.sights),
+            sights: normalizeSights(v.sights).map(compactActivity),
           })),
         })),
       }

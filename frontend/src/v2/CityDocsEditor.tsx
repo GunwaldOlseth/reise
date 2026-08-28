@@ -13,17 +13,23 @@ import { useConfirmDelete } from './ConfirmDelete'
 export function CityDocsEditor({
   value,
   disabled,
+  heading = 'Dokumenter',
+  firstTitlePlaceholder = 'Om byen',
+  firstBodyPlaceholder = 'Tips, område, hvorfor vi er her…',
   onChange,
 }: {
   value: CityDocHolder
   disabled?: boolean
+  heading?: string
+  firstTitlePlaceholder?: string
+  firstBodyPlaceholder?: string
   onChange: (
     next: CityDocHolder,
     opts?: { immediate?: boolean },
   ) => void
 }) {
   const askDelete = useConfirmDelete()
-  const docs = cityDocsForEdit(value)
+  const docs = cityDocsForEdit(value, firstTitlePlaceholder)
 
   function commit(nextDocs: JourneyCityDoc[], immediate?: boolean) {
     onChange(applyCityDocs(value, nextDocs), { immediate })
@@ -39,7 +45,7 @@ export function CityDocsEditor({
   return (
     <div className="v2-city-docs">
       <div className="v2-sights-head">
-        <span>Dokumenter</span>
+        <span>{heading}</span>
         <button
           type="button"
           className="v2-chip-btn"
@@ -62,7 +68,7 @@ export function CityDocsEditor({
               <input
                 value={doc.title}
                 disabled={disabled}
-                placeholder={i === 0 ? 'Om byen' : 'Tittel'}
+                placeholder={i === 0 ? firstTitlePlaceholder : 'Tittel'}
                 aria-label="Dokumenttittel"
                 onChange={(e) => patchDoc(doc.id, { title: e.target.value })}
                 onBlur={(e) =>
@@ -99,9 +105,7 @@ export function CityDocsEditor({
               value={doc.body}
               disabled={disabled}
               placeholder={
-                i === 0
-                  ? 'Tips, område, hvorfor vi er her…'
-                  : 'Skriv notatet her…'
+                i === 0 ? firstBodyPlaceholder : 'Skriv notatet her…'
               }
               onChange={(html) => patchDoc(doc.id, { body: html })}
               onBlur={(html) =>

@@ -715,7 +715,7 @@ export function JourneyLive({
                     {[sight.startTime, sight.endTime].filter(Boolean).join('–')}
                   </span>
                 ) : null}
-                <CityInfoTip text={sight.notes} />
+                <CityInfoTip text={sight.notes} docs={sight.docs} />
               </li>
             ))}
           </ul>
