@@ -6358,10 +6358,6 @@ html[data-theme='plasma'] .v2-shell {
     min-height: 0;
   }
 
-  .v2-place-summary {
-    padding: 0.75rem 0.85rem !important;
-  }
-
   .v2-place-panel .v2-transport-summary {
     min-width: 0;
   }
@@ -6377,7 +6373,116 @@ html[data-theme='plasma'] .v2-shell {
   }
 
   .v2-place-panel > .v2-sights-preview {
-    margin: 0 0.85rem 0.75rem;
+    margin: 0 0.55rem 0.55rem;
+  }
+
+  /* Less outer padding — thread + panel eat a lot of width on phones. */
+  .v2-hub-panel {
+    padding: 0.5rem;
+    padding-bottom: calc(0.75rem + env(safe-area-inset-bottom, 0px));
+  }
+
+  .v2-thread {
+    padding: 0.35rem 0.2rem;
+  }
+
+  .v2-place-summary {
+    padding: 0.65rem 0.55rem !important;
+  }
+
+  .v2-place-body.v2-transport-body {
+    padding: 0.35rem 0.4rem 0.55rem;
+    gap: 0.4rem;
+  }
+
+  .v2-place-body .v2-city-days {
+    gap: 0;
+  }
+
+  .v2-place-body .v2-city-day,
+  .v2-pack-day-programs .v2-city-day {
+    padding: 0.5rem 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    gap: 0.35rem;
+  }
+
+  .v2-place-body .v2-city-days .v2-city-day + .v2-city-day {
+    border-top: 1px solid var(--v2-line);
+    margin-top: 0.35rem;
+    padding-top: 0.6rem;
+  }
+
+  .v2-pack-day-programs {
+    margin: 0.35rem 0 0;
+  }
+
+  /* One visual layer for sights — not a box inside a box. */
+  .v2-place-body .v2-sights,
+  .v2-city-day .v2-sights {
+    margin-top: 0.3rem;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+  }
+
+  .v2-place-body .v2-sights-head {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.35rem;
+    margin-bottom: 0.2rem;
+  }
+
+  .v2-place-body .v2-sights-add {
+    justify-content: flex-start;
+  }
+
+  .v2-place-body .v2-sights-add .v2-chip-btn {
+    font-size: 0.72rem;
+    padding: 0.28rem 0.45rem;
+  }
+
+  .v2-place-body .v2-sights-list {
+    gap: 0;
+  }
+
+  /* Collapsed activities: divider rows; expanded: one card only. */
+  .v2-place-body .v2-activity-card {
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    border-bottom: 1px solid var(--v2-line);
+  }
+
+  .v2-place-body .v2-activity-card:last-child {
+    border-bottom: 0;
+  }
+
+  .v2-place-body .v2-activity-card.is-open {
+    border: 1px solid var(--v2-line-strong);
+    border-radius: 0.55rem;
+    background: var(--v2-field);
+    margin: 0.2rem 0 0.35rem;
+  }
+
+  .v2-place-body .v2-activity-summary {
+    padding: 0.4rem 0.3rem;
+  }
+
+  .v2-place-body .v2-activity-body {
+    padding: 0 0.3rem 0.45rem;
+    gap: 0.35rem;
+  }
+
+  .v2-place-body .v2-note-editor {
+    border-color: color-mix(in srgb, var(--v2-line) 75%, transparent);
+  }
+
+  .v2-place-body .v2-city-doc-head input,
+  .v2-place-body .v2-activity-body input {
+    padding: 0.45rem 0.5rem;
   }
 }
 
