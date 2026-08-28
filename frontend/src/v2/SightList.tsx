@@ -377,33 +377,35 @@ export function SightList({
                     </span>
                   )}
                 </button>
-                <CityInfoTip
-                  text={sight.notes}
-                  docs={sight.docs}
-                  disabled={disabled}
-                />
-                <button
-                  type="button"
-                  className="v2-seg-toggle"
-                  disabled={disabled}
-                  aria-label={expanded ? 'Skjul' : 'Vis'}
-                  title={expanded ? 'Skjul' : 'Vis detaljer'}
-                  onClick={() =>
-                    setOpenId((prev) => (prev === sight.id ? null : sight.id))
-                  }
-                >
-                  {expanded ? '▴' : '▾'}
-                </button>
-                <button
-                  type="button"
-                  className="v2-via-remove"
-                  disabled={disabled}
-                  aria-label="Slett"
-                  title="Slett"
-                  onClick={() => remove(idx)}
-                >
-                  <TrashIcon size={14} />
-                </button>
+                <div className="v2-activity-actions">
+                  <CityInfoTip
+                    text={sight.notes}
+                    docs={sight.docs}
+                    disabled={disabled}
+                  />
+                  <button
+                    type="button"
+                    className="v2-seg-toggle"
+                    disabled={disabled}
+                    aria-label={expanded ? 'Skjul' : 'Vis'}
+                    title={expanded ? 'Skjul' : 'Vis detaljer'}
+                    onClick={() =>
+                      setOpenId((prev) => (prev === sight.id ? null : sight.id))
+                    }
+                  >
+                    {expanded ? '▴' : '▾'}
+                  </button>
+                  <button
+                    type="button"
+                    className="v2-via-remove"
+                    disabled={disabled}
+                    aria-label="Slett"
+                    title="Slett"
+                    onClick={() => remove(idx)}
+                  >
+                    <TrashIcon size={14} />
+                  </button>
+                </div>
               </div>
               {expanded && (
                 <div className="v2-activity-body">

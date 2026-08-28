@@ -79,33 +79,36 @@ export function CityDocsEditor({
                   )
                 }
               />
-              {docs.length > 1 && (
-                <button
-                  type="button"
-                  className="v2-via-remove"
-                  disabled={disabled}
-                  aria-label="Slett dokument"
-                  title="Slett dokument"
-                  onClick={() => {
-                    const name = doc.title.trim() || 'dokumentet'
-                    void askDelete({ title: `Slette ${name}?` }).then((ok) => {
-                      if (!ok) return
-                      commit(
-                        docs.filter((d) => d.id !== doc.id),
-                        true,
-                      )
-                    })
-                  }}
-                >
-                  <TrashIcon size={14} />
-                </button>
-              )}
             </div>
             <NoteEditor
               value={doc.body}
               disabled={disabled}
               placeholder={
                 i === 0 ? firstBodyPlaceholder : 'Skriv notatet her…'
+              }
+              toolbarExtra={
+                docs.length > 1 ? (
+                  <button
+                    type="button"
+                    className="v2-note-tool v2-note-tool-del"
+                    disabled={disabled}
+                    aria-label="Slett dokument"
+                    title="Slett dokument"
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => {
+                      const name = doc.title.trim() || 'dokumentet'
+                      void askDelete({ title: `Slette ${name}?` }).then((ok) => {
+                        if (!ok) return
+                        commit(
+                          docs.filter((d) => d.id !== doc.id),
+                          true,
+                        )
+                      })
+                    }}
+                  >
+                    <TrashIcon size={14} />
+                  </button>
+                ) : undefined
               }
               onChange={(html) => patchDoc(doc.id, { body: html })}
               onBlur={(html) =>

@@ -4424,9 +4424,28 @@ html[data-theme='plasma'] .v2-shell {
 
 .v2-activity-head {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   gap: 0.25rem;
   align-items: stretch;
+}
+
+.v2-activity-actions {
+  display: flex;
+  align-items: center;
+  align-self: center;
+  gap: 0.25rem;
+  padding-right: 0.2rem;
+}
+
+.v2-activity-actions .v2-city-info-btn {
+  width: 2.1rem;
+  height: 2.1rem;
+}
+
+.v2-activity-head .v2-seg-toggle {
+  min-height: 2.1rem;
+  width: 2.1rem;
+  font-size: 1rem;
 }
 
 .v2-activity-body .v2-city-docs {
@@ -4676,9 +4695,27 @@ html[data-theme='plasma'] .v2-shell {
   display: flex;
   flex-wrap: wrap;
   gap: 0.25rem;
+  align-items: center;
   padding: 0.3rem 0.35rem;
   border-bottom: 1px solid var(--v2-line);
   background: color-mix(in srgb, var(--v2-panel) 70%, var(--v2-field));
+}
+
+.v2-note-tools-end {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.v2-note-tool-del {
+  color: var(--v2-label);
+}
+
+.v2-note-tool-del:hover:not(:disabled) {
+  color: #f87171;
+  border-color: color-mix(in srgb, #f87171 35%, transparent);
+  background: color-mix(in srgb, #f87171 12%, transparent);
 }
 
 .v2-note-tool {
@@ -4700,6 +4737,11 @@ html[data-theme='plasma'] .v2-shell {
 .v2-note-tool:focus-visible {
   border-color: var(--v2-line-strong);
   background: var(--v2-shade);
+}
+
+.v2-note-tool.is-on {
+  border-color: color-mix(in srgb, var(--v2-accent) 55%, var(--v2-line-strong));
+  background: color-mix(in srgb, var(--v2-accent) 22%, var(--v2-panel));
 }
 
 .v2-note-tool[aria-label='Stjerne'],
@@ -4762,6 +4804,102 @@ html[data-theme='plasma'] .v2-shell {
   border-left: 2px solid var(--v2-accent);
 }
 
+.v2-note-tools-sub {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.v2-note-tool-heading {
+  min-width: 2.1rem;
+  font-size: 0.72rem;
+  letter-spacing: 0.02em;
+}
+
+.v2-note-tool-link {
+  text-decoration: underline;
+  font-weight: 800;
+}
+
+.v2-note-tool-clear {
+  font-weight: 600;
+  font-size: 0.82rem;
+}
+
+.v2-note-tool-clear sub {
+  font-size: 0.62rem;
+}
+
+.v2-note-upload-err {
+  margin: 0.25rem 0.35rem 0;
+  font-size: 0.8rem;
+  color: #f87171;
+}
+
+.v2-note-html h1,
+.v2-note-html h2,
+.v2-note-html h3,
+.v2-note-html h4 {
+  margin: 0.45rem 0 0.3rem;
+  line-height: 1.25;
+  font-weight: 800;
+}
+
+.v2-note-html h1 {
+  font-size: 1.35rem;
+}
+
+.v2-note-html h2 {
+  font-size: 1.18rem;
+}
+
+.v2-note-html h3 {
+  font-size: 1.02rem;
+}
+
+.v2-note-html h4 {
+  font-size: 0.92rem;
+  font-weight: 750;
+  color: var(--v2-label);
+}
+
+.v2-note-html a {
+  color: var(--v2-accent);
+  text-decoration: underline;
+  text-underline-offset: 0.12em;
+}
+
+.v2-note-html img.v2-note-img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 0.35rem 0;
+  border-radius: 0.5rem;
+  border: 1px solid var(--v2-line);
+}
+
+.v2-note-html ul.v2-note-checklist {
+  list-style: none;
+  padding-left: 0;
+  margin-left: 0;
+}
+
+.v2-note-html .v2-note-check-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.35rem;
+}
+
+.v2-note-html .v2-note-check {
+  flex-shrink: 0;
+  cursor: pointer;
+  user-select: none;
+  line-height: 1.35;
+}
+
+.v2-note-html .v2-note-check-item.is-done {
+  color: color-mix(in srgb, var(--v2-ink) 72%, var(--v2-muted));
+}
+
 .v2-note-html mark {
   background: rgba(212, 168, 74, 0.4);
   color: inherit;
@@ -4786,7 +4924,8 @@ html[data-theme='plasma'] .v2-shell {
 
 .v2-transport:has(.v2-city-info.is-open),
 .v2-place-panel:has(.v2-city-info.is-open),
-.v2-overview-list li:has(.v2-city-info.is-open) {
+.v2-overview-list li:has(.v2-city-info.is-open),
+.v2-activity-card:has(.v2-city-info.is-open) {
   z-index: 16;
   overflow: visible;
 }
