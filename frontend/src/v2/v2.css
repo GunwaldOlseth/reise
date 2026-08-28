@@ -4804,6 +4804,102 @@ html[data-theme='plasma'] .v2-shell {
   border-left: 2px solid var(--v2-accent);
 }
 
+.v2-note-tools-sub {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.v2-note-tool-heading {
+  min-width: 2.1rem;
+  font-size: 0.72rem;
+  letter-spacing: 0.02em;
+}
+
+.v2-note-tool-link {
+  text-decoration: underline;
+  font-weight: 800;
+}
+
+.v2-note-tool-clear {
+  font-weight: 600;
+  font-size: 0.82rem;
+}
+
+.v2-note-tool-clear sub {
+  font-size: 0.62rem;
+}
+
+.v2-note-upload-err {
+  margin: 0.25rem 0.35rem 0;
+  font-size: 0.8rem;
+  color: #f87171;
+}
+
+.v2-note-html h1,
+.v2-note-html h2,
+.v2-note-html h3,
+.v2-note-html h4 {
+  margin: 0.45rem 0 0.3rem;
+  line-height: 1.25;
+  font-weight: 800;
+}
+
+.v2-note-html h1 {
+  font-size: 1.35rem;
+}
+
+.v2-note-html h2 {
+  font-size: 1.18rem;
+}
+
+.v2-note-html h3 {
+  font-size: 1.02rem;
+}
+
+.v2-note-html h4 {
+  font-size: 0.92rem;
+  font-weight: 750;
+  color: var(--v2-label);
+}
+
+.v2-note-html a {
+  color: var(--v2-accent);
+  text-decoration: underline;
+  text-underline-offset: 0.12em;
+}
+
+.v2-note-html img.v2-note-img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 0.35rem 0;
+  border-radius: 0.5rem;
+  border: 1px solid var(--v2-line);
+}
+
+.v2-note-html ul.v2-note-checklist {
+  list-style: none;
+  padding-left: 0;
+  margin-left: 0;
+}
+
+.v2-note-html .v2-note-check-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.35rem;
+}
+
+.v2-note-html .v2-note-check {
+  flex-shrink: 0;
+  cursor: pointer;
+  user-select: none;
+  line-height: 1.35;
+}
+
+.v2-note-html .v2-note-check-item.is-done {
+  color: color-mix(in srgb, var(--v2-ink) 72%, var(--v2-muted));
+}
+
 .v2-note-html mark {
   background: rgba(212, 168, 74, 0.4);
   color: inherit;

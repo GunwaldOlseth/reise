@@ -1,9 +1,31 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { compactNoteHtml, noteHasContent, sanitizeNoteHtml } from './noteHtml'
+import { api } from '../api'
+import { downscaleImage } from './imageResize'
+import {
+  compactNoteHtml,
+  normalizeNoteLinkUrl,
+  noteHasContent,
+  sanitizeNoteHtml,
+} from './noteHtml'
 
-type Tool = 'bold' | 'highlight' | 'list' | 'indent' | 'outdent' | 'star'
+type Tool =
+  | 'bold'
+  | 'highlight'
+  | 'list'
+  | 'checklist'
+  | 'link'
+  | 'clearFormat'
+  | 'indent'
+  | 'outdent'
+  | 'star'
+  | 'h1'
+  | 'h2'
+  | 'h3'
+  | 'h4'
 
 const HIGHLIGHT_COLOR = '#d4a84a'
+const CHECKLIST_HTML =
+  '<ul class="v2-note-checklist"><li class="v2-note-check-item"><span class="v2-note-check" contenteditable="false">☐</span>&nbsp;</li></ul>'
 
 function run(cmd: string, value?: string) {
   document.execCommand(cmd, false, value)
@@ -102,6 +124,66 @@ function toggleHighlight(root: HTMLElement) {
   run('hiliteColor', HIGHLIGHT_COLOR)
 }
 
+function clearFormatting(root: HTMLElement) {
+  const sel = window.getSelection()
+  if (!sel || sel.rangeCount === 0) return
+  const range = sel.getRangeAt(0)
+
+  run('removeFormat')
+  removeHighlightFromSelection(root)
+
+  root.querySelectorAll('a, strong, b, em, i, u, mark').forEach((el) => {
+    if (range.intersectsNode(el)) unwrapElement(el)
+  })
+
+  root.querySelectorAll('h1, h2, h3, h4').forEach((el) => {
+    if (!range.intersectsNode(el)) return
+    const p = document.createElement('p')
+    p.innerHTML = el.innerHTML
+    el.replaceWith(p)
+  })
+}
+
+function insertOrEditLink(root: HTMLElement) {
+  const sel = window.getSelection()
+  let anchor: Element | null = null
+  if (sel?.anchorNode) {
+    const node =
+      sel.anchorNode.nodeType === Node.ELEMENT_NODE
+        ? (sel.anchorNode as Element)
+        : sel.anchorNode.parentElement
+    anchor = node?.closest('a') ?? null
+  }
+  if (anchor && root.contains(anchor)) {
+    unwrapElement(anchor)
+    return
+  }
+
+  const url = window.prompt('Lenke (https://…)', 'https://')
+  if (!url?.trim()) return
+  const safe = normalizeNoteLinkUrl(url.trim())
+  if (!safe) {
+    window.alert('Bruk en gyldig http- eller https-lenke.')
+    return
+  }
+  if (sel && sel.isCollapsed) {
+    run(
+      'insertHTML',
+      `<a href="${safe}" target="_blank" rel="noopener noreferrer">${safe}</a>`,
+    )
+    return
+  }
+  run('createLink', safe)
+}
+
+function toggleChecklistItem(target: HTMLElement, root: HTMLElement) {
+  const li = target.closest('.v2-note-check-item')
+  if (!li || !root.contains(li)) return
+  li.classList.toggle('is-done')
+  const mark = li.querySelector('.v2-note-check')
+  if (mark) mark.textContent = li.classList.contains('is-done') ? '☑' : '☐'
+}
+
 export function NoteEditor({
   value,
   disabled,
@@ -115,12 +197,14 @@ export function NoteEditor({
   placeholder?: string
   onChange: (html: string) => void
   onBlur?: (html: string) => void
-  /** Optional controls on the right side of the formatting toolbar. */
   toolbarExtra?: ReactNode
 }) {
   const box = useRef<HTMLDivElement>(null)
+  const fileRef = useRef<HTMLInputElement>(null)
   const last = useRef(sanitizeNoteHtml(value || ''))
   const [highlightActive, setHighlightActive] = useState(false)
+  const [uploading, setUploading] = useState(false)
+  const [uploadError, setUploadError] = useState('')
 
   useEffect(() => {
     const el = box.current
@@ -168,12 +252,41 @@ export function NoteEditor({
     if (tool === 'bold') run('bold')
     if (tool === 'highlight') toggleHighlight(root)
     if (tool === 'list') run('insertUnorderedList')
+    if (tool === 'checklist') run('insertHTML', CHECKLIST_HTML)
+    if (tool === 'link') insertOrEditLink(root)
+    if (tool === 'clearFormat') clearFormatting(root)
     if (tool === 'indent') run('indent')
     if (tool === 'outdent') run('outdent')
     if (tool === 'star') {
       run('insertHTML', '<span class="v2-note-star">★</span>')
     }
+    if (tool === 'h1') run('formatBlock', 'h1')
+    if (tool === 'h2') run('formatBlock', 'h2')
+    if (tool === 'h3') run('formatBlock', 'h3')
+    if (tool === 'h4') run('formatBlock', 'h4')
     emit()
+  }
+
+  async function onPickImage(files: FileList | null) {
+    if (!files?.length || disabled) return
+    setUploadError('')
+    setUploading(true)
+    try {
+      const prepared = await downscaleImage(files[0])
+      const res = await api.uploadImage(prepared)
+      run(
+        'insertHTML',
+        `<img src="${res.url}" alt="" class="v2-note-img" />`,
+      )
+      emit()
+    } catch (err) {
+      setUploadError(
+        err instanceof Error ? err.message : 'Kunne ikke laste opp bildet',
+      )
+    } finally {
+      setUploading(false)
+      if (fileRef.current) fileRef.current.value = ''
+    }
   }
 
   const empty = !noteHasContent(value)
@@ -197,7 +310,9 @@ export function NoteEditor({
           className={`v2-note-tool${highlightActive ? ' is-on' : ''}`}
           disabled={disabled}
           title={
-            highlightActive ? 'Fjern markering' : 'Merk tekst (klikk igjen for å fjerne)'
+            highlightActive
+              ? 'Fjern markering'
+              : 'Merk tekst (klikk igjen for å fjerne)'
           }
           aria-label="Merk tekst"
           aria-pressed={highlightActive}
@@ -232,6 +347,99 @@ export function NoteEditor({
           type="button"
           className="v2-note-tool"
           disabled={disabled}
+          title="Sjekkliste"
+          aria-label="Sjekkliste"
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => apply('checklist')}
+        >
+          ☑
+        </button>
+        <button
+          type="button"
+          className="v2-note-tool"
+          disabled={disabled}
+          title="Lenke (klikk igjen på lenke for å fjerne)"
+          aria-label="Lenke"
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => apply('link')}
+        >
+          <span className="v2-note-tool-link">L</span>
+        </button>
+        <button
+          type="button"
+          className="v2-note-tool"
+          disabled={disabled || uploading}
+          title="Sett inn bilde"
+          aria-label="Bilde"
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => fileRef.current?.click()}
+        >
+          {uploading ? '…' : '+'}
+        </button>
+        <button
+          type="button"
+          className="v2-note-tool"
+          disabled={disabled}
+          title="Fjern formatering"
+          aria-label="Fjern formatering"
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => apply('clearFormat')}
+        >
+          <span className="v2-note-tool-clear">T<sub>x</sub></span>
+        </button>
+        {toolbarExtra ? (
+          <div className="v2-note-tools-end">{toolbarExtra}</div>
+        ) : null}
+      </div>
+      <div className="v2-note-tools v2-note-tools-sub" role="toolbar" aria-label="Skrift">
+        <button
+          type="button"
+          className="v2-note-tool v2-note-tool-heading"
+          disabled={disabled}
+          title="Stor tittel (H1)"
+          aria-label="H1"
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => apply('h1')}
+        >
+          H1
+        </button>
+        <button
+          type="button"
+          className="v2-note-tool v2-note-tool-heading"
+          disabled={disabled}
+          title="Tittel (H2)"
+          aria-label="H2"
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => apply('h2')}
+        >
+          H2
+        </button>
+        <button
+          type="button"
+          className="v2-note-tool v2-note-tool-heading"
+          disabled={disabled}
+          title="Mellomtittel (H3)"
+          aria-label="H3"
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => apply('h3')}
+        >
+          H3
+        </button>
+        <button
+          type="button"
+          className="v2-note-tool v2-note-tool-heading"
+          disabled={disabled}
+          title="Liten tittel (H4)"
+          aria-label="H4"
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => apply('h4')}
+        >
+          H4
+        </button>
+        <button
+          type="button"
+          className="v2-note-tool"
+          disabled={disabled}
           title="Innrykk"
           aria-label="Innrykk"
           onMouseDown={(e) => e.preventDefault()}
@@ -250,10 +458,15 @@ export function NoteEditor({
         >
           ←
         </button>
-        {toolbarExtra ? (
-          <div className="v2-note-tools-end">{toolbarExtra}</div>
-        ) : null}
       </div>
+      <input
+        ref={fileRef}
+        type="file"
+        accept="image/*"
+        hidden
+        onChange={(e) => void onPickImage(e.target.files)}
+      />
+      {uploadError ? <p className="v2-note-upload-err">{uploadError}</p> : null}
       <div
         ref={box}
         className={`v2-note-area v2-note-html${empty ? ' is-empty' : ''}`}
@@ -267,6 +480,16 @@ export function NoteEditor({
         onBlur={() => onBlur?.(emit())}
         onMouseUp={syncToolbarState}
         onKeyUp={syncToolbarState}
+        onClick={(e) => {
+          const t = e.target as HTMLElement
+          if (t.classList.contains('v2-note-check')) {
+            e.preventDefault()
+            const root = box.current
+            if (!root) return
+            toggleChecklistItem(t, root)
+            emit()
+          }
+        }}
         onPaste={(e) => {
           if (disabled) return
           e.preventDefault()
@@ -283,6 +506,10 @@ export function NoteEditor({
           if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'b') {
             e.preventDefault()
             apply('bold')
+          }
+          if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+            e.preventDefault()
+            apply('link')
           }
         }}
       />
