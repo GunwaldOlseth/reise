@@ -4,7 +4,9 @@ import { downscaleImage } from './imageResize'
 import {
   compactNoteHtml,
   normalizeNoteLinkUrl,
+  normalizePastedNoteHtml,
   noteHasContent,
+  plainTextToNoteHtml,
   sanitizeNoteHtml,
 } from './noteHtml'
 
@@ -493,9 +495,23 @@ export function NoteEditor({
         onPaste={(e) => {
           if (disabled) return
           e.preventDefault()
-          const text = e.clipboardData?.getData('text/plain') ?? ''
-          if (!text) return
-          document.execCommand('insertText', false, text)
+          const root = box.current
+          if (!root) return
+          root.focus()
+
+          const html = e.clipboardData?.getData('text/html') ?? ''
+          const plain = e.clipboardData?.getData('text/plain') ?? ''
+
+          let insert = ''
+          if (html.trim()) {
+            insert = normalizePastedNoteHtml(html)
+          }
+          if (!insert && plain.trim()) {
+            insert = sanitizeNoteHtml(plainTextToNoteHtml(plain))
+          }
+          if (!insert || !noteHasContent(insert)) return
+
+          document.execCommand('insertHTML', false, insert)
           emit()
         }}
         onKeyDown={(e) => {

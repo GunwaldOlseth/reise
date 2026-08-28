@@ -138,6 +138,153 @@ function serialize(node: Node): string {
   return `<${name}>${inner}</${name}>`
 }
 
+function applyPastedInlineStyles(el: HTMLElement, inner: string): string {
+  if (!inner) return ''
+  let out = inner
+  const style = el.style
+  const fw = style.fontWeight || ''
+  const fwNum = parseInt(fw, 10)
+  const isBold =
+    el.tagName === 'B' ||
+    el.tagName === 'STRONG' ||
+    fw === 'bold' ||
+    fw === 'bolder' ||
+    (!Number.isNaN(fwNum) && fwNum >= 600)
+  const isItalic =
+    el.tagName === 'I' ||
+    el.tagName === 'EM' ||
+    style.fontStyle === 'italic'
+  const isUnderline =
+    el.tagName === 'U' || (style.textDecoration || '').includes('underline')
+  const bg = style.backgroundColor || el.getAttribute('bgcolor') || ''
+  const isHighlight =
+    el.tagName === 'MARK' ||
+    (bg &&
+      bg !== 'transparent' &&
+      bg !== 'inherit' &&
+      bg !== 'initial' &&
+      bg !== 'rgba(0, 0, 0, 0)')
+
+  if (isBold) out = `<strong>${out}</strong>`
+  if (isItalic) out = `<em>${out}</em>`
+  if (isUnderline) out = `<u>${out}</u>`
+  if (isHighlight) out = `<mark>${out}</mark>`
+  return out
+}
+
+const PASTE_SKIP_TAGS = new Set([
+  'SCRIPT',
+  'STYLE',
+  'META',
+  'LINK',
+  'HEAD',
+  'TITLE',
+  'HTML',
+])
+
+function convertPastedNodes(nodes: Node[]): string {
+  return nodes.map(convertPastedNode).join('')
+}
+
+function convertPastedNode(node: Node): string {
+  if (node.nodeType === Node.TEXT_NODE) {
+    return escapeHtml(node.textContent || '')
+  }
+  if (node.nodeType !== Node.ELEMENT_NODE) return ''
+  const el = node as HTMLElement
+  const tag = el.tagName
+  if (PASTE_SKIP_TAGS.has(tag)) return ''
+
+  if (tag === 'BR') return '<br>'
+
+  const inner = convertPastedNodes(Array.from(el.childNodes))
+
+  if (tag === 'B' || tag === 'STRONG') return inner ? `<strong>${inner}</strong>` : ''
+  if (tag === 'I' || tag === 'EM') return inner ? `<em>${inner}</em>` : ''
+  if (tag === 'U') return inner ? `<u>${inner}</u>` : ''
+  if (tag === 'MARK') return inner ? `<mark>${inner}</mark>` : ''
+  if (tag === 'H1' || tag === 'H2' || tag === 'H3' || tag === 'H4') {
+    const name = tag.toLowerCase()
+    return inner.trim() ? `<${name}>${inner}</${name}>` : ''
+  }
+  if (tag === 'UL') {
+    if (!inner.trim()) return ''
+    const isCheck = el.classList.contains('v2-note-checklist')
+    return isCheck
+      ? `<ul class="v2-note-checklist">${inner}</ul>`
+      : `<ul>${inner}</ul>`
+  }
+  if (tag === 'OL') return inner.trim() ? `<ol>${inner}</ol>` : ''
+  if (tag === 'LI') {
+    if (!inner.trim()) return ''
+    if (el.classList.contains('v2-note-check-item')) {
+      const done = el.classList.contains('is-done')
+      const cls = done ? 'v2-note-check-item is-done' : 'v2-note-check-item'
+      return `<li class="${cls}">${inner}</li>`
+    }
+    return `<li>${inner}</li>`
+  }
+  if (tag === 'A') {
+    const href =
+      normalizeNoteLinkUrl(el.getAttribute('href') || '') ||
+      (isSafeNoteHref(el.getAttribute('href') || '')
+        ? (el.getAttribute('href') || '').trim()
+        : null)
+    if (!href) return inner
+    const label = inner.trim() || escapeHtml(href)
+    return `<a href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer">${label}</a>`
+  }
+  if (tag === 'IMG') {
+    const src = (el.getAttribute('src') || '').trim()
+    if (!isSafeNoteImgSrc(src)) return ''
+    return `<img src="${escapeHtml(src)}" alt="" class="v2-note-img" />`
+  }
+  if (tag === 'BLOCKQUOTE') {
+    return inner.trim() ? `<blockquote>${inner}</blockquote>` : ''
+  }
+  if (
+    tag === 'P' ||
+    tag === 'DIV' ||
+    tag === 'BODY' ||
+    tag === 'SECTION' ||
+    tag === 'ARTICLE'
+  ) {
+    const text = (el.textContent || '').replace(/\s+/g, '').trim()
+    if (!text) return ''
+    const blockInner = inner.trim()
+    if (!blockInner) return ''
+    return `<p>${blockInner}</p>`
+  }
+  if (tag === 'SPAN' || tag === 'FONT') {
+    return applyPastedInlineStyles(el, inner)
+  }
+
+  return inner
+}
+
+/** Plain clipboard text → paragraphs (line breaks preserved). */
+export function plainTextToNoteHtml(text: string): string {
+  const raw = (text || '').replace(/\r\n/g, '\n')
+  if (!raw.trim()) return ''
+  const parts = raw.split('\n').map((line) => {
+    const t = line.trim()
+    if (!t) return ''
+    return `<p>${escapeHtml(t)}</p>`
+  })
+  const joined = parts.filter(Boolean).join('')
+  return joined || `<p>${escapeHtml(raw.trim())}</p>`
+}
+
+/** Word / browser HTML → safe note HTML with formatting kept where possible. */
+export function normalizePastedNoteHtml(raw: string): string {
+  const src = (raw || '').trim()
+  if (!src) return ''
+  const doc = new DOMParser().parseFromString(src, 'text/html')
+  const converted = convertPastedNodes(Array.from(doc.body.childNodes))
+  if (!converted.trim()) return ''
+  return sanitizeNoteHtml(converted)
+}
+
 export function sanitizeNoteHtml(raw: string): string {
   const src = (raw || '').trim()
   if (!src) return ''
