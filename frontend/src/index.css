@@ -438,7 +438,7 @@ a:hover {
 .expense-total-amount {
   margin: 0.15rem 0 0.35rem;
   font-family: var(--font-display);
-  font-size: clamp(2.2rem, 6vw, 3rem);
+  font-size: clamp(1.5rem, 3.2vw + 0.55rem, 2.2rem);
   line-height: 1.05;
   color: var(--teal-deep);
 }
