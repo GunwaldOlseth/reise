@@ -16,7 +16,7 @@
   --font-display: 'Fraunces', Georgia, serif;
   --font-body: 'Source Sans 3', 'Segoe UI', Roboto, 'Noto Sans', system-ui, sans-serif;
   color: var(--v2-ink, var(--ink));
-  background: var(--v2-bg, var(--teal-deep));
+  background: var(--v2-bg, #e8ebe8);
   font-family: var(--font-body);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -33,10 +33,14 @@ body,
   min-height: 100%;
 }
 
+html {
+  background: var(--v2-bg, #e8ebe8);
+}
+
 body {
   margin: 0;
   min-width: 320px;
-  background: var(--v2-bg, #0f1c1a);
+  background: var(--v2-bg, #e8ebe8);
   color: var(--v2-ink, var(--ink));
 }
 

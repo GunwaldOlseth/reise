@@ -623,11 +623,11 @@ html[data-theme='sand-lys'],
 html[data-theme='lavendel-lys'],
 html[data-theme='stein-lys'],
 html[data-theme='nordlys-lys'] {
-  /* Light themes: lift surfaces toward white — never darken bg with ink */
-  --v2-bg: color-mix(in srgb, var(--v2-bg-base) 82%, #ffffff 18%);
-  --v2-panel: color-mix(in srgb, var(--v2-panel-base) 48%, #ffffff 52%);
-  --v2-field: color-mix(in srgb, var(--v2-field-base) 42%, #ffffff 58%);
-  --v2-shade: color-mix(in srgb, var(--v2-ink) 12%, var(--v2-bg) 88%);
+  /* Light themes: solid lifted surfaces — never darken bg with ink */
+  --v2-bg: color-mix(in srgb, var(--v2-bg-base) 88%, #ffffff 12%);
+  --v2-panel: color-mix(in srgb, var(--v2-panel-base) 78%, #ffffff 22%);
+  --v2-field: color-mix(in srgb, var(--v2-field-base) 68%, #ffffff 32%);
+  --v2-shade: color-mix(in srgb, var(--v2-ink) 14%, var(--v2-bg) 86%);
   --v2-accent-text: color-mix(in srgb, var(--v2-accent) 55%, var(--v2-ink) 45%);
 }
 
@@ -649,11 +649,41 @@ html:not([data-theme]) {
   --v2-scrim-mid: color-mix(in srgb, var(--v2-bg) 92%, var(--v2-panel) 8%);
 }
 
+html[data-theme='skog-lys'] {
+  --v2-label: #2f3d38;
+  --v2-muted: #4a5c55;
+  --v2-subtle: #384842;
+  --v2-placeholder: #6a7a72;
+}
+
+html[data-theme='lavendel-lys'] {
+  --v2-label: #342f3a;
+  --v2-muted: #524c58;
+  --v2-subtle: #3f3946;
+  --v2-placeholder: #6b6472;
+}
+
 html[data-theme='stein-lys'] {
   --v2-label: #2a2622;
   --v2-muted: #524b44;
   --v2-subtle: #3d3832;
   --v2-placeholder: #6b635a;
+}
+
+html[data-theme='nordlys-lys'] {
+  --v2-label: #1e2240;
+  --v2-muted: #3d4368;
+  --v2-subtle: #2a2f52;
+  --v2-placeholder: #5c6288;
+}
+
+html[data-theme='skog-lys'],
+html[data-theme='kyst-lys'],
+html[data-theme='sand-lys'],
+html[data-theme='lavendel-lys'],
+html[data-theme='stein-lys'],
+html[data-theme='nordlys-lys'] {
+  --v2-line-strong: color-mix(in srgb, var(--v2-ink) 26%, var(--v2-bg) 74%);
 }
 
 .v2-shell {
@@ -679,7 +709,7 @@ html[data-theme='stein-lys'] {
   padding-bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
 }
 
-.v2-shell button:not(.btn):not(.v2-chip-btn):not(.v2-hub-tab):not(.v2-hub-burger):not(.v2-theme-card):not(.v2-overview-tab) {
+.v2-shell button:not(.btn):not(.v2-chip-btn):not(.v2-hub-tab):not(.v2-hub-burger):not(.v2-theme-card):not(.v2-overview-tab):not([role='menuitem']) {
   color: var(--v2-ink);
 }
 
@@ -734,7 +764,8 @@ html[data-theme='nordlys-lys'] .v2-shell {
     radial-gradient(60% 40% at 15% 100%, rgba(180, 140, 220, 0.12), transparent 45%),
     radial-gradient(120% 80% at 10% -10%, var(--v2-glow-1), transparent 55%),
     radial-gradient(90% 60% at 100% 0%, var(--v2-glow-2), transparent 45%),
-    linear-gradient(175deg, #b8d1ea 0%, #bad3f2 50%, #bbd1f1 100%);
+    linear-gradient(175deg, var(--v2-bg-base) 0%, var(--v2-panel-base) 50%, var(--v2-field-base) 100%),
+    var(--v2-bg);
 }
 
 html[data-theme='nordlys'] .v2-theme-card.is-active,
@@ -893,7 +924,8 @@ html[data-theme='plasma'] .v2-shell {
   padding: 0.4rem;
   border-radius: 0.75rem;
   border: 1px solid var(--v2-line-strong);
-  background: var(--v2-panel);
+  background: var(--v2-field);
+  color: var(--v2-ink);
   box-shadow: 0 14px 32px var(--v2-shade);
   display: flex;
   flex-direction: column;
@@ -901,7 +933,7 @@ html[data-theme='plasma'] .v2-shell {
   z-index: 8;
 }
 
-.v2-shell .v2-hub-menu button {
+.v2-shell .v2-hub-menu button[role='menuitem'] {
   appearance: none;
   border: 0;
   background: transparent;
@@ -914,11 +946,20 @@ html[data-theme='plasma'] .v2-shell {
   cursor: pointer;
 }
 
-.v2-shell .v2-hub-menu button:hover {
-  background: color-mix(in srgb, var(--v2-accent) 14%, var(--v2-panel) 86%);
+.v2-shell .v2-hub-menu button[role='menuitem']:hover,
+.v2-shell .v2-hub-menu button[role='menuitem']:focus-visible {
+  background: color-mix(in srgb, var(--v2-accent) 16%, var(--v2-field) 84%);
+  color: var(--v2-ink);
+  outline: none;
 }
 
-.v2-shell .v2-hub-menu button.is-danger {
+.v2-shell .v2-hub-menu button[role='menuitem'].is-danger {
+  color: var(--v2-danger);
+}
+
+.v2-shell .v2-hub-menu button[role='menuitem'].is-danger:hover,
+.v2-shell .v2-hub-menu button[role='menuitem'].is-danger:focus-visible {
+  background: color-mix(in srgb, var(--v2-danger) 12%, var(--v2-field) 88%);
   color: var(--v2-danger);
 }
 
@@ -1406,13 +1447,21 @@ html[data-theme='plasma'] .v2-shell {
 }
 
 .v2-home .btn-soft {
-  background: rgba(232, 244, 242, 0.08);
+  background: color-mix(in srgb, var(--v2-panel) 88%, var(--v2-bg) 12%);
   color: var(--v2-ink);
-  border: 1px solid var(--v2-line);
+  border: 1px solid var(--v2-line-strong);
 }
 
 .v2-home .btn-ghost {
   color: var(--v2-ink);
+  background: color-mix(in srgb, var(--v2-panel) 86%, var(--v2-bg) 14%);
+  border: 1px solid var(--v2-line-strong);
+}
+
+.v2-home .btn-ghost:hover:not(:disabled) {
+  color: var(--v2-ink);
+  background: color-mix(in srgb, var(--v2-accent) 12%, var(--v2-panel));
+  border-color: var(--v2-accent);
 }
 
 .v2-sheet .btn-danger,
