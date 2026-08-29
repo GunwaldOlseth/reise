@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from 'react'
+import { useMemo, useState } from 'react'
 import { HolidayCountdown } from './HolidayCountdown'
 import { cachedJourney } from './journeyCache'
 import { formatDateNO, todayIsoOslo } from './journeyModel'
@@ -37,7 +37,6 @@ export function HomePage({
   showNewTrip,
   newTrip,
   startsFromHome,
-  googleSlot,
   onRefresh,
   onOpenSettings,
   onOpenAppearance,
@@ -64,7 +63,6 @@ export function HomePage({
   showNewTrip: boolean
   newTrip: TripInput
   startsFromHome: boolean
-  googleSlot?: ReactNode
   onRefresh: () => void
   onOpenSettings: () => void
   onOpenAppearance: () => void
@@ -108,7 +106,6 @@ export function HomePage({
     <div className="v2-shell v2-home">
       <header className="v2-home-top">
         <div className="v2-home-top-actions">
-          {googleSlot}
           <button
             type="button"
             className="btn btn-ghost btn-sm"

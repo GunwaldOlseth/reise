@@ -6,7 +6,6 @@ import {
   type Trip,
   type TripInput,
 } from './api'
-import { useGoogleAuth } from './googleAuth'
 import { CitySuggestFields } from './CitySuggest'
 import {
   defaultPlannerSettings,
@@ -51,40 +50,6 @@ import {
   type AppView,
 } from './appRoute'
 import './v2/v2.css'
-
-function GoogleLoginButton() {
-  const { user, ready, configured, login, logout } = useGoogleAuth()
-  if (!configured) return null
-  if (!ready) {
-    return (
-      <button className="btn btn-ghost btn-sm" type="button" disabled>
-        …
-      </button>
-    )
-  }
-  if (user) {
-    return (
-      <button
-        className="btn btn-ghost btn-sm"
-        type="button"
-        title={`Logg ut ${user.name || user.email || ''}`}
-        onClick={() => logout()}
-      >
-        {user.name || user.email || 'Logg ut'}
-      </button>
-    )
-  }
-  return (
-    <button
-      className="btn btn-ghost btn-sm"
-      type="button"
-      title="Logg inn med Google"
-      onClick={() => login()}
-    >
-      Logg inn med Google
-    </button>
-  )
-}
 
 type View = AppView
 
@@ -717,7 +682,6 @@ function AppMain() {
       showNewTrip={showNewTrip}
       newTrip={newTrip}
       startsFromHome={startsFromHome}
-      googleSlot={<GoogleLoginButton />}
       onRefresh={() => void loadTrips()}
       onOpenSettings={() => {
         setError('')
