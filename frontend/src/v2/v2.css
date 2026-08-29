@@ -2178,6 +2178,15 @@ html[data-theme='plasma'] .v2-shell {
   display: none;
 }
 
+.v2-transport-wrap.is-open > .v2-transport,
+.v2-transport-wrap.is-open .v2-transport-body,
+.v2-transport-wrap.is-open .v2-via-list,
+.v2-transport-wrap.is-open .v2-seg-card,
+.v2-transport-wrap.is-open .v2-hop-opt {
+  width: 100%;
+  min-width: 0;
+}
+
 .v2-transport-wrap .v2-transport-summary {
   padding: 0.4rem 0.6rem;
 }
@@ -2829,7 +2838,7 @@ html[data-theme='plasma'] .v2-shell {
 }
 
 .v2-hop-row.is-summary .v2-hop-summary {
-  display: inline-flex;
+  display: flex;
 }
 
 .v2-hop-row.is-editing .v2-hop-summary {
