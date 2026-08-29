@@ -4427,11 +4427,13 @@ html[data-theme='plasma'] .v2-shell {
 .v2-sights-preview li.is-hotel {
   background: color-mix(in srgb, var(--v2-warn) 36%, var(--v2-panel));
   border: 2px solid color-mix(in srgb, var(--v2-warn) 62%, transparent);
+  color: color-mix(in srgb, var(--v2-warn) 32%, var(--v2-ink));
 }
 
 .v2-sights-preview li.is-airbnb {
   background: color-mix(in srgb, var(--v2-danger) 26%, var(--v2-panel));
   border: 2px solid color-mix(in srgb, var(--v2-danger) 52%, transparent);
+  color: color-mix(in srgb, var(--v2-danger) 28%, var(--v2-ink));
 }
 
 .v2-sights-preview li.is-hotel.is-empty,
