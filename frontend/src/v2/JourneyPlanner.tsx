@@ -1251,9 +1251,7 @@ function PlaceStopPanel({
   const hotelTimes = hasStay ? formatHotelStayTimes(stay) : ''
   const dateSpan =
     stop.arriveDate && nights > 0
-      ? `${formatDateNO(stop.arriveDate)}–${formatDateNO(depart)} (${nights}n)${
-          hotelTimes ? ` · ${hotelTimes}` : ''
-        }`
+      ? `${formatDateNO(stop.arriveDate)}–${formatDateNO(depart)} (${nights}n)`
       : stop.arriveDate
         ? `Ankomst ${formatDateNO(stop.arriveDate)}`
         : nights > 0
