@@ -69,6 +69,8 @@ import {
   modeIsOther,
   modeIsWalk,
   moveActivityToDay,
+  moveActivityToCalendarDate,
+  journeyActivityCalendarBounds,
   sortTransportOptions,
   formatCityStation,
   samePlaceName,
@@ -327,6 +329,10 @@ export function JourneyPlanner({
       ]),
     ) as Record<string, string[]>
   }, [journey])
+  const activityCalendarBounds = useMemo(
+    () => journeyActivityCalendarBounds(journey),
+    [journey],
+  )
   const journeyRef = useRef(journey)
   journeyRef.current = journey
   const placeSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -511,6 +517,29 @@ export function JourneyPlanner({
     }, 450)
   }
 
+  function moveActivityToDate(
+    sourceStopId: string,
+    activityId: string,
+    targetDate: string,
+  ) {
+    const next = moveActivityToCalendarDate(
+      journeyRef.current,
+      sourceStopId,
+      activityId,
+      targetDate,
+    )
+    if (!next) {
+      setError(
+        'Ingen planlagt dag på den datoen. Velg en dato der du er på et sted eller cruise.',
+      )
+      return
+    }
+    if (sameJourneyStopsLegs(journeyRef.current, next)) return
+    journeyRef.current = next
+    setJourney(next)
+    void persist(next, { quiet: true })
+  }
+
   /** Optimistic transport edits — same quiet debounce as place fields. */
   function patchTransportLeg(
     nextLeg: JourneyLeg,
@@ -663,6 +692,11 @@ export function JourneyPlanner({
                       warnMissingStay={settings.warnMissingStay}
                       open={openPlaceId === stop.id}
                       disabled={loading}
+                      calendarMin={activityCalendarBounds.min}
+                      calendarMax={activityCalendarBounds.max}
+                      onMoveActivityToDate={(activityId, date) =>
+                        moveActivityToDate(stop.id, activityId, date)
+                      }
                       onToggle={() =>
                         setOpenPlaceId((id) =>
                           id === stop.id ? null : stop.id,
@@ -944,6 +978,11 @@ export function JourneyPlanner({
                                 { immediate: true },
                               )
                             }
+                            calendarMin={activityCalendarBounds.min}
+                            calendarMax={activityCalendarBounds.max}
+                            onMoveActivityToDate={(activityId, date) =>
+                              moveActivityToDate(stop.id, activityId, date)
+                            }
                           />
                         )
                       })}
@@ -1187,6 +1226,9 @@ function PackDayPanel({
   onChangeDay,
   onChangeSights,
   onMoveToDay,
+  calendarMin,
+  calendarMax,
+  onMoveActivityToDate,
 }: {
   day: JourneyPackageDay
   dateLabel: string
@@ -1206,6 +1248,9 @@ function PackDayPanel({
   ) => void
   onChangeSights: (sights: ReturnType<typeof normalizeSights>) => void
   onMoveToDay?: (activityId: string, targetOffset: number) => void
+  calendarMin?: string
+  calendarMax?: string
+  onMoveActivityToDate?: (activityId: string, date: string) => void
 }) {
   const activityCount = normalizeSights(sights).length
   const timeMeta = [
@@ -1299,6 +1344,9 @@ function PackDayPanel({
             suggestCountry={suggestCountry}
             cityDays={cityDays}
             onMoveToDay={onMoveToDay}
+            calendarMin={calendarMin}
+            calendarMax={calendarMax}
+            onMoveToDate={onMoveActivityToDate}
             onChange={onChangeSights}
           />
         </div>
@@ -1320,6 +1368,9 @@ function PlaceStopPanel({
   warnMissingStay,
   open,
   disabled,
+  calendarMin,
+  calendarMax,
+  onMoveActivityToDate,
   onToggle,
   onChange,
 }: {
@@ -1331,6 +1382,9 @@ function PlaceStopPanel({
   warnMissingStay: boolean
   open: boolean
   disabled?: boolean
+  calendarMin?: string
+  calendarMax?: string
+  onMoveActivityToDate?: (activityId: string, date: string) => void
   onToggle: () => void
   onChange: (
     stop: JourneyStop,
@@ -1693,6 +1747,9 @@ function PlaceStopPanel({
                         { immediate: true },
                       )
                     }
+                    calendarMin={calendarMin}
+                    calendarMax={calendarMax}
+                    onMoveToDate={onMoveActivityToDate}
                     onChange={(dayList) =>
                       patchStop(
                         {
@@ -2181,6 +2238,9 @@ function PlaceStopPanel({
                 disabled={disabled}
                 heading="Aktiviteter"
                 suggestCountry={stop.country}
+                calendarMin={calendarMin}
+                calendarMax={calendarMax}
+                onMoveToDate={onMoveActivityToDate}
                 onChange={(sights) =>
                   patchStop({ sights }, { immediate: true })
                 }
