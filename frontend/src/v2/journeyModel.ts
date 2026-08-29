@@ -2262,8 +2262,8 @@ export function packageDayTableRow(
     (opts.type === 'cruise' && day.offset === 0
       ? opts.basePlace?.trim() || 'Hjemhavn'
       : opts.placeFallback)
-  const isStart = day.offset === 0
-  const isLast = day.offset === opts.nights
+  const isStart = packageDayOffset(day) === 0
+  const isLast = packageDayOffset(day) === opts.nights
   const arriveRaw =
     opts.type === 'cruise' && isStart
       ? ''
@@ -2379,11 +2379,19 @@ export function packageNightsOf(pack?: JourneyPackage | null): number {
   // missing/stale nights field cannot collapse a 7-night cruise to 1 day.
   let fromDays = 0
   for (const d of pack?.days || []) {
-    const off = Math.floor(Number(d.offset) || 0)
+    const off = packageDayOffset(d)
     if (off > fromDays) fromDays = off
   }
   const n = Math.max(fromField, fromDays)
   return Math.max(1, Math.min(30, n || 1))
+}
+
+/** Firestore/JSON may store offset as a string; Map.get(0) then misses "0". */
+export function packageDayOffset(
+  day: Pick<JourneyPackageDay, 'offset'> | null | undefined,
+): number {
+  const n = Math.floor(Number(day?.offset))
+  return Number.isFinite(n) && n >= 0 ? n : 0
 }
 
 /** @deprecated use packageNightsOf */
@@ -2403,11 +2411,23 @@ export function syncPackageDays(
   const baseCountry = baseCountryRaw.trim()
   const baseCoords = geoCoordsOf(pack.baseLatitude, pack.baseLongitude)
   const freeLabel = packageFreeDayLabel(type)
-  const prev = [...(pack.days || [])].sort((a, b) => a.offset - b.offset)
-  const byOffset = new Map(prev.map((d) => [d.offset, d]))
+  const prev = [...(pack.days || [])]
+    .map((d) => ({ ...d, offset: packageDayOffset(d) }))
+    .sort((a, b) => a.offset - b.offset)
+  const byOffset = new Map<number, JourneyPackageDay>()
+  for (const d of prev) {
+    const cur = byOffset.get(d.offset)
+    if (!cur) {
+      byOffset.set(d.offset, d)
+      continue
+    }
+    const curAboard = (cur.allAboardTime || '').trim()
+    const nextAboard = (d.allAboardTime || '').trim()
+    if (!curAboard && nextAboard) byOffset.set(d.offset, d)
+  }
   const days: JourneyPackageDay[] = []
   for (let offset = 0; offset <= nights; offset++) {
-    const existing = byOffset.get(offset)
+    const existing = byOffset.get(offset) || prev[offset]
     const isStart = offset === 0
     const isLast = offset === nights
     /** Embark / start day always uses hjemhavn (base). */
@@ -2454,9 +2474,9 @@ export function syncPackageDays(
           ? ''
           : normalizeEditableClockTime((existing.leaveTime || '').trim()),
         allAboardTime:
-          type === 'cruise' && !isLast && !atSea && !noLeave
-            ? normalizeEditableClockTime((existing.allAboardTime || '').trim())
-            : '',
+          atSea || isLast
+            ? ''
+            : normalizeEditableClockTime((existing.allAboardTime || '').trim()),
         hideOnMap: atSea ? false : !!existing.hideOnMap,
       })
       continue

@@ -174,6 +174,12 @@ func normalizePackageStop(stop *JourneyStop) {
 		p.Days = []JourneyPackageDay{}
 	}
 	for i := range p.Days {
+		if p.Days[i].Offset < 0 {
+			p.Days[i].Offset = 0
+		}
+		p.Days[i].ArriveTime = strings.TrimSpace(p.Days[i].ArriveTime)
+		p.Days[i].LeaveTime = strings.TrimSpace(p.Days[i].LeaveTime)
+		p.Days[i].AllAboardTime = strings.TrimSpace(p.Days[i].AllAboardTime)
 		p.Days[i].Notes = strings.TrimSpace(p.Days[i].Notes)
 		normalizeCityDocHolder(&p.Days[i].Notes, &p.Days[i].Docs)
 	}
