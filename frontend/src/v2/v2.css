@@ -4425,15 +4425,13 @@ html[data-theme='plasma'] .v2-shell {
 }
 
 .v2-sights-preview li.is-hotel {
-  background: color-mix(in srgb, var(--v2-warn) 26%, var(--v2-panel));
-  border-color: color-mix(in srgb, var(--v2-warn) 52%, transparent);
-  border-width: 1.5px;
+  background: color-mix(in srgb, var(--v2-warn) 36%, var(--v2-panel));
+  border: 2px solid color-mix(in srgb, var(--v2-warn) 62%, transparent);
 }
 
 .v2-sights-preview li.is-airbnb {
-  background: color-mix(in srgb, var(--v2-danger) 20%, var(--v2-panel));
-  border-color: color-mix(in srgb, var(--v2-danger) 46%, transparent);
-  border-width: 1.5px;
+  background: color-mix(in srgb, var(--v2-danger) 26%, var(--v2-panel));
+  border: 2px solid color-mix(in srgb, var(--v2-danger) 52%, transparent);
 }
 
 .v2-sights-preview li.is-hotel.is-empty,
@@ -5411,11 +5409,11 @@ html[data-theme='plasma'] .v2-shell {
 }
 
 .v2-linked-preview .is-hotel {
-  border-color: color-mix(in srgb, var(--v2-warn) 52%, transparent);
+  border-color: color-mix(in srgb, var(--v2-warn) 62%, transparent);
 }
 
 .v2-linked-preview .is-airbnb {
-  border-color: color-mix(in srgb, var(--v2-danger) 46%, transparent);
+  border-color: color-mix(in srgb, var(--v2-danger) 52%, transparent);
 }
 
 .v2-linked-preview .is-hotel.is-empty {
