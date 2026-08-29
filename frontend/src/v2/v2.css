@@ -624,12 +624,14 @@ html[data-theme='nordlys-lys'] {
 html {
   --v2-line-strong: color-mix(in srgb, var(--v2-ink) 28%, transparent);
   --v2-wash: color-mix(in srgb, var(--v2-ink) 8%, transparent);
-  /* Readable secondary text on every theme (replaces per-theme 68% muted) */
-  --v2-muted: color-mix(in srgb, var(--v2-ink) 76%, transparent);
-  --v2-subtle: color-mix(in srgb, var(--v2-ink) 84%, transparent);
+  /* Readable text on every theme — derived from ink, not fixed rgba alphas */
+  --v2-label: color-mix(in srgb, var(--v2-ink) 97%, transparent);
+  --v2-muted: color-mix(in srgb, var(--v2-ink) 88%, transparent);
+  --v2-subtle: color-mix(in srgb, var(--v2-ink) 94%, transparent);
   --v2-expense-paid: color-mix(in srgb, var(--v2-accent) 72%, var(--v2-ink) 28%);
   --v2-expense-section: color-mix(in srgb, var(--v2-accent) 88%, var(--v2-ink) 12%);
   --v2-surface-solid: var(--v2-field);
+  --v2-accent-text: color-mix(in srgb, var(--v2-accent) 82%, var(--v2-ink) 18%);
 }
 
 .v2-shell {
@@ -640,13 +642,30 @@ html {
     radial-gradient(90% 60% at 100% 0%, var(--v2-glow-2), transparent 45%),
     var(--v2-bg);
   color: var(--v2-ink);
+  /* Remap legacy index.css tokens so shared rules stay readable in v2 */
+  --ink: var(--v2-ink);
+  --ink-soft: var(--v2-label);
+  --muted: var(--v2-subtle);
+  --teal-deep: var(--v2-ink);
+  --teal: var(--v2-accent-text);
+  --teal-mid: var(--v2-accent-text);
+  --paper: var(--v2-ink);
+  --paper-2: var(--v2-subtle);
+  --line: var(--v2-line);
   display: flex;
   flex-direction: column;
   padding-bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
 }
 
 .v2-shell button:not(.btn):not(.v2-chip-btn) {
-  color: inherit;
+  color: var(--v2-ink);
+}
+
+.v2-shell .v2-stop-card,
+.v2-shell .v2-transport-summary,
+.v2-shell .v2-place-panel,
+.v2-shell .v2-thread {
+  color: var(--v2-ink);
 }
 
 html[data-theme='nordlys'] .v2-shell {
@@ -870,7 +889,7 @@ html[data-theme='plasma'] .v2-shell {
   appearance: none;
   border: 0;
   background: transparent;
-  color: var(--v2-subtle);
+  color: var(--v2-label);
   font: inherit;
   font-weight: 600;
   font-size: 0.7rem;
@@ -2388,7 +2407,7 @@ html[data-theme='plasma'] .v2-shell {
   flex-shrink: 0;
   font-size: 0.82rem;
   font-weight: 650;
-  color: var(--v2-accent);
+  color: var(--v2-accent-text);
   white-space: nowrap;
 }
 
@@ -2413,7 +2432,7 @@ html[data-theme='plasma'] .v2-shell {
   flex-shrink: 0;
   font-size: 0.78rem;
   font-weight: 750;
-  color: var(--v2-accent);
+  color: var(--v2-accent-text);
   letter-spacing: 0.02em;
 }
 
@@ -3798,7 +3817,7 @@ html[data-theme='plasma'] .v2-shell {
   text-align: left;
   vertical-align: baseline;
   font-weight: 400;
-  color: var(--v2-label);
+  color: var(--v2-ink);
 }
 
 .v2-cruise-day-table th {
@@ -3816,7 +3835,7 @@ html[data-theme='plasma'] .v2-shell {
 
 .v2-cruise-day-table .v2-cruise-day-date,
 .v2-cruise-day-table tr.is-sea td:not(:nth-child(2)) {
-  color: var(--v2-subtle);
+  color: var(--v2-label);
 }
 
 .v2-cruise-day-table td:nth-child(3),
@@ -3854,7 +3873,7 @@ html[data-theme='plasma'] .v2-shell {
 }
 
 .v2-cruise-day-date {
-  color: var(--v2-subtle);
+  color: var(--v2-label);
 }
 
 .v2-place-body .v2-city-days {
@@ -4373,7 +4392,7 @@ html[data-theme='plasma'] .v2-shell {
   text-align: left;
   border: 1px solid color-mix(in srgb, var(--v2-line-strong) 72%, transparent);
   background: var(--v2-panel);
-  color: inherit;
+  color: var(--v2-ink);
   border-radius: 1rem;
   padding: 0.9rem 1rem;
   margin: 0;
@@ -4383,6 +4402,10 @@ html[data-theme='plasma'] .v2-shell {
   gap: 0.35rem;
   box-shadow: 0 0.2rem 0.65rem var(--v2-shade);
   transition: border-color 0.15s ease, transform 0.15s ease;
+}
+
+.v2-stop-card .v2-meta {
+  color: var(--v2-label);
 }
 
 .v2-stop-card:active {
@@ -4473,13 +4496,13 @@ html[data-theme='plasma'] .v2-shell {
 }
 
 .v2-meta {
-  color: var(--v2-subtle);
+  color: var(--v2-label);
   font-size: 0.9rem;
   line-height: 1.35;
 }
 
 .v2-shell .meta {
-  color: var(--v2-subtle);
+  color: var(--v2-label);
 }
 
 .v2-stop-actions {
@@ -5848,14 +5871,15 @@ html[data-theme='plasma'] .v2-shell {
 
 .v2-chip-btn {
   appearance: none;
-  border: 1px solid var(--v2-line);
-  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--v2-line-strong);
+  background: color-mix(in srgb, var(--v2-panel) 92%, var(--v2-ink) 8%);
   color: var(--v2-ink);
   border-radius: 999px;
   padding: 0.45rem 0.8rem;
   min-height: 2.5rem;
   font: inherit;
   font-size: 0.88rem;
+  font-weight: 600;
 }
 
 .v2-chip-btn:disabled {
