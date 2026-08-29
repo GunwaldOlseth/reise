@@ -901,7 +901,6 @@ export function TripMap({
   }
 
   const failed = resolved.filter((r) => !r.place)
-  const plotted = resolved.filter((r) => r.place).length
   const markerPoints = useMemo(
     () =>
       resolved
@@ -946,11 +945,6 @@ export function TripMap({
   return (
     <div className="trip-map-wrap stack">
       <div className="trip-map-toolbar">
-        <p className="section-sub" style={{ marginBottom: 0 }}>
-          {status === 'loading'
-            ? 'Henter posisjoner…'
-            : `${plotted} av ${stops.length} punkt (hovedrute = byer; via som 1a, 1b…)`}
-        </p>
         <div className="trip-map-actions">
           <button
             type="button"
