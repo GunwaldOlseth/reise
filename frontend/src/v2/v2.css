@@ -4325,7 +4325,14 @@ html[data-theme='plasma'] .v2-shell {
 .v2-sights-add {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.3rem;
+  gap: 0.22rem;
+}
+
+.v2-sights-add .v2-chip-btn {
+  min-height: 1.65rem;
+  padding: 0.12rem 0.48rem;
+  font-size: 0.72rem;
+  font-weight: 650;
 }
 
 .v2-sights-list {
@@ -6583,8 +6590,9 @@ html[data-theme='plasma'] .v2-shell {
   }
 
   .v2-place-body .v2-sights-add .v2-chip-btn {
-    font-size: 0.72rem;
-    padding: 0.28rem 0.45rem;
+    min-height: 1.55rem;
+    font-size: 0.7rem;
+    padding: 0.1rem 0.4rem;
   }
 
   .v2-place-body .v2-sights-list {
