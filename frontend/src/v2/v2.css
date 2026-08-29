@@ -3712,7 +3712,7 @@ html[data-theme='plasma'] .v2-shell {
   gap: 0.28rem;
 }
 
-.v2-cruise-days li {
+.v2-cruise-days > li {
   display: grid;
   grid-template-columns: 5.5rem minmax(0, 1fr);
   gap: 0.45rem;
@@ -4630,6 +4630,8 @@ html[data-theme='plasma'] .v2-shell {
   display: flex;
   flex-direction: column;
   gap: 0.55rem;
+  width: 100%;
+  min-width: 0;
 }
 
 .v2-city-docs-head {
@@ -4688,7 +4690,10 @@ html[data-theme='plasma'] .v2-shell {
 .v2-city-doc {
   display: flex;
   flex-direction: column;
+  grid-template-columns: none;
   gap: 0.25rem;
+  width: 100%;
+  min-width: 0;
 }
 
 .v2-city-doc-title-row {
@@ -4752,6 +4757,8 @@ html[data-theme='plasma'] .v2-shell {
 }
 
 .v2-note-editor {
+  width: 100%;
+  min-width: 0;
   border-radius: 0.55rem;
   border: 1px solid var(--v2-line-strong);
   background: var(--v2-field);
