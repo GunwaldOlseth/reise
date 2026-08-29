@@ -797,7 +797,7 @@ export function JourneyPlanner({
                         {(pack?.days || []).map((day) => {
                           const row = packageDayTableRow(day, {
                             type: packType,
-                            nights: nights || pack?.nights || 1,
+                            nights: packageNightsOf(pack),
                             basePlace: pack?.basePlace,
                             freeLabel: freeDayLabel,
                             placeFallback:
