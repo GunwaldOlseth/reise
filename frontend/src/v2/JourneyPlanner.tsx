@@ -623,7 +623,6 @@ export function JourneyPlanner({
                   warn={warnings.includes('travel')}
                   requireTransportMode={settings.requireTransportMode}
                   disabled={loading}
-                  openTransportLegId={openTransportLegId}
                   onTransportOpenChange={setOpenTransportLegId}
                   onChange={patchTransportLeg}
                   onGoalStationChange={(station) =>
@@ -2053,7 +2052,6 @@ function TransportBlock({
   warn,
   requireTransportMode = true,
   disabled,
-  openTransportLegId = null,
   onTransportOpenChange,
   onChange,
   onGoalStationChange,
@@ -2065,7 +2063,6 @@ function TransportBlock({
   warn: boolean
   requireTransportMode?: boolean
   disabled?: boolean
-  openTransportLegId?: string | null
   onTransportOpenChange?: (legId: string | null) => void
   onChange: (leg: JourneyLeg, opts?: { immediate?: boolean }) => void
   onGoalStationChange?: (station: string) => void
@@ -2283,8 +2280,6 @@ function TransportBlock({
     onTransportOpenChange?.(leg.id)
   }
 
-  const showRail = !open && !openTransportLegId
-
   useEffect(() => {
     if (open) return
     setDraft(withTransportSegments(leg, transportSegments(leg)))
@@ -2499,21 +2494,8 @@ function TransportBlock({
     <div
       className={`v2-transport-wrap${open ? ' is-open' : ''}`}
       data-transport-open={open ? 'true' : 'false'}
-      style={
-        open
-          ? {
-              display: 'block',
-              paddingLeft: 0,
-              gap: 0,
-            }
-          : undefined
-      }
+      style={{ display: 'block', paddingLeft: 0, margin: 0 }}
     >
-      {showRail ? (
-        <div className="v2-rail v2-transport-rail" aria-hidden>
-          <div className="v2-rail-line" />
-        </div>
-      ) : null}
       <div
         className={`v2-transport${showWarn ? ' is-warn' : ''}${
           open ? ' is-open' : ''
