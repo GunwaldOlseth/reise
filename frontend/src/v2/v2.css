@@ -1966,6 +1966,17 @@ html[data-theme='plasma'] .v2-shell {
   font-size: 9px;
 }
 
+.v2-weather-chart-now {
+  stroke: var(--v2-weather-forecast);
+  stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.v2-weather-chart-dot-now {
+  fill: var(--v2-weather-forecast);
+}
+
 .v2-weather-chart-temp-label {
   fill: var(--v2-accent);
   font-size: 9.5px;
@@ -2012,10 +2023,43 @@ html[data-theme='plasma'] .v2-shell {
 
 .v2-weather-chart-legend {
   display: flex;
-  gap: 0.55rem;
-  margin: 0.35rem 0 0;
+  flex-wrap: wrap;
+  gap: 0.55rem 1rem;
+  margin: 0.45rem 0 0;
+  padding: 0;
+  list-style: none;
   font-size: 0.75rem;
   color: var(--v2-muted);
+}
+
+.v2-weather-chart-legend li {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-weight: 650;
+}
+
+.v2-weather-chart-legend li::before {
+  content: '';
+  width: 1.1rem;
+  height: 0.18rem;
+  border-radius: 99px;
+}
+
+.v2-weather-chart-legend .is-now {
+  color: var(--v2-weather-forecast);
+}
+
+.v2-weather-chart-legend .is-now::before {
+  background: var(--v2-weather-forecast);
+}
+
+.v2-weather-chart-legend .is-arrive {
+  color: var(--v2-accent);
+}
+
+.v2-weather-chart-legend .is-arrive::before {
+  background: var(--v2-accent);
 }
 
 .v2-weather-chart-legend button {
