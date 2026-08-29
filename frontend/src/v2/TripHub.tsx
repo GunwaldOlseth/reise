@@ -604,7 +604,7 @@ function JourneyExpensesView({
                 </span>
                 <span className="expense-line-amount">
                   {line.paid && (
-                    <span className="expense-paid-mark" title="Betalt" style={{ color: 'var(--color-success)', marginRight: '6px' }}>
+                    <span className="expense-paid-mark" title="Betalt">
                       ✓
                     </span>
                   )}
@@ -665,9 +665,9 @@ function JourneyExpensesView({
             </p>
           </div>
           <div className="expense-total-side">
-            <div>
-              <p className="expense-total-label" style={{ color: 'var(--color-success-text)' }}>Betalt</p>
-              <p className="expense-total-amount" style={{ color: 'var(--color-success-text)' }}>
+            <div className="expense-total-paid">
+              <p className="expense-total-label">Betalt</p>
+              <p className="expense-total-amount">
                 {formatExpenseAmount(summary.paidTotal || 0)}
               </p>
             </div>
