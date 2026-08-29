@@ -965,7 +965,7 @@ export function TripMap({
               })
             }}
           >
-            Reisetid
+            {showTravelTime ? 'Skjul reisetid' : 'Vis reisetid'}
           </button>
           <button
             type="button"
