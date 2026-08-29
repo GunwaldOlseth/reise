@@ -20,7 +20,7 @@ export function JourneyOverview({ journey }: { journey: Journey }) {
       <nav className="v2-overview-nav" aria-label="Oversikt">
         <button
           type="button"
-          className={`v2-overview-tab${page === 'cities' ? ' is-on' : ''}`}
+          className={`v2-overview-tab is-days${page === 'cities' ? ' is-on' : ''}`}
           title="Byer vi skal besøke"
           onClick={() => setPage('cities')}
         >
@@ -36,7 +36,7 @@ export function JourneyOverview({ journey }: { journey: Journey }) {
         </button>
         <button
           type="button"
-          className={`v2-overview-tab${page === 'rides' ? ' is-on' : ''}`}
+          className={`v2-overview-tab is-travel${page === 'rides' ? ' is-on' : ''}`}
           title="Transport med dato"
           onClick={() => setPage('rides')}
         >
@@ -53,7 +53,7 @@ export function JourneyOverview({ journey }: { journey: Journey }) {
               : `${cities.length} ${cities.length === 1 ? 'by' : 'byer'} i rekkefølge.`}
           </p>
           {cities.length > 0 && (
-            <ol className="v2-overview-list">
+            <ol className="v2-overview-list is-days">
               {cities.map((place, i) => (
                 <li key={`${place.country}|${place.city}|${i}`}>
                   <span className="v2-overview-num">{i + 1}</span>

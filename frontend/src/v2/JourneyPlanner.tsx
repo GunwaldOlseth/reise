@@ -1274,7 +1274,7 @@ function PlaceStopPanel({
 
   return (
     <div
-      className={`v2-transport v2-place-panel${open ? ' is-open' : ''}${
+      className={`v2-transport v2-place-panel is-day${open ? ' is-open' : ''}${
         warnings.length ? ' is-warn' : ''
       }`}
     >
@@ -2494,7 +2494,7 @@ function TransportBlock({
         <div className="v2-rail-line" />
       </div>
       <div
-        className={`v2-transport${showWarn ? ' is-warn' : ''}${
+        className={`v2-transport is-travel${showWarn ? ' is-warn' : ''}${
           open ? ' is-open' : ''
         }`}
       >

@@ -588,6 +588,12 @@ html[data-theme='bordeaux'] {
 html {
   --v2-line-strong: color-mix(in srgb, var(--v2-ink) 28%, transparent);
   --v2-wash: color-mix(in srgb, var(--v2-ink) 8%, transparent);
+  /* Stay/day vs travel — same theme tokens, different mix */
+  --v2-day-fill: color-mix(in srgb, var(--v2-accent) 13%, var(--v2-panel));
+  --v2-day-edge: color-mix(in srgb, var(--v2-accent) 42%, var(--v2-line));
+  --v2-travel-fill: color-mix(in srgb, var(--v2-warn) 12%, var(--v2-panel));
+  --v2-travel-edge: color-mix(in srgb, var(--v2-warn) 40%, var(--v2-line));
+  --v2-travel-mark: var(--v2-warn);
 }
 
 .v2-shell {
@@ -835,7 +841,7 @@ html[data-theme='plasma'] .v2-shell {
 
 .v2-hub-tab.is-active {
   color: var(--v2-ink);
-  background: rgba(61, 190, 165, 0.16);
+  background: color-mix(in srgb, var(--v2-accent) 16%, transparent);
 }
 
 .v2-hub-body {
@@ -937,6 +943,12 @@ html[data-theme='plasma'] .v2-shell {
   box-shadow: 0 0 0 1px var(--v2-accent);
 }
 
+.v2-overview-tab.is-travel.is-on {
+  border-color: var(--v2-travel-mark);
+  background: var(--v2-travel-fill);
+  box-shadow: 0 0 0 1px var(--v2-travel-mark);
+}
+
 .v2-hop-sort {
   display: flex;
   flex-wrap: wrap;
@@ -962,6 +974,16 @@ html[data-theme='plasma'] .v2-shell {
   border-radius: 0.85rem;
   border: 1px solid var(--v2-line-strong);
   background: var(--v2-panel);
+}
+
+.v2-overview-list.is-days li {
+  background: var(--v2-day-fill);
+  border-color: var(--v2-day-edge);
+  box-shadow: inset 3px 0 0 var(--v2-accent);
+}
+
+.v2-overview-list.is-days .v2-overview-num {
+  color: var(--v2-accent);
 }
 
 .v2-overview-num {
@@ -991,6 +1013,14 @@ html[data-theme='plasma'] .v2-shell {
 
 .v2-overview-list.is-rides li {
   align-items: start;
+  background: var(--v2-travel-fill);
+  border-color: var(--v2-travel-edge);
+  box-shadow: inset 3px 0 0 var(--v2-travel-mark);
+}
+
+.v2-overview-list.is-rides .v2-overview-num,
+.v2-overview-list.is-rides .v2-overview-date {
+  color: var(--v2-travel-mark);
 }
 
 .v2-text-link {
@@ -2148,23 +2178,23 @@ html[data-theme='plasma'] .v2-shell {
 
 .v2-transport-rail .v2-rail-line {
   width: 0;
-  border-left: 2px dashed var(--v2-line-strong);
+  border-left: 2px dashed var(--v2-travel-mark);
   background: transparent;
 }
 
 .v2-transport-wrap > .v2-transport {
-  border: 1px solid var(--v2-line-strong);
+  border: 1px solid var(--v2-travel-edge);
   border-radius: 0.65rem;
-  background: var(--v2-panel);
-  box-shadow: none;
+  background: var(--v2-travel-fill);
+  box-shadow: inset 3px 0 0 var(--v2-travel-mark);
 }
 
 .v2-transport-wrap > .v2-transport.is-warn {
-  border-color: rgba(240, 180, 41, 0.45);
+  border-color: color-mix(in srgb, var(--v2-warn) 55%, transparent);
 }
 
 .v2-transport-wrap > .v2-transport.is-open {
-  background: rgba(61, 190, 165, 0.05);
+  background: color-mix(in srgb, var(--v2-warn) 16%, var(--v2-panel));
 }
 
 .v2-transport-wrap .v2-transport-summary {
@@ -2198,12 +2228,21 @@ html[data-theme='plasma'] .v2-shell {
   overflow: visible;
 }
 
+.v2-transport.is-travel {
+  border-color: var(--v2-travel-edge);
+  background: var(--v2-travel-fill);
+}
+
 .v2-transport.is-warn {
-  border-color: rgba(240, 180, 41, 0.5);
+  border-color: color-mix(in srgb, var(--v2-warn) 55%, transparent);
 }
 
 .v2-transport.is-open {
-  background: rgba(61, 190, 165, 0.06);
+  background: color-mix(in srgb, var(--v2-accent) 10%, var(--v2-panel));
+}
+
+.v2-transport.is-travel.is-open {
+  background: color-mix(in srgb, var(--v2-warn) 16%, var(--v2-panel));
 }
 
 .v2-transport > .v2-transport-bar {
@@ -2263,6 +2302,10 @@ html[data-theme='plasma'] .v2-shell {
   font-weight: 650;
   color: var(--v2-accent);
   white-space: nowrap;
+}
+
+.v2-transport.is-travel .v2-transport-duration {
+  color: var(--v2-travel-mark);
 }
 
 .v2-hop-duration {
@@ -4091,8 +4134,14 @@ html[data-theme='plasma'] .v2-shell {
   background: var(--v2-panel);
 }
 
+.v2-stop > div:last-child > .v2-place-panel.is-day {
+  border-color: var(--v2-day-edge);
+  background: var(--v2-day-fill);
+  box-shadow: inset 3px 0 0 var(--v2-accent);
+}
+
 .v2-stop > div:last-child > .v2-place-panel.is-open {
-  background: rgba(61, 190, 165, 0.06);
+  background: color-mix(in srgb, var(--v2-accent) 16%, var(--v2-panel));
 }
 
 .v2-dot {
@@ -4101,7 +4150,7 @@ html[data-theme='plasma'] .v2-shell {
   margin-top: 1.15rem;
   border-radius: 999px;
   background: var(--v2-accent);
-  box-shadow: 0 0 0 4px rgba(61, 190, 165, 0.18);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--v2-accent) 18%, transparent);
 }
 
 .v2-dot.is-home {
@@ -4548,6 +4597,16 @@ html[data-theme='plasma'] .v2-shell {
   border: 1px solid var(--v2-line);
   background: var(--v2-panel);
   min-height: 3.5rem;
+}
+
+.v2-place-panel.v2-transport.is-day {
+  border-color: var(--v2-day-edge);
+  background: var(--v2-day-fill);
+  box-shadow: inset 3px 0 0 var(--v2-accent);
+}
+
+.v2-place-panel.v2-transport.is-day.is-open {
+  background: color-mix(in srgb, var(--v2-accent) 16%, var(--v2-panel));
 }
 
 .v2-place-panel .v2-transport-bar {
@@ -6008,14 +6067,23 @@ html[data-theme='plasma'] .v2-shell {
   flex-wrap: wrap;
 }
 
+.v2-live-places li {
+  padding: 0.55rem 0.75rem;
+  border-radius: 0.75rem;
+  border: 1px solid var(--v2-day-edge);
+  background: var(--v2-day-fill);
+  box-shadow: inset 3px 0 0 var(--v2-accent);
+}
+
 .v2-live-rides li {
   display: flex;
   flex-direction: column;
   gap: 0.45rem;
   padding: 0.65rem 0.7rem;
-  border: 1px solid var(--v2-line);
+  border: 1px solid var(--v2-travel-edge);
   border-radius: 0.75rem;
-  background: var(--v2-panel);
+  background: var(--v2-travel-fill);
+  box-shadow: inset 3px 0 0 var(--v2-travel-mark);
 }
 
 .v2-live-ride-main {
@@ -6271,6 +6339,14 @@ html[data-theme='plasma'] .v2-shell {
   gap: 0.85rem;
 }
 
+.v2-share-list > li {
+  padding: 0.7rem 0.85rem;
+  border-radius: 0.85rem;
+  border: 1px solid var(--v2-day-edge);
+  background: var(--v2-day-fill);
+  box-shadow: inset 3px 0 0 var(--v2-accent);
+}
+
 .v2-share-list > li > strong {
   display: block;
   font-size: 1.12rem;
@@ -6279,17 +6355,22 @@ html[data-theme='plasma'] .v2-shell {
 
 .v2-share-hops {
   list-style: none;
-  margin: 0.2rem 0 0;
-  padding: 0 0 0 1.15rem;
+  margin: 0.35rem 0 0;
+  padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.12rem;
+  gap: 0.28rem;
 }
 
 .v2-share-hops li {
-  color: var(--v2-muted);
-  font-size: 0.98rem;
+  color: var(--v2-ink);
+  font-size: 0.95rem;
   line-height: 1.35;
+  padding: 0.35rem 0.55rem;
+  border-radius: 0.5rem;
+  border: 1px solid var(--v2-travel-edge);
+  background: var(--v2-travel-fill);
+  box-shadow: inset 3px 0 0 var(--v2-travel-mark);
 }
 
 .v2-share-preview {
