@@ -158,14 +158,18 @@ export function TripHub({
 
   function persistLiveNow(next: Journey) {
     livePending.current = null
+    const live = compactLive(next.live)
     void api
-      .saveJourney(
-        tripId,
-        localizeJourneyPlaces({
-          ...next,
+      .getJourney(tripId)
+      .then((latest) =>
+        api.saveJourney(
           tripId,
-          live: compactLive(next.live),
-        }),
+          localizeJourneyPlaces({
+            ...latest,
+            tripId,
+            live,
+          }),
+        ),
       )
       .catch(() => {})
   }
@@ -191,18 +195,7 @@ export function TripHub({
   useEffect(() => {
     return () => {
       if (liveSaveTimer.current) clearTimeout(liveSaveTimer.current)
-      if (livePending.current) {
-        void api
-          .saveJourney(
-            tripId,
-            localizeJourneyPlaces({
-              ...livePending.current,
-              tripId,
-              live: compactLive(livePending.current.live),
-            }),
-          )
-          .catch(() => {})
-      }
+      if (livePending.current) persistLiveNow(livePending.current)
     }
   }, [tripId])
 

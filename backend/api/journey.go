@@ -2,10 +2,12 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -185,6 +187,81 @@ func normalizePackageStop(stop *JourneyStop) {
 	}
 	// Prefer pack going forward; drop legacy cruise payload once migrated.
 	stop.Cruise = nil
+}
+
+func parseFlexibleOffset(raw json.RawMessage) int {
+	s := strings.TrimSpace(string(raw))
+	if s == "" || s == "null" {
+		return 0
+	}
+	if strings.HasPrefix(s, "\"") {
+		var str string
+		if err := json.Unmarshal(raw, &str); err != nil {
+			return 0
+		}
+		n, err := strconv.Atoi(strings.TrimSpace(str))
+		if err != nil || n < 0 {
+			return 0
+		}
+		return n
+	}
+	var n int
+	if err := json.Unmarshal(raw, &n); err == nil {
+		if n < 0 {
+			return 0
+		}
+		return n
+	}
+	var f float64
+	if err := json.Unmarshal(raw, &f); err != nil {
+		return 0
+	}
+	n = int(f)
+	if n < 0 {
+		return 0
+	}
+	return n
+}
+
+// UnmarshalJSON accepts offset as a number or string. A string offset used to
+// fail the entire PUT /journey decode, so allAboardTime never reached Firestore.
+func (d *JourneyPackageDay) UnmarshalJSON(data []byte) error {
+	var shadow struct {
+		ID            string           `json:"id"`
+		Offset        json.RawMessage  `json:"offset"`
+		AtSea         bool             `json:"atSea"`
+		City          string           `json:"city"`
+		Country       string           `json:"country"`
+		Latitude      float64          `json:"latitude"`
+		Longitude     float64          `json:"longitude"`
+		ArriveTime    string           `json:"arriveTime"`
+		LeaveTime     string           `json:"leaveTime"`
+		AllAboardTime string           `json:"allAboardTime"`
+		AllAboard     string           `json:"allAboard"`
+		HideOnMap     bool             `json:"hideOnMap"`
+		Notes         string           `json:"notes"`
+		Docs          []JourneyCityDoc `json:"docs"`
+	}
+	if err := json.Unmarshal(data, &shadow); err != nil {
+		return err
+	}
+	d.ID = shadow.ID
+	d.Offset = parseFlexibleOffset(shadow.Offset)
+	d.AtSea = shadow.AtSea
+	d.City = shadow.City
+	d.Country = shadow.Country
+	d.Latitude = shadow.Latitude
+	d.Longitude = shadow.Longitude
+	d.ArriveTime = strings.TrimSpace(shadow.ArriveTime)
+	d.LeaveTime = strings.TrimSpace(shadow.LeaveTime)
+	d.AllAboardTime = strings.TrimSpace(shadow.AllAboardTime)
+	if d.AllAboardTime == "" {
+		d.AllAboardTime = strings.TrimSpace(shadow.AllAboard)
+	}
+	d.HideOnMap = shadow.HideOnMap
+	d.Notes = shadow.Notes
+	d.Docs = shadow.Docs
+	return nil
 }
 
 func normalizeJourney(j *Journey) {
@@ -382,6 +459,7 @@ func putJourney(w http.ResponseWriter, r *http.Request) {
 
 	var incoming Journey
 	if err := decodeJSON(r, &incoming); err != nil {
+		log.Printf("putJourney decode: %v", err)
 		respondWithError(w, http.StatusBadRequest, "Invalid JSON")
 		return
 	}

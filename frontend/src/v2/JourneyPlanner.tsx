@@ -61,6 +61,7 @@ import {
   packageFreeDayLabel,
   packageNightsOf,
   packageOf,
+  persistPackageDay,
   packageDayTableRow,
   packageTypeLabel,
   removeStop,
@@ -424,15 +425,7 @@ export function JourneyPlanner({
                 ...stop,
                 pack: {
                   ...pack,
-                  days: (pack.days || []).map((day) => {
-                    const dayDocs = compactCityDocs(cityDocsOf(day))
-                    return {
-                      ...day,
-                      docs: dayDocs,
-                      notes:
-                        dayDocs[0]?.body || compactNoteHtml(day.notes || ''),
-                    }
-                  }),
+                  days: (pack.days || []).map((day) => persistPackageDay(day)),
                 },
               }
             }

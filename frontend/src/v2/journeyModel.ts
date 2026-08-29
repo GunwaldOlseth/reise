@@ -6,6 +6,7 @@ import {
 } from '../userSettings'
 import {
   arriveTimeSortKey,
+  commitClockTimeInput,
   formatExpenseAmount,
   normalizeClockTime,
   normalizeEditableClockTime,
@@ -2394,6 +2395,20 @@ export function packageDayOffset(
   return Number.isFinite(n) && n >= 0 ? n : 0
 }
 
+/** Always emit clock strings so JSON.stringify keeps allAboardTime on PUT. */
+export function persistPackageDay(day: JourneyPackageDay): JourneyPackageDay {
+  const dayDocs = compactCityDocs(cityDocsOf(day))
+  return {
+    ...day,
+    offset: packageDayOffset(day),
+    arriveTime: commitClockTimeInput((day.arriveTime || '').trim()),
+    leaveTime: commitClockTimeInput((day.leaveTime || '').trim()),
+    allAboardTime: commitClockTimeInput((day.allAboardTime || '').trim()),
+    docs: dayDocs,
+    notes: dayDocs[0]?.body || compactNoteHtml(day.notes || ''),
+  }
+}
+
 /** @deprecated use packageNightsOf */
 export function cruiseNightsOf(cruise?: JourneyCruise | null): number {
   return packageNightsOf(cruise)
@@ -3209,6 +3224,9 @@ export function keepPlacePurpose(local: Journey, saved: Journey): Journey {
                   return {
                     ...d,
                     hideOnMap: d.hideOnMap ?? prevDay?.hideOnMap,
+                    arriveTime: d.arriveTime ?? prevDay?.arriveTime,
+                    leaveTime: d.leaveTime ?? prevDay?.leaveTime,
+                    allAboardTime: d.allAboardTime ?? prevDay?.allAboardTime,
                   }
                 }),
               }
