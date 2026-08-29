@@ -2090,6 +2090,143 @@ export function moveActivityToDay(
   return normalizeSights([...without, moved])
 }
 
+/** Calendar days on a stop where activities can be scheduled. */
+export function calendarDaysForStop(stop: JourneyStop): {
+  offset: number
+  date: string
+  label: string
+}[] {
+  const arrive = (stop.arriveDate || '').trim()
+  if (!arrive) return []
+
+  if (isPackageStop(stop)) {
+    const pack = packageOf(stop)
+    const nights = packageNightsOf(pack)
+    const freeLabel = packageFreeDayLabel(stop.kind)
+    return Array.from({ length: nights + 1 }, (_, offset) => {
+      const day = (pack?.days || []).find(
+        (d) => packageDayOffset(d) === offset,
+      )
+      const date = addDaysIso(arrive, offset)
+      const place = day?.atSea
+        ? freeLabel
+        : day?.city?.trim() ||
+          pack?.basePlace?.trim() ||
+          stop.city?.trim() ||
+          'Dag'
+      return {
+        offset,
+        date,
+        label: `${formatDateNO(date)} · ${place}`,
+      }
+    })
+  }
+
+  if (stop.kind === 'home') {
+    return [{ offset: 0, date: arrive, label: formatDateNO(arrive) }]
+  }
+
+  return cityStayDays(stop).map((d) => ({
+    offset: d.offset,
+    date: d.date,
+    label: `${formatDateNO(d.date)} · ${d.label}`,
+  }))
+}
+
+/** Which stop and dayOffset owns a calendar date on the journey thread. */
+export function resolveActivityDateTarget(
+  journey: Journey,
+  date: string,
+): { stopId: string; dayOffset: number; label: string } | null {
+  const target = (date || '').trim()
+  if (!target) return null
+  const stops = [...(journey.stops || [])].sort(
+    (a, b) => a.sortOrder - b.sortOrder,
+  )
+  for (const stop of stops) {
+    const day = calendarDaysForStop(stop).find((d) => d.date === target)
+    if (day) {
+      return {
+        stopId: stop.id,
+        dayOffset: day.offset,
+        label: day.label,
+      }
+    }
+  }
+  return null
+}
+
+export function journeyActivityCalendarBounds(journey: Journey): {
+  min?: string
+  max?: string
+} {
+  let min = ''
+  let max = ''
+  for (const stop of journey.stops || []) {
+    for (const day of calendarDaysForStop(stop)) {
+      if (!min || day.date < min) min = day.date
+      if (!max || day.date > max) max = day.date
+    }
+  }
+  return { min: min || undefined, max: max || undefined }
+}
+
+/** Move an activity to any calendar day on the journey (may change stop). */
+export function moveActivityToCalendarDate(
+  journey: Journey,
+  sourceStopId: string,
+  activityId: string,
+  targetDate: string,
+): Journey | null {
+  const target = resolveActivityDateTarget(journey, targetDate)
+  if (!target) return null
+
+  const sourceStop = (journey.stops || []).find((s) => s.id === sourceStopId)
+  if (!sourceStop) return null
+
+  const activity = normalizeSights(sourceStop.sights).find(
+    (s) => s.id === activityId,
+  )
+  if (!activity) return null
+
+  const sourceOffset = activity.dayOffset ?? 0
+  if (
+    target.stopId === sourceStopId &&
+    sourceOffset === target.dayOffset
+  ) {
+    return journey
+  }
+
+  const sourceSights = normalizeSights(sourceStop.sights).filter(
+    (s) => s.id !== activityId,
+  )
+
+  const targetStop = (journey.stops || []).find((s) => s.id === target.stopId)
+  if (!targetStop) return null
+
+  const targetDayCount = normalizeSights(targetStop.sights).filter(
+    (s) => (s.dayOffset ?? 0) === target.dayOffset,
+  ).length
+  const moved: JourneyActivity = {
+    ...activity,
+    dayOffset: target.dayOffset,
+    sortOrder: targetDayCount,
+  }
+  const targetSights = normalizeSights([
+    ...normalizeSights(targetStop.sights),
+    moved,
+  ])
+
+  return {
+    ...journey,
+    stops: (journey.stops || []).map((s) => {
+      if (s.id === sourceStopId) return { ...s, sights: sourceSights }
+      if (s.id === target.stopId) return { ...s, sights: targetSights }
+      return s
+    }),
+  }
+}
+
 export function newLegId(): string {
   return crypto.randomUUID()
 }

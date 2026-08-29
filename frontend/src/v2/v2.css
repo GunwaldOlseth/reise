@@ -585,6 +585,42 @@ html[data-theme='bordeaux'] {
   --v2-hover: #e8d3cf;
 }
 
+/* Lift cards/surfaces away from page background on every theme. */
+html[data-theme='skog'],
+html[data-theme='kyst'],
+html[data-theme='sand'],
+html[data-theme='lavendel'],
+html[data-theme='stein'],
+html[data-theme='nordlys'],
+html[data-theme='solglod'],
+html[data-theme='neonrosa'],
+html[data-theme='elektrisk'],
+html[data-theme='polarnatt'],
+html[data-theme='plasma'],
+html[data-theme='sepia'],
+html[data-theme='blekk'],
+html[data-theme='pergament'],
+html[data-theme='kobber'],
+html[data-theme='bibliotek'],
+html[data-theme='bordeaux'] {
+  --v2-bg: color-mix(in srgb, var(--v2-bg) 84%, #000000 16%);
+  --v2-panel: color-mix(in srgb, var(--v2-panel) 64%, #ffffff 36%);
+  --v2-field: color-mix(in srgb, var(--v2-field) 78%, #ffffff 22%);
+  --v2-shade: color-mix(in srgb, var(--v2-shade) 70%, #000000 30%);
+}
+
+html[data-theme='skog-lys'],
+html[data-theme='kyst-lys'],
+html[data-theme='sand-lys'],
+html[data-theme='lavendel-lys'],
+html[data-theme='stein-lys'],
+html[data-theme='nordlys-lys'] {
+  --v2-bg: color-mix(in srgb, var(--v2-bg) 70%, var(--v2-ink) 30%);
+  --v2-panel: color-mix(in srgb, var(--v2-panel) 50%, #ffffff 50%);
+  --v2-field: color-mix(in srgb, var(--v2-field) 62%, #ffffff 38%);
+  --v2-shade: color-mix(in srgb, var(--v2-shade) 55%, var(--v2-ink) 45%);
+}
+
 html {
   --v2-line-strong: color-mix(in srgb, var(--v2-ink) 28%, transparent);
   --v2-wash: color-mix(in srgb, var(--v2-ink) 8%, transparent);
@@ -2212,10 +2248,10 @@ html[data-theme='plasma'] .v2-shell {
 }
 
 .v2-transport-wrap > .v2-transport {
-  border: 1px solid var(--v2-line-strong);
+  border: 1px solid color-mix(in srgb, var(--v2-line-strong) 72%, transparent);
   border-radius: 0.65rem;
   background: var(--v2-panel);
-  box-shadow: none;
+  box-shadow: 0 0.2rem 0.55rem var(--v2-shade);
 }
 
 .v2-transport-wrap > .v2-transport.is-warn {
@@ -4248,8 +4284,9 @@ html[data-theme='plasma'] .v2-shell {
 
 .v2-stop > div:last-child > .v2-place-panel,
 .v2-stop > div:last-child > .v2-stop-card:not(.is-pack) {
-  border-color: var(--v2-line);
+  border-color: color-mix(in srgb, var(--v2-line-strong) 72%, transparent);
   background: var(--v2-panel);
+  box-shadow: 0 0.2rem 0.65rem var(--v2-shade);
 }
 
 .v2-stop > div:last-child > .v2-place-panel.is-open {
@@ -4323,7 +4360,7 @@ html[data-theme='plasma'] .v2-shell {
   appearance: none;
   width: 100%;
   text-align: left;
-  border: 1px solid var(--v2-line);
+  border: 1px solid color-mix(in srgb, var(--v2-line-strong) 72%, transparent);
   background: var(--v2-panel);
   color: inherit;
   border-radius: 1rem;
@@ -4333,6 +4370,7 @@ html[data-theme='plasma'] .v2-shell {
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
+  box-shadow: 0 0.2rem 0.65rem var(--v2-shade);
   transition: border-color 0.15s ease, transform 0.15s ease;
 }
 
@@ -4771,8 +4809,9 @@ html[data-theme='plasma'] .v2-shell {
 .v2-place-panel.v2-transport {
   margin: 0;
   border-radius: 1rem;
-  border: 1px solid var(--v2-line);
+  border: 1px solid color-mix(in srgb, var(--v2-line-strong) 72%, transparent);
   background: var(--v2-panel);
+  box-shadow: 0 0.2rem 0.65rem var(--v2-shade);
   min-height: 3.5rem;
 }
 
