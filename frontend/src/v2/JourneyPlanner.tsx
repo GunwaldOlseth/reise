@@ -7,11 +7,8 @@ import {
   applyRegisteredHome,
   formatHomePlace,
   hasHomePlace,
-  loadTransportOptionSort,
-  saveTransportOptionSort,
   type HomePlace,
   type PlannerSettings,
-  type TransportOptionSort,
 } from '../userSettings'
 import {
   activitiesForDay,
@@ -2042,9 +2039,6 @@ function TransportBlock({
   const [overSegId, setOverSegId] = useState<string | null>(null)
   /** Which departure-row mode menu is open (`placeIdx-optIdx`). */
   const [modeMenuKey, setModeMenuKey] = useState<string | null>(null)
-  const [optionSort, setOptionSort] = useState<TransportOptionSort>(() =>
-    loadTransportOptionSort(),
-  )
   const [draft, setDraft] = useState<JourneyLeg>(() =>
     withTransportSegments(leg, transportSegments(leg)),
   )
@@ -2103,10 +2097,7 @@ function TransportBlock({
   const latestSegs = useRef(segments)
   latestSegs.current = segments
 
-  function cleanSegments(
-    list: JourneyVia[],
-    by: TransportOptionSort = optionSort,
-  ): JourneyVia[] {
+  function cleanSegments(list: JourneyVia[]): JourneyVia[] {
     return list
       .map((v, i) => {
         let opts: JourneyTransportOption[] = viaTransportOptions(v)
@@ -2183,7 +2174,7 @@ function TransportBlock({
           )
         const flight = opts.find((o) => o.mode === 'flight')
         if (flight) opts = [flight]
-        else opts = sortTransportOptions(opts, by)
+        else opts = sortTransportOptions(opts)
         return withViaOptions(
           {
             ...v,
@@ -2207,28 +2198,21 @@ function TransportBlock({
       .filter((v) => v.title.trim() || viaTransportOptions(v).length > 0)
   }
 
-  function persistNow(
-    list: JourneyVia[],
-    by: TransportOptionSort = optionSort,
-    immediate = false,
-  ) {
+  function persistNow(list: JourneyVia[], immediate = false) {
     if (persistTimer.current) {
       clearTimeout(persistTimer.current)
       persistTimer.current = null
     }
-    onChange(withTransportSegments(leg, cleanSegments(list, by)), {
+    onChange(withTransportSegments(leg, cleanSegments(list)), {
       immediate,
     })
   }
 
-  function schedulePersist(
-    list: JourneyVia[],
-    by: TransportOptionSort = optionSort,
-  ) {
+  function schedulePersist(list: JourneyVia[]) {
     if (persistTimer.current) clearTimeout(persistTimer.current)
     persistTimer.current = setTimeout(() => {
       persistTimer.current = null
-      onChange(withTransportSegments(leg, cleanSegments(list, by)))
+      onChange(withTransportSegments(leg, cleanSegments(list)))
     }, 450)
   }
 
@@ -2382,7 +2366,7 @@ function TransportBlock({
     const modeChange = Object.prototype.hasOwnProperty.call(partial, 'mode')
     setOptions(
       placeIdx,
-      resort ? sortTransportOptions(next, optionSort) : next,
+      resort ? sortTransportOptions(next) : next,
       modeChange || resort || immediate,
     )
   }
@@ -2404,22 +2388,9 @@ function TransportBlock({
     if (!via) return
     setOptions(
       placeIdx,
-      sortTransportOptions(viaTransportOptions(via), optionSort),
+      sortTransportOptions(viaTransportOptions(via)),
       true,
     )
-  }
-
-  function applyOptionSort(by: TransportOptionSort) {
-    const next = saveTransportOptionSort(by)
-    setOptionSort(next)
-    const sorted = segments.map((via) =>
-      withViaOptions(
-        via,
-        sortTransportOptions(viaTransportOptions(via), next),
-      ),
-    )
-    setDraft(withTransportSegments(draft, sorted))
-    persistNow(sorted, next)
   }
 
   function removeOption(placeIdx: number, optIdx: number) {
@@ -2556,26 +2527,6 @@ function TransportBlock({
                 ? '. Hvert sted trenger navn og minst én reise (buss, tog, fly …).'
                 : '. Du kan legge hovedlinjen med bare steder; reisemåte er valgfritt.'}
             </p>
-            <nav className="v2-hop-sort" aria-label="Sorter transport">
-              {(
-                [
-                  ['depart', 'Avreise'],
-                  ['arrive', 'Ankomst'],
-                  ['duration', 'Varighet'],
-                ] as const
-              ).map(([id, label]) => (
-                <button
-                  key={id}
-                  type="button"
-                  className={`v2-overview-tab${optionSort === id ? ' is-on' : ''}`}
-                  disabled={disabled}
-                  title={`Sorter etter ${label.toLowerCase()}`}
-                  onClick={() => applyOptionSort(id)}
-                >
-                  {label}
-                </button>
-              ))}
-            </nav>
 
             <div className="v2-via-list">
               <div className="v2-via-head">

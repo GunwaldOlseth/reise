@@ -1,8 +1,6 @@
 import {
-  loadTransportOptionSort,
   type HomePlace,
   type PlannerSettings,
-  type TransportOptionSort,
 } from '../userSettings'
 import {
   arriveTimeSortKey,
@@ -1253,10 +1251,10 @@ export function stopPurpose(
   return 'visit'
 }
 
-/** One departure alternative — sorted by avreise, ankomst or varighet. */
+/** One departure alternative — sorted by departure time. */
 export function sortTransportOptions(
   options: JourneyTransportOption[],
-  by: TransportOptionSort = loadTransportOptionSort(),
+  by: 'depart' | 'arrive' | 'duration' = 'depart',
 ): JourneyTransportOption[] {
   const rows = options.map((option, index) => ({
     option,
@@ -1279,10 +1277,10 @@ export function sortTransportOptions(
   return rows.map((row) => row.option)
 }
 
-/** @deprecated Prefer sortTransportOptions — uses the saved sort preference. */
+/** @deprecated Prefer sortTransportOptions. */
 export function sortTransportOptionsByTime(
   options: JourneyTransportOption[],
-  by: TransportOptionSort = loadTransportOptionSort(),
+  by: 'depart' | 'arrive' | 'duration' = 'depart',
 ): JourneyTransportOption[] {
   return sortTransportOptions(options, by)
 }
