@@ -70,10 +70,12 @@ Read-Host 'Enter for a lukke'
 
 $frontendCmd = @"
 `$host.UI.RawUI.WindowTitle = 'Reise frontend :5174'
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force
 Set-Location '$Root\frontend'
-if (-not (Test-Path node_modules)) { npm install }
+# npm.ps1 is blocked when ExecutionPolicy is Restricted; npm.cmd is not.
+if (-not (Test-Path node_modules)) { npm.cmd install }
 Write-Host 'Starter Vite. Vent til du ser Local: http://localhost:5174/'
-npm run dev
+npm.cmd run dev
 Write-Host 'Frontend avsluttet. Ofte: port 5174 opptatt, eller kjort fra feil mappe.' -ForegroundColor Red
 Read-Host 'Enter for a lukke'
 "@
