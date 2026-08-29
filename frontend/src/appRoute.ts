@@ -57,8 +57,16 @@ function parseTripParts(parts: string[]): AppView | null {
   return { name: 'trip', tripId, tab }
 }
 
+/** Share itinerary hashes are owned by `readShareToken`, not app screens. */
+export function isShareHash(hash: string): boolean {
+  return /^#\/d\/[A-Za-z0-9_-]+$/.test(hash || '')
+}
+
 /** Parse location.hash. Share links `#/d/…` are handled separately. */
 export function parseAppHash(hash: string): AppView {
+  if (isShareHash(hash.startsWith('#') ? hash : `#${hash}`)) {
+    return { name: 'home' }
+  }
   const path = normalizeHash(hash)
   const parts = path.split('/').filter(Boolean)
   if (parts[0] === 'd') return { name: 'home' }

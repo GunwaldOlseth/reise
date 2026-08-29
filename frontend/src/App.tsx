@@ -43,6 +43,7 @@ import { cacheJourney } from './v2/journeyCache'
 import { MissingHotelDaysCard } from './v2/MissingHotelDaysCard'
 import {
   hashesEqual,
+  isShareHash,
   mergeAppView,
   parseAppHash,
   sameAppRoute,
@@ -336,7 +337,18 @@ function SettingsPage({
 }
 
 export default function App() {
-  const shareToken = readShareToken()
+  const [shareToken, setShareToken] = useState(() => readShareToken())
+  useEffect(() => {
+    function syncShare() {
+      setShareToken(readShareToken())
+    }
+    window.addEventListener('hashchange', syncShare)
+    window.addEventListener('popstate', syncShare)
+    return () => {
+      window.removeEventListener('hashchange', syncShare)
+      window.removeEventListener('popstate', syncShare)
+    }
+  }, [])
   return (
     <ConfirmDeleteProvider>
       {shareToken ? (
@@ -354,6 +366,7 @@ function AppMain() {
   )
 
   function applyLocationView() {
+    if (isShareHash(window.location.hash)) return
     const next = parseAppHash(window.location.hash)
     setViewState((prev) => {
       const merged = mergeAppView(prev, next)
@@ -378,6 +391,8 @@ function AppMain() {
   }
 
   useEffect(() => {
+    if (isShareHash(window.location.hash)) return
+
     const current = window.location.hash
     const canonical = viewToHash(parseAppHash(current))
     if (!current || current === '#' || !hashesEqual(current, canonical)) {
