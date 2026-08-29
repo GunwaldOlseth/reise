@@ -23,7 +23,18 @@ Write-Host "=== Reise lokal dev ===" -ForegroundColor Cyan
 Write-Host "Repo:      $Root"
 Write-Host "Frontend:  http://localhost:5174/   (ikke 5173)"
 Write-Host "Backend:   http://localhost:8082/api/health"
+Write-Host "Vite-dev kaller /api (proxy) — ikke Cloud Run."
 Write-Host ""
+
+$envLocal = Join-Path $Root "frontend\.env.local"
+if (Test-Path $envLocal) {
+  $localApi = Select-String -Path $envLocal -Pattern "VITE_API_URL\s*=" -ErrorAction SilentlyContinue
+  if ($localApi -and $localApi.Line -match "run\.app") {
+    Write-Host "Merk: frontend\.env.local har Cloud Run VITE_API_URL." -ForegroundColor Yellow
+    Write-Host "npm run dev ignorerer den og bruker /api -> :8082. Fjern VITE_API_URL fra .env.local om du vil." -ForegroundColor Yellow
+    Write-Host ""
+  }
+}
 
 $fePid = Get-ListenerPid 5174
 $bePid = Get-ListenerPid 8082
@@ -47,7 +58,7 @@ if (-not (Test-Path $KeyPath)) {
 $backendCmd = @"
 `$host.UI.RawUI.WindowTitle = 'Reise backend :8082'
 Set-Location '$Root\backend\api'
-`$env:FIREBASE_KEY_PATH = '$KeyPath'
+if (Test-Path '$KeyPath') { `$env:FIREBASE_KEY_PATH = '$KeyPath' }
 `$env:PORT = '8082'
 Write-Host 'Starter backend. La dette vinduet sta apent.'
 go run .

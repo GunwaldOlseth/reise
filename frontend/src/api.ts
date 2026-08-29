@@ -1,10 +1,29 @@
+const PRODUCTION_API =
+  'https://reise-backend-624978663833.europe-north1.run.app/api'
+
+function isLocalApiBase(url: string): boolean {
+  const u = url.replace(/\/$/, '')
+  if (!u || u === '/api') return true
+  try {
+    const parsed = new URL(u, 'http://127.0.0.1')
+    return parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1'
+  } catch {
+    return false
+  }
+}
+
 const API_BASE = (() => {
   const fromEnv = (import.meta.env.VITE_API_URL as string | undefined)?.trim()
-  if (fromEnv) return fromEnv.replace(/\/$/, '')
-  // Vite production builds for Cloud Run bake this via frontend/.env.production
-  if (import.meta.env.PROD) {
-    return 'https://reise-backend-624978663833.europe-north1.run.app/api'
+  // Vite `npm run dev` must never hit Cloud Run — .env.local often copies
+  // .env.production (Firebase keys) and accidentally keeps VITE_API_URL.
+  if (import.meta.env.DEV) {
+    if (fromEnv && isLocalApiBase(fromEnv)) {
+      return fromEnv.replace(/\/$/, '')
+    }
+    return '/api'
   }
+  if (fromEnv) return fromEnv.replace(/\/$/, '')
+  if (import.meta.env.PROD) return PRODUCTION_API
   return 'http://localhost:8082/api'
 })()
 

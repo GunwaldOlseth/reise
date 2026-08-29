@@ -39,9 +39,11 @@ npm run dev
 
 Åpne **`http://localhost:5174/`** (Reise bruker port **5174**, ikke 5173 — beer/brygge bruker 5173).
 
-API-kall går til `http://localhost:8082/api` via Vite-proxy (se `frontend/vite.config.ts`) eller `VITE_API_URL` i `.env.local` (se `.env.example`).
+API-kall i **`npm run dev`** går til **samme origin** (`/api`) og proxes til `http://localhost:8082` (`frontend/vite.config.ts`). Produksjons-URL fra `.env.production` / `.env.local` brukes **ikke** i Vite-dev, slik at A.ab. lagres mot lokal Go + Firestore (ikke Cloud Run).
 
 **Én kommando (Windows):** `powershell -File scripts/start-dev.ps1` — starter backend og frontend i egne vinduer, og åpner nettleseren når Vite er klar.
+
+**All aboard lagres ikke «lokalt»:** `git pull` denne branchen, stopp **både** `go run` og `npm run dev` (`Ctrl+C`), kjør `scripts/start-dev.ps1` på nytt. Hard refresh `Ctrl+Shift+R`. Sjekk at nettverksfanen viser `PUT http://localhost:5174/api/trips/.../journey` (ikke `*.run.app`).
 
 **Tom side / «kommer ikke opp» lokalt:** Vite må kjøre *etter* `git pull`. Stopp gamle `npm run dev` / `go run` (`Ctrl+C`), kjør `scripts/start-dev.ps1` på nytt, og vent til vinduet viser `Local: http://localhost:5174/`. Hard refresh: `Ctrl+Shift+R`. Ikke bruk `localhost:5173`.
 
