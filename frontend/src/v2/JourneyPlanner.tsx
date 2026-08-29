@@ -2518,6 +2518,26 @@ function TransportBlock({
 
         {open && (
           <div className="v2-transport-body">
+            <nav className="v2-hop-sort" aria-label="Sorter transport">
+              {(
+                [
+                  ['depart', 'Avreise'],
+                  ['arrive', 'Ankomst'],
+                  ['duration', 'Varighet'],
+                ] as const
+              ).map(([id, label]) => (
+                <button
+                  key={id}
+                  type="button"
+                  className={`v2-overview-tab${optionSort === id ? ' is-on' : ''}`}
+                  disabled={disabled}
+                  title={`Sorter etter ${label.toLowerCase()}`}
+                  onClick={() => applyOptionSort(id)}
+                >
+                  {label}
+                </button>
+              ))}
+            </nav>
             <p className="v2-meta" style={{ margin: 0 }}>
               Sti fra{' '}
               <strong>
