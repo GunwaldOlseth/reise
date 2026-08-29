@@ -194,6 +194,45 @@ export function PlaceMetaIcon({
   }
 }
 
+/** Pencil / edit icon. */
+export function PencilIcon({ size = 15 }: { size?: number }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <path d="M12.5 6.5 17.5 11.5" />
+      <path d="M4 20.5 5.8 14.2 16.2 3.8a2.1 2.1 0 0 1 3 3L8.8 18.2 4 20.5Z" />
+    </svg>
+  )
+}
+
+/** Small check for “done editing”. */
+export function CheckIcon({ size = 15 }: { size?: number }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.4"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <path d="M5 12.5 10 17.5 19 7.5" />
+    </svg>
+  )
+}
+
 /** Trash / delete icon for remove buttons. */
 export function TrashIcon({ size = 16 }: { size?: number }) {
   return (
