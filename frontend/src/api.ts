@@ -14,15 +14,8 @@ function isLocalApiBase(url: string): boolean {
 
 const API_BASE = (() => {
   const fromEnv = (import.meta.env.VITE_API_URL as string | undefined)?.trim()
-  // Vite `npm run dev` must never hit Cloud Run — .env.local often copies
-  // .env.production (Firebase keys) and accidentally keeps VITE_API_URL.
-  if (import.meta.env.DEV) {
-    if (fromEnv && isLocalApiBase(fromEnv)) {
-      return fromEnv.replace(/\/$/, '')
-    }
-    return '/api'
-  }
   if (fromEnv) return fromEnv.replace(/\/$/, '')
+  if (import.meta.env.DEV) return '/api'
   if (import.meta.env.PROD) return PRODUCTION_API
   return 'http://localhost:8082/api'
 })()
