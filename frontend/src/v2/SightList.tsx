@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { ClockTimeInput } from './ClockTimeInput'
 import { CityDocsEditor } from './CityDocsEditor'
 import { CityInfoTip } from './CityInfoTip'
+import { HotelLinkedChip } from './HotelInfoTip'
 import { CitySuggestFields } from '../CitySuggest'
 import { TrashIcon, PlaceMetaIcon } from '../TransportModeIcon'
 import {
@@ -15,6 +16,7 @@ import {
   STAY_WITHOUT_HOTEL_LABEL,
   type JourneyActivity,
   type JourneyActivityKind,
+  type JourneyStay,
 } from './journeyModel'
 import { useConfirmDelete } from './ConfirmDelete'
 import { PurposeToggle, PaidToggle } from './PurposeToggle'
@@ -739,14 +741,20 @@ export function SightPreview({ sights }: { sights?: JourneyActivity[] | null }) 
 /** Collapsed preview of hotel + program linked to a city. */
 export function PlaceLinkedPreview({
   hotel,
+  stay,
   lodgingKind = 'hotel',
   nights,
+  arriveDate,
+  departDate,
   warnMissingStay,
   sights,
 }: {
   hotel?: string
+  stay?: JourneyStay | null
   lodgingKind?: 'hotel' | 'airbnb'
   nights?: number
+  arriveDate?: string
+  departDate?: string
   warnMissingStay?: boolean
   sights?: JourneyActivity[] | null
 }) {
@@ -761,13 +769,24 @@ export function PlaceLinkedPreview({
   return (
     <ul className="v2-sights-preview v2-linked-preview">
       {hasHotel ? (
-        <li className={itemClass} title={kindLabel}>
-          {hotel!.trim()}
-        </li>
+        <HotelLinkedChip
+          stay={stay}
+          label={hotel!.trim()}
+          lodgingKind={lodgingKind}
+          nights={nights}
+          arriveDate={arriveDate}
+          departDate={departDate}
+        />
       ) : hasStay ? (
-        <li className={`${itemClass} is-empty`} title={kindLabel}>
-          {unsetLabel}
-        </li>
+        <HotelLinkedChip
+          stay={stay}
+          label={unsetLabel}
+          lodgingKind={lodgingKind}
+          empty
+          nights={nights}
+          arriveDate={arriveDate}
+          departDate={departDate}
+        />
       ) : warnMissingStay ? (
         <li className={`${itemClass} is-empty`} title={kindLabel}>
           Uten {kindLabel.toLowerCase()}
