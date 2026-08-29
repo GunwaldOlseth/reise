@@ -4630,6 +4630,32 @@ html[data-theme='plasma'] .v2-shell {
   height: 2.1rem;
 }
 
+.v2-activity-move {
+  appearance: none;
+  border: 1px solid var(--v2-line);
+  background: transparent;
+  color: var(--v2-ink);
+  border-radius: 0.45rem;
+  width: 2.1rem;
+  min-height: 2.1rem;
+  padding: 0 0.15rem;
+  font-size: 0.85rem;
+  line-height: 1;
+  cursor: pointer;
+  text-align: center;
+}
+
+.v2-activity-move:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+.v2-sight-row .v2-activity-move {
+  width: 1.85rem;
+  min-height: 1.85rem;
+  font-size: 0.8rem;
+}
+
 .v2-activity-head .v2-seg-toggle {
   min-height: 2.1rem;
   width: 2.1rem;

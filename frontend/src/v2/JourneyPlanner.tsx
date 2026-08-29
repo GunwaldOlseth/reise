@@ -68,6 +68,7 @@ import {
   modeIsFlight,
   modeIsOther,
   modeIsWalk,
+  moveActivityToDay,
   sortTransportOptions,
   formatCityStation,
   samePlaceName,
@@ -887,6 +888,34 @@ export function JourneyPlanner({
                               suggestCountry={
                                 day.country || pack?.baseCountry || stop.country
                               }
+                              cityDays={
+                                (pack?.days || []).length > 1
+                                  ? (pack?.days || []).map((d) => ({
+                                      offset: d.offset,
+                                      date: stop.arriveDate
+                                        ? addDaysIso(stop.arriveDate, d.offset)
+                                        : '',
+                                      label: d.atSea
+                                        ? freeDayLabel
+                                        : d.city?.trim() ||
+                                          pack?.basePlace?.trim() ||
+                                          '',
+                                    }))
+                                  : undefined
+                              }
+                              onMoveToDay={(activityId, targetOffset) =>
+                                patchPlaceStop(
+                                  {
+                                    ...stop,
+                                    sights: moveActivityToDay(
+                                      stop.sights,
+                                      activityId,
+                                      targetOffset,
+                                    ),
+                                  },
+                                  { immediate: true },
+                                )
+                              }
                               onChange={(dayList) =>
                                 patchPlaceStop(
                                   {
@@ -1493,6 +1522,21 @@ function PlaceStopPanel({
                     disabled={disabled}
                     heading="Utflukter og severdigheter"
                     suggestCountry={stop.country}
+                    cityDays={
+                      daysInCity.length > 1 ? daysInCity : undefined
+                    }
+                    onMoveToDay={(activityId, targetOffset) =>
+                      patchStop(
+                        {
+                          sights: moveActivityToDay(
+                            stop.sights,
+                            activityId,
+                            targetOffset,
+                          ),
+                        },
+                        { immediate: true },
+                      )
+                    }
                     onChange={(dayList) =>
                       patchStop(
                         {

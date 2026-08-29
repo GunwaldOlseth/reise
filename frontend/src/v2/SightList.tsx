@@ -9,6 +9,7 @@ import {
   activityKindLabel,
   activityPurpose,
   cityDocsOf,
+  formatDateNO,
   newSight,
   normalizeSights,
   STAY_WITHOUT_HOTEL_LABEL,
@@ -45,6 +46,60 @@ function normalizeKind(kind?: string): JourneyActivityKind {
   return 'sight'
 }
 
+type CityDayOption = {
+  offset: number
+  date: string
+  label?: string
+}
+
+function MoveDaySelect({
+  activityId,
+  dayOffset,
+  cityDays,
+  disabled,
+  onMoveToDay,
+}: {
+  activityId: string
+  dayOffset: number
+  cityDays?: CityDayOption[]
+  disabled?: boolean
+  onMoveToDay?: (activityId: string, targetOffset: number) => void
+}) {
+  if (!cityDays || cityDays.length <= 1 || !onMoveToDay) return null
+  const options = cityDays.filter((d) => d.offset !== dayOffset)
+  if (!options.length) return null
+  return (
+    <select
+      className="v2-activity-move"
+      disabled={disabled}
+      value=""
+      title="Flytt til annen dag"
+      aria-label="Flytt til annen dag"
+      onChange={(e) => {
+        const raw = e.target.value
+        if (!raw) return
+        const target = parseInt(raw, 10)
+        if (!Number.isFinite(target)) return
+        onMoveToDay(activityId, target)
+        e.target.value = ''
+      }}
+    >
+      <option value="" disabled hidden>↔</option>
+      {options.map((d) => {
+        const dateLabel = d.date
+          ? formatDateNO(d.date)
+          : `Dag ${d.offset + 1}`
+        const label = d.label?.trim()
+        return (
+          <option key={d.offset} value={d.offset}>
+            {label ? `${dateLabel} · ${label}` : dateLabel}
+          </option>
+        )
+      })}
+    </select>
+  )
+}
+
 export function SightList({
   sights,
   disabled,
@@ -52,6 +107,8 @@ export function SightList({
   heading = 'På programmet',
   suggestCountry = '',
   dayOffset = 0,
+  cityDays,
+  onMoveToDay,
   onChange,
 }: {
   sights?: JourneyActivity[] | null
@@ -64,6 +121,9 @@ export function SightList({
   suggestCountry?: string
   /** Calendar day from stop.arriveDate (0 = ankomstdag). */
   dayOffset?: number
+  /** Other days in the same city / package (enables “flytt til dag”). */
+  cityDays?: CityDayOption[]
+  onMoveToDay?: (activityId: string, targetOffset: number) => void
   onChange: (sights: JourneyActivity[]) => void
 }) {
   const askDelete = useConfirmDelete()
@@ -310,6 +370,13 @@ export function SightList({
                     )
                   }
                 />
+                <MoveDaySelect
+                  activityId={sight.id}
+                  dayOffset={dayOffset}
+                  cityDays={cityDays}
+                  disabled={disabled}
+                  onMoveToDay={onMoveToDay}
+                />
                 <button
                   type="button"
                   className="v2-via-remove"
@@ -382,6 +449,13 @@ export function SightList({
                     text={sight.notes}
                     docs={sight.docs}
                     disabled={disabled}
+                  />
+                  <MoveDaySelect
+                    activityId={sight.id}
+                    dayOffset={dayOffset}
+                    cityDays={cityDays}
+                    disabled={disabled}
+                    onMoveToDay={onMoveToDay}
                   />
                   <button
                     type="button"
