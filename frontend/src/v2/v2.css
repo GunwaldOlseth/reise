@@ -588,6 +588,7 @@ html[data-theme='bordeaux'] {
 html {
   --v2-line-strong: color-mix(in srgb, var(--v2-ink) 28%, transparent);
   --v2-wash: color-mix(in srgb, var(--v2-ink) 8%, transparent);
+  --v2-expense-paid: var(--v2-accent);
 }
 
 .v2-shell {
@@ -6078,8 +6079,18 @@ html[data-theme='plasma'] .v2-shell {
 
 .v2-shell .expense-total-amount,
 .v2-shell .expense-cruise-avg strong {
-  color: #9fd9cc;
+  color: var(--v2-ink);
   font-weight: 700;
+}
+
+.v2-shell .expense-total-paid-label,
+.v2-shell .expense-total-paid-amount,
+.v2-shell .expense-paid-mark {
+  color: var(--v2-expense-paid);
+}
+
+.v2-shell .expense-paid-mark {
+  margin-right: 0.35rem;
 }
 
 .v2-shell .expense-total-amount {
