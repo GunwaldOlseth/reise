@@ -6725,8 +6725,8 @@ html[data-theme='plasma'] .v2-shell {
 .v2-live-rides .v2-live-ride-opt {
   padding: 0.45rem 0.5rem;
   border-radius: 0.55rem;
-  background: rgba(0, 0, 0, 0.14);
-  border: 1px solid rgba(232, 244, 242, 0.1);
+  background: color-mix(in srgb, var(--v2-panel) 88%, var(--v2-bg) 12%);
+  border: 1px solid var(--v2-line-strong);
 }
 
 .v2-live-ride-opt-main {
@@ -6767,7 +6767,8 @@ html[data-theme='plasma'] .v2-shell {
   flex-direction: column;
   gap: 0.2rem;
   font-size: 0.72rem;
-  color: var(--v2-muted);
+  font-weight: 650;
+  color: var(--v2-label);
 }
 
 .v2-live-prices input,
@@ -6776,17 +6777,23 @@ html[data-theme='plasma'] .v2-shell {
   min-width: 0;
   padding: 0.4rem 0.5rem;
   border-radius: 0.45rem;
-  border: 1px solid rgba(232, 244, 242, 0.16);
-  background: rgba(8, 18, 22, 0.35);
-  color: inherit;
+  border: 1px solid var(--v2-line-strong);
+  background: var(--v2-field);
+  color: var(--v2-ink);
+  color-scheme: var(--v2-scheme);
   font: inherit;
   font-size: 0.9rem;
+}
+
+.v2-live-prices input::placeholder,
+.v2-live-log-row input::placeholder {
+  color: var(--v2-placeholder);
 }
 
 .v2-live-prices input:focus,
 .v2-live-log-row input:focus {
   outline: none;
-  border-color: rgba(61, 190, 165, 0.55);
+  border-color: var(--v2-accent);
 }
 
 .v2-live-log-row {
