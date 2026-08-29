@@ -3,7 +3,7 @@ import { ClockTimeInput } from './ClockTimeInput'
 import { CityDocsEditor } from './CityDocsEditor'
 import { CityInfoTip } from './CityInfoTip'
 import { CitySuggestFields } from '../CitySuggest'
-import { TrashIcon } from '../TransportModeIcon'
+import { TrashIcon, PlaceMetaIcon } from '../TransportModeIcon'
 import {
   activityDisplayName,
   activityKindLabel,
@@ -50,6 +50,61 @@ type CityDayOption = {
   offset: number
   date: string
   label?: string
+}
+
+function MoveDatePicker({
+  activityId,
+  disabled,
+  calendarMin,
+  calendarMax,
+  onMoveToDate,
+}: {
+  activityId: string
+  disabled?: boolean
+  calendarMin?: string
+  calendarMax?: string
+  onMoveToDate?: (activityId: string, date: string) => void
+}) {
+  const inputRef = useRef<HTMLInputElement>(null)
+  if (!onMoveToDate || !calendarMin || !calendarMax) return null
+  return (
+    <span className="v2-activity-move-date-wrap">
+      <button
+        type="button"
+        className="v2-activity-move v2-activity-move-date"
+        disabled={disabled}
+        title="Flytt til annen dag på reisen"
+        aria-label="Flytt til annen dag på reisen"
+        onClick={() => {
+          const el = inputRef.current
+          if (!el) return
+          if (typeof el.showPicker === 'function') {
+            el.showPicker()
+          } else {
+            el.click()
+          }
+        }}
+      >
+        <PlaceMetaIcon name="dates" size={14} />
+      </button>
+      <input
+        ref={inputRef}
+        type="date"
+        className="v2-activity-move-input"
+        min={calendarMin}
+        max={calendarMax}
+        disabled={disabled}
+        tabIndex={-1}
+        aria-hidden
+        onChange={(e) => {
+          const v = e.target.value
+          if (!v) return
+          onMoveToDate(activityId, v)
+          e.target.value = ''
+        }}
+      />
+    </span>
+  )
 }
 
 function MoveDaySelect({
@@ -109,6 +164,9 @@ export function SightList({
   dayOffset = 0,
   cityDays,
   onMoveToDay,
+  calendarMin,
+  calendarMax,
+  onMoveToDate,
   onChange,
 }: {
   sights?: JourneyActivity[] | null
@@ -124,6 +182,10 @@ export function SightList({
   /** Other days in the same city / package (enables “flytt til dag”). */
   cityDays?: CityDayOption[]
   onMoveToDay?: (activityId: string, targetOffset: number) => void
+  /** Min/max ISO dates for journey-wide move picker. */
+  calendarMin?: string
+  calendarMax?: string
+  onMoveToDate?: (activityId: string, date: string) => void
   onChange: (sights: JourneyActivity[]) => void
 }) {
   const askDelete = useConfirmDelete()
@@ -416,6 +478,13 @@ export function SightList({
                   disabled={disabled}
                   onMoveToDay={onMoveToDay}
                 />
+                <MoveDatePicker
+                  activityId={sight.id}
+                  disabled={disabled}
+                  calendarMin={calendarMin}
+                  calendarMax={calendarMax}
+                  onMoveToDate={onMoveToDate}
+                />
                 <button
                   type="button"
                   className="v2-via-remove"
@@ -496,6 +565,13 @@ export function SightList({
                     cityDays={cityDays}
                     disabled={disabled}
                     onMoveToDay={onMoveToDay}
+                  />
+                  <MoveDatePicker
+                    activityId={sight.id}
+                    disabled={disabled}
+                    calendarMin={calendarMin}
+                    calendarMax={calendarMax}
+                    onMoveToDate={onMoveToDate}
                   />
                   <button
                     type="button"

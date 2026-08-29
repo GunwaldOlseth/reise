@@ -4683,6 +4683,26 @@ html[data-theme='plasma'] .v2-shell {
   min-height: 2.1rem;
 }
 
+.v2-activity-move-date-wrap {
+  position: relative;
+  display: inline-flex;
+}
+
+.v2-activity-move-date {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+.v2-activity-move-input {
+  position: absolute;
+  width: 0;
+  height: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
 .v2-activity-head .v2-seg-toggle {
   min-height: 2.1rem;
   width: 2.1rem;
