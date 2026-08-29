@@ -2482,6 +2482,15 @@ function TransportBlock({
     <div
       className={`v2-transport-wrap${open ? ' is-open' : ''}`}
       data-transport-open={open ? 'true' : 'false'}
+      style={
+        open
+          ? {
+              display: 'block',
+              paddingLeft: 0,
+              gap: 0,
+            }
+          : undefined
+      }
     >
       {!open ? (
         <div className="v2-rail v2-transport-rail" aria-hidden>
@@ -2543,17 +2552,6 @@ function TransportBlock({
 
         {open && (
           <div className="v2-transport-body">
-            <p className="v2-meta" style={{ margin: 0 }}>
-              Sti fra{' '}
-              <strong>
-                {from.kind === 'home' ? 'start' : from.city || 'fra'}
-              </strong>{' '}
-              til <strong>{goalName}</strong>
-              {requireTransportMode
-                ? '. Hvert sted trenger navn og minst én reise (buss, tog, fly …).'
-                : '. Du kan legge hovedlinjen med bare steder; reisemåte er valgfritt.'}
-            </p>
-
             <div className="v2-via-list">
               <div className="v2-via-head">
                 <span>Steder på veien</span>

@@ -2224,10 +2224,11 @@ html[data-theme='plasma'] .v2-shell {
 }
 
 /* Open editor: drop the dashed rail and use full thread width.
-   Rail is unmounted in JSX when open; these rules are a fallback. */
+   Rail is unmounted in JSX when open; block layout avoids a lone child
+   sitting in the 1.5rem grid column when CSS is stale. */
 .v2-transport-wrap.is-open,
 .v2-transport-wrap[data-transport-open='true'] {
-  grid-template-columns: minmax(0, 1fr);
+  display: block;
   gap: 0;
   padding-left: 0;
 }
@@ -6703,9 +6704,9 @@ html[data-theme='plasma'] .v2-shell {
 @media (max-width: 640px) {
   .v2-transport-wrap.is-open,
   .v2-transport-wrap[data-transport-open='true'] {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 0;
+    display: block;
     padding-left: 0;
+    gap: 0;
   }
 
   .v2-stop {
