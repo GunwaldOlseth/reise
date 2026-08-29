@@ -5785,6 +5785,120 @@ html[data-theme='plasma'] .v2-shell {
   font-style: italic;
 }
 
+.v2-hotel-linked-chip {
+  padding: 0;
+  overflow: visible;
+}
+
+.v2-hotel-linked-chip.is-open {
+  z-index: 20;
+  position: relative;
+}
+
+.v2-place-panel:has(.v2-hotel-linked-chip.is-open) {
+  z-index: 16;
+  overflow: visible;
+}
+
+.v2-hotel-linked-chip-btn {
+  appearance: none;
+  display: block;
+  width: 100%;
+  margin: 0;
+  padding: 0.15rem 0.45rem;
+  border: 0;
+  border-radius: inherit;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: inherit;
+  text-align: left;
+  cursor: pointer;
+  line-height: inherit;
+}
+
+.v2-hotel-linked-chip-btn:hover,
+.v2-hotel-linked-chip.is-open .v2-hotel-linked-chip-btn {
+  filter: brightness(1.06);
+}
+
+.v2-hotel-linked-chip-btn:focus-visible {
+  outline: 2px solid var(--v2-accent);
+  outline-offset: 1px;
+}
+
+.v2-hotel-info-pop .v2-hotel-info-title,
+.v2-hotel-info-pop .v2-city-info-pop-head h3 {
+  margin: 0 0 0.35rem;
+  font-size: 1.05rem;
+  font-weight: 700;
+  line-height: 1.3;
+  color: var(--v2-ink);
+}
+
+.v2-hotel-info-kind {
+  margin: 0 0 0.65rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--v2-muted);
+}
+
+.v2-hotel-info-fields {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.v2-hotel-info-field {
+  display: grid;
+  grid-template-columns: minmax(5.5rem, 34%) minmax(0, 1fr);
+  gap: 0.45rem 0.65rem;
+  align-items: start;
+}
+
+.v2-hotel-info-field dt {
+  margin: 0;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--v2-muted);
+}
+
+.v2-hotel-info-field dd {
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--v2-ink);
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.v2-hotel-info-field dd a {
+  color: var(--v2-accent);
+  text-decoration: underline;
+  text-underline-offset: 0.12em;
+}
+
+.v2-hotel-info-notes {
+  margin-top: 0.75rem;
+  padding-top: 0.65rem;
+  border-top: 1px solid var(--v2-line);
+}
+
+.v2-hotel-info-notes h4 {
+  margin: 0 0 0.35rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--v2-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.v2-hotel-info-pop .v2-note-html {
+  color: var(--v2-ink);
+}
+
 .v2-place-days {
   display: flex;
   flex-direction: column;
