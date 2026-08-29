@@ -1308,7 +1308,7 @@ function PlaceStopPanel({
                 <span className="v2-place-bit-text">Ikke stopp</span>
               ) : stop.hideOnMap ? (
                 <span className="v2-place-bit-text">Ikke på kart</span>
-                ) : hotel ? (
+              ) : hotel ? (
                 <span
                   className={`v2-place-bit is-lodging ${
                     lodgingKind === 'airbnb' ? 'is-airbnb' : 'is-hotel'
