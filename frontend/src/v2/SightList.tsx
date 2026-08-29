@@ -454,6 +454,7 @@ export function SightList({
                   <CityDocsEditor
                     value={sight}
                     disabled={disabled}
+                    heading=""
                     firstTitlePlaceholder="Notat"
                     firstBodyPlaceholder="Møtested, billett, tips…"
                     onChange={(next, opts) =>
