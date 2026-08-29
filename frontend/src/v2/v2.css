@@ -2126,22 +2126,23 @@ html[data-theme='plasma'] .v2-shell {
   gap: var(--v2-stack-gap);
 }
 
-/* One open hop editor: hide every dashed transport rail in the thread. */
+/* One open hop editor: hide timeline rails and use full width. */
 .v2-thread.is-transport-editing .v2-transport-wrap {
   padding-left: 0;
 }
 
-.v2-thread.is-transport-editing .v2-transport-wrap:not(.is-open) {
-  display: block;
+.v2-thread.is-transport-editing .v2-gap-marker {
+  grid-template-columns: minmax(0, 1fr);
   gap: 0;
 }
 
-.v2-thread.is-transport-editing .v2-transport-rail,
-.v2-thread.is-transport-editing .v2-transport-rail .v2-rail-line {
+.v2-thread.is-transport-editing .v2-rail,
+.v2-thread.is-transport-editing .v2-rail-line,
+.v2-thread.is-transport-editing .v2-rail::after {
   display: none !important;
-  width: 0;
-  min-width: 0;
-  min-height: 0;
+  width: 0 !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
   border: none !important;
   background: none !important;
 }
@@ -2203,29 +2204,11 @@ html[data-theme='plasma'] .v2-shell {
   background: var(--v2-line);
 }
 
-/* Compact transport block between start/city — indented to separate from stops */
+/* Transport hop between cities — full thread width, no side rail column. */
 .v2-transport-wrap {
-  display: grid;
-  grid-template-columns: 1.5rem 1fr;
-  gap: 0.45rem;
-  align-items: stretch;
-  padding: 0 0 0 1.15rem;
+  display: block;
+  padding: 0;
   margin: 0;
-}
-
-.v2-transport-rail {
-  min-height: 100%;
-  opacity: 0.55;
-}
-
-.v2-transport-rail .v2-rail-line {
-  width: 0;
-  border-left: 2px dashed var(--v2-line-strong);
-  background: transparent;
-}
-
-.v2-transport-rail::after {
-  display: none;
 }
 
 .v2-transport-wrap > .v2-transport {
@@ -2243,28 +2226,11 @@ html[data-theme='plasma'] .v2-shell {
   background: rgba(61, 190, 165, 0.05);
 }
 
-/* Open editor: drop the dashed rail and use full thread width.
-   Rail is unmounted in JSX when open; block layout avoids a lone child
-   sitting in the 1.5rem grid column when CSS is stale. */
+/* Open editor: full width for nested hop UI. */
 .v2-transport-wrap.is-open,
 .v2-transport-wrap[data-transport-open='true'] {
   display: block;
-  gap: 0;
   padding-left: 0;
-}
-
-.v2-transport-wrap.is-open .v2-transport-rail,
-.v2-transport-wrap[data-transport-open='true'] .v2-transport-rail,
-.v2-transport-wrap.is-open .v2-rail-line,
-.v2-transport-wrap[data-transport-open='true'] .v2-rail-line,
-.v2-transport-wrap.is-open .v2-rail::after,
-.v2-transport-wrap[data-transport-open='true'] .v2-rail::after {
-  display: none !important;
-  width: 0;
-  min-width: 0;
-  min-height: 0;
-  border: none;
-  background: none;
 }
 
 .v2-transport-wrap.is-open > .v2-transport,
