@@ -139,16 +139,30 @@ export function CityDocsEditor({
       <ul className="v2-city-docs-list">
         {docs.map((doc, i) => (
           <li key={doc.id} className="v2-city-doc">
-            <CityDocTitle
-              doc={doc}
-              index={i}
-              editing={titleEditId === doc.id}
-              disabled={disabled}
-              placeholder={i === 0 ? firstTitlePlaceholder : 'Notat'}
-              onChange={(title) => patchDoc(doc.id, { title })}
-              onCommit={(title) => patchDoc(doc.id, { title }, true)}
-              onEndEdit={() => setTitleEditId(null)}
-            />
+            <div className="v2-city-doc-title-row">
+              <CityDocTitle
+                doc={doc}
+                index={i}
+                editing={titleEditId === doc.id}
+                disabled={disabled}
+                placeholder={i === 0 ? firstTitlePlaceholder : 'Notat'}
+                onChange={(title) => patchDoc(doc.id, { title })}
+                onCommit={(title) => patchDoc(doc.id, { title }, true)}
+                onEndEdit={() => setTitleEditId(null)}
+              />
+              {compact && docs.length === 1 && titleEditId !== doc.id ? (
+                <button
+                  type="button"
+                  className="v2-city-docs-add"
+                  disabled={disabled}
+                  aria-label="Nytt dokument"
+                  title="Nytt dokument"
+                  onClick={() => addDocument()}
+                >
+                  +
+                </button>
+              ) : null}
+            </div>
             <NoteEditor
               value={doc.body}
               disabled={disabled}
@@ -168,19 +182,6 @@ export function CityDocsEditor({
                   >
                     T
                   </button>
-                  {compact && docs.length === 1 ? (
-                    <button
-                      type="button"
-                      className="v2-note-tool v2-note-tool-add"
-                      disabled={disabled}
-                      aria-label="Nytt dokument"
-                      title="Nytt dokument"
-                      onMouseDown={(e) => e.preventDefault()}
-                      onClick={() => addDocument()}
-                    >
-                      +
-                    </button>
-                  ) : null}
                   {docs.length > 1 ? (
                     <button
                       type="button"
