@@ -180,6 +180,15 @@ export function PackageWizard({
     setPack((prev) => syncPackageDays({ ...prev, ...partial }, type))
   }
 
+  function patchCosts(costs: JourneyPackage['costs']) {
+    patchPack({ costs })
+  }
+
+  function addCost() {
+    const costs = pack.costs || []
+    patchCosts([...costs, newJourneyCost(costs.length)])
+  }
+
   function updateDay(dayId: string, partial: Partial<JourneyPackageDay>) {
     setPack((prev) =>
       syncPackageDays(
@@ -415,93 +424,87 @@ export function PackageWizard({
             <h3>Ekstra kostnader</h3>
             <button
               type="button"
-              className="btn btn-soft btn-sm"
+              className="v2-city-docs-add"
               title="Legg til kostnad"
-              onClick={() =>
-                patchPack({
-                  costs: [
-                    ...(pack.costs || []),
-                    newJourneyCost((pack.costs || []).length),
-                  ],
-                })
-              }
+              aria-label="Legg til kostnad"
+              onClick={addCost}
             >
-              + Kostnad
+              +
             </button>
           </div>
           {(pack.costs || []).length === 0 ? (
-            <p className="v2-meta">Valgfritt — drikkepakke, tips, utflukter…</p>
+            <p className="v2-meta">
+              Valgfritt — trykk + for drikkepakke, tips, utflukter…
+            </p>
           ) : (
             <div className="v2-cruise-cost-list">
               {(pack.costs || []).map((cost) => (
                 <div key={cost.id} className="v2-cruise-cost-row">
-                  <label>
-                    Kostnad
+                  <input
+                    value={cost.title}
+                    placeholder="Kostnad"
+                    aria-label="Kostnad"
+                    onChange={(e) =>
+                      patchCosts(
+                        (pack.costs || []).map((c) =>
+                          c.id === cost.id
+                            ? { ...c, title: e.target.value }
+                            : c,
+                        ),
+                      )
+                    }
+                  />
+                  <input
+                    value={cost.price || ''}
+                    placeholder="Pris"
+                    inputMode="decimal"
+                    aria-label="Pris"
+                    onChange={(e) =>
+                      patchCosts(
+                        (pack.costs || []).map((c) =>
+                          c.id === cost.id
+                            ? { ...c, price: e.target.value }
+                            : c,
+                        ),
+                      )
+                    }
+                  />
+                  <label className="v2-check-row">
                     <input
-                      value={cost.title}
-                      placeholder="Drikkepakke…"
+                      type="checkbox"
+                      checked={cost.paid || false}
                       onChange={(e) =>
-                        patchPack({
-                          costs: (pack.costs || []).map((c) =>
+                        patchCosts(
+                          (pack.costs || []).map((c) =>
                             c.id === cost.id
-                              ? { ...c, title: e.target.value }
+                              ? { ...c, paid: e.target.checked }
                               : c,
                           ),
-                        })
+                        )
                       }
                     />
+                    Betalt
                   </label>
-                  <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'flex-end' }}>
-                    <label style={{ flex: 1 }}>
-                      Pris
-                      <input
-                        value={cost.price || ''}
-                        placeholder="500 kr"
-                        inputMode="decimal"
-                        onChange={(e) =>
-                          patchPack({
-                            costs: (pack.costs || []).map((c) =>
-                              c.id === cost.id
-                                ? { ...c, price: e.target.value }
-                                : c,
-                            ),
-                          })
-                        }
-                      />
-                    </label>
-                    <label className="v2-check-row" style={{ paddingBottom: '8px' }}>
-                      <input
-                        type="checkbox"
-                        checked={cost.paid || false}
-                        onChange={(e) =>
-                          patchPack({
-                            costs: (pack.costs || []).map((c) =>
-                              c.id === cost.id
-                                ? { ...c, paid: e.target.checked }
-                                : c,
-                            ),
-                          })
-                        }
-                      />
-                      Betalt
-                    </label>
-                  </div>
                   <button
                     type="button"
-                    className="btn btn-ghost btn-sm"
+                    className="v2-cruise-cost-remove"
                     title="Fjern kostnad"
+                    aria-label="Fjern kostnad"
                     onClick={() => {
-                      const name = (cost.title || '').trim() || 'kostnaden'
+                      const name = (cost.title || '').trim()
+                      const drop = () =>
+                        patchCosts(
+                          (pack.costs || []).filter((c) => c.id !== cost.id),
+                        )
+                      if (!name && !(cost.price || '').trim()) {
+                        drop()
+                        return
+                      }
                       void askDelete({
-                        title: `Slette ${name}?`,
+                        title: `Slette ${name || 'kostnaden'}?`,
                         confirmLabel: 'Fjern',
                       }).then((ok) => {
-                        if (!ok) return
-                        patchPack({
-                          costs: (pack.costs || []).filter(
-                            (c) => c.id !== cost.id,
-                          ),
-                        })
+                        if (ok) drop()
                       })
                     }}
                   >
