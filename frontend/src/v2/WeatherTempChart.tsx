@@ -1,7 +1,11 @@
 import { useLayoutEffect, useRef, useState } from 'react'
 import { localizeCity } from '../placeNames'
 import { useWeatherCacheVersion } from './weatherPrefetch'
-import { formatChartDateNO, type JourneyWeatherRow } from './weatherDisplay'
+import {
+  formatChartDateNO,
+  formatTempC,
+  type JourneyWeatherRow,
+} from './weatherDisplay'
 
 function useChartBox() {
   const ref = useRef<HTMLDivElement>(null)
@@ -41,6 +45,38 @@ function niceTicks(min: number, max: number): number[] {
   return ticks
 }
 
+function polylinePath(
+  values: Array<number | null>,
+  xAt: (i: number) => number,
+  yAt: (temp: number) => number,
+): string {
+  const parts: string[] = []
+  let open = false
+  for (let i = 0; i < values.length; i++) {
+    const v = values[i]
+    if (v == null) {
+      open = false
+      continue
+    }
+    const x = xAt(i).toFixed(1)
+    const y = yAt(v).toFixed(1)
+    if (!open) {
+      parts.push(`M ${x} ${y}`)
+      open = true
+    } else {
+      parts.push(`L ${x} ${y}`)
+    }
+  }
+  return parts.join(' ')
+}
+
+function labelStep(count: number, innerW: number, minPx: number): number {
+  if (count <= 2) return 1
+  const needed = (count - 1) * minPx
+  if (needed <= innerW) return 1
+  return Math.ceil(needed / innerW)
+}
+
 export function WeatherTempChart({ rows }: { rows: JourneyWeatherRow[] }) {
   useWeatherCacheVersion()
   const { ref, width: boxW, mobile } = useChartBox()
@@ -57,10 +93,13 @@ export function WeatherTempChart({ rows }: { rows: JourneyWeatherRow[] }) {
     key: row.spot.key,
     city: localizeCity(row.spot.city) || row.spot.city,
     date: row.spot.date,
-    max: row.tempMax,
+    now: row.tempNow,
+    arrive: row.tempArrive,
   }))
 
-  const temps = points.map((p) => p.max).filter((t): t is number => t != null)
+  const temps = points
+    .flatMap((p) => [p.now, p.arrive])
+    .filter((t): t is number => t != null)
   const ticks =
     temps.length > 0
       ? niceTicks(Math.min(...temps), Math.max(...temps))
@@ -68,10 +107,10 @@ export function WeatherTempChart({ rows }: { rows: JourneyWeatherRow[] }) {
   const yMin = ticks[0]
   const yMax = ticks[ticks.length - 1]
   const pad = mobile
-    ? { top: 8, right: 8, bottom: 52, left: 26 }
-    : { top: 10, right: 14, bottom: 56, left: 32 }
+    ? { top: 8, right: 10, bottom: 62, left: 26 }
+    : { top: 10, right: 16, bottom: 68, left: 32 }
   const width = Math.max(boxW, 200)
-  const height = mobile ? 156 : 172
+  const height = mobile ? 176 : 196
   const innerW = width - pad.left - pad.right
   const innerH = height - pad.top - pad.bottom
   const xAt = (i: number) =>
@@ -80,28 +119,21 @@ export function WeatherTempChart({ rows }: { rows: JourneyWeatherRow[] }) {
   const yAt = (temp: number) =>
     pad.top + ((yMax - temp) / (yMax - yMin || 1)) * innerH
 
-  const lineParts: string[] = []
-  let segmentOpen = false
-  for (let i = 0; i < points.length; i++) {
-    const max = points[i].max
-    if (max == null) {
-      segmentOpen = false
-      continue
-    }
-    const x = xAt(i).toFixed(1)
-    const y = yAt(max).toFixed(1)
-    if (!segmentOpen) {
-      lineParts.push(`M ${x} ${y}`)
-      segmentOpen = true
-    } else {
-      lineParts.push(`L ${x} ${y}`)
-    }
-  }
-  const maxLine = lineParts.join(' ')
+  const nowLine = polylinePath(
+    points.map((p) => p.now),
+    xAt,
+    yAt,
+  )
+  const arriveLine = polylinePath(
+    points.map((p) => p.arrive),
+    xAt,
+    yAt,
+  )
+  const step = labelStep(points.length, innerW, mobile ? 44 : 52)
 
   return (
     <figure className="v2-weather-chart">
-      <figcaption>Temperatur langs reisen (kl. 12)</figcaption>
+      <figcaption>Temperatur langs reisen</figcaption>
       <div className="v2-weather-chart-scroll" ref={ref}>
         <svg
           viewBox={`0 0 ${width} ${height}`}
@@ -109,7 +141,7 @@ export function WeatherTempChart({ rows }: { rows: JourneyWeatherRow[] }) {
           height={height}
           preserveAspectRatio="xMidYMid meet"
           role="img"
-          aria-label="Temperatur per stopp i datorekkefølge"
+          aria-label="Temperatur per by: nå og ankomstdag"
         >
           {ticks.map((t) => (
             <g key={t}>
@@ -130,51 +162,72 @@ export function WeatherTempChart({ rows }: { rows: JourneyWeatherRow[] }) {
               </text>
             </g>
           ))}
-          {maxLine ? (
-            <path d={maxLine} className="v2-weather-chart-max" fill="none" />
+          {nowLine ? (
+            <path d={nowLine} className="v2-weather-chart-now" fill="none" />
           ) : null}
-          {points.map((p, i) => (
-            <g key={p.key}>
-              <title>
-                {p.max != null
-                  ? `${p.city} · ${formatChartDateNO(p.date)} · ${Math.round(p.max)}°`
-                  : `${p.city} · ${formatChartDateNO(p.date)} · ingen data`}
-              </title>
-              {p.max != null ? (
-                <circle
-                  cx={xAt(i)}
-                  cy={yAt(p.max)}
-                  r="3.5"
-                  className="v2-weather-chart-dot-max"
-                />
-              ) : (
-                <circle
-                  cx={xAt(i)}
-                  cy={yAt(yMin)}
-                  r="2.5"
-                  className="v2-weather-chart-dot-missing"
-                />
-              )}
-              <text
-                x={xAt(i)}
-                y={height - pad.bottom + 6}
-                textAnchor="middle"
-                className="v2-weather-chart-city"
-              >
-                {p.city}
-              </text>
-              <text
-                x={xAt(i)}
-                y={height - pad.bottom + 16}
-                textAnchor="middle"
-                className="v2-weather-chart-date"
-              >
-                {formatChartDateNO(p.date)}
-              </text>
-            </g>
-          ))}
+          {arriveLine ? (
+            <path d={arriveLine} className="v2-weather-chart-max" fill="none" />
+          ) : null}
+          {points.map((p, i) => {
+            const showLabel =
+              i === 0 || i === points.length - 1 || i % step === 0
+            const x = xAt(i)
+            const labelY = pad.top + innerH + 10
+            const nowTip =
+              p.now != null ? `nå ${formatTempC(p.now)}` : 'nå uten data'
+            const arriveTip =
+              p.arrive != null
+                ? `ankomst ${formatChartDateNO(p.date)} ${formatTempC(p.arrive)}`
+                : `ankomst ${formatChartDateNO(p.date)} utenfor 7-dagersprognose`
+            return (
+              <g key={p.key}>
+                <title>
+                  {p.city} · {nowTip} · {arriveTip}
+                </title>
+                {p.now != null ? (
+                  <circle
+                    cx={x}
+                    cy={yAt(p.now)}
+                    r="3.2"
+                    className="v2-weather-chart-dot-now"
+                  />
+                ) : null}
+                {p.arrive != null ? (
+                  <circle
+                    cx={x}
+                    cy={yAt(p.arrive)}
+                    r="3.5"
+                    className="v2-weather-chart-dot-max"
+                  />
+                ) : null}
+                {showLabel ? (
+                  <text
+                    x={x}
+                    y={labelY}
+                    textAnchor="end"
+                    className="v2-weather-chart-city"
+                    transform={`rotate(-42 ${x} ${labelY})`}
+                  >
+                    {p.city}
+                  </text>
+                ) : (
+                  <line
+                    x1={x}
+                    x2={x}
+                    y1={pad.top + innerH}
+                    y2={pad.top + innerH + 4}
+                    className="v2-weather-chart-grid"
+                  />
+                )}
+              </g>
+            )
+          })}
         </svg>
       </div>
+      <ul className="v2-weather-chart-legend">
+        <li className="is-now">Nå</li>
+        <li className="is-arrive">Ankomstdag (maks)</li>
+      </ul>
     </figure>
   )
 }

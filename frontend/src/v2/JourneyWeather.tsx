@@ -11,7 +11,7 @@ import {
 import { WeatherTempChart } from './WeatherTempChart'
 import { WeatherDaySpark } from './WeatherCityDetail'
 import {
-  buildJourneyWeatherRows,
+  buildJourneyWeatherChartRows,
   pickTripWeatherDay,
   formatTempC,
 } from './weatherDisplay'
@@ -525,15 +525,17 @@ export function JourneyWeatherView({ journey }: { journey: Journey }) {
       </p>
     )
   }
-  const rows = buildJourneyWeatherRows(spots)
+  const chartRows = buildJourneyWeatherChartRows(spots)
   return (
     <div className="v2-weather-list">
       <p className="v2-meta" style={{ marginTop: 0 }}>
-        Den lille grafen viser temperatur kl. 12 de siste 7 dagene. Trykk den
-        for detaljer.
+        Oversiktsgrafen viser temperatur nå i hver by, og maks temperatur på
+        ankomstdagen når den er i dag eller inntil 7 dager frem (Oslo-tid).
+        Den lille grafen på hvert sted viser temperatur kl. 12 de siste 7
+        dagene. Trykk den for detaljer.
         <span className="v2-weather-forecast-inline"> Blå</span> = prognose.
       </p>
-      <WeatherTempChart rows={rows} />
+      <WeatherTempChart rows={chartRows} />
       {spots.map((spot) => (
         <SpotWeatherCard key={spot.key} spot={spot} />
       ))}

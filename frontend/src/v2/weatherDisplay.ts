@@ -4,7 +4,7 @@ import {
   type WeatherCacheEntry,
 } from './weatherPrefetch'
 import type { JourneyWeatherSpot } from './JourneyWeather'
-import { todayIsoOslo } from './journeyModel'
+import { addDaysIso, todayIsoOslo } from './journeyModel'
 
 /** Short axis label, e.g. 10.08 */
 export function formatChartDateNO(iso: string): string {
@@ -46,7 +46,58 @@ export type JourneyWeatherRow = {
   spot: JourneyWeatherSpot
   entry: WeatherCacheEntry
   day: WeatherDay | null
+  /** Arrival-day `tempMax` when the API has that date (may be outside the 7-day window). */
   tempMax: number | null
+  /** Current temperature now, or today's daily max if `current` is missing. */
+  tempNow: number | null
+  /** Arrival-day max, only when the stop date is not more than 7 days ahead of Oslo today. */
+  tempArrive: number | null
+  arriveInForecastWindow: boolean
+}
+
+const FORECAST_HORIZON_DAYS = 7
+
+/** Arrival-day points: past/today always allowed; future only through today+7 (Oslo). */
+export function arriveInForecastWindow(iso: string): boolean {
+  const stamp = iso.trim().slice(0, 10)
+  if (!stamp) return false
+  const today = todayIsoOslo()
+  return stamp <= addDaysIso(today, FORECAST_HORIZON_DAYS)
+}
+
+export function pickTempNow(weather: WeatherReport | null | undefined): number | null {
+  if (!weather) return null
+  const current = weather.current?.temperature
+  if (typeof current === 'number' && Number.isFinite(current)) return current
+  const today = weather.today
+  if (today && Number.isFinite(today.tempMax)) return today.tempMax
+  const marked = weather.days.find((d) => d.isToday)
+  if (marked && Number.isFinite(marked.tempMax)) return marked.tempMax
+  const stamp = todayIsoOslo()
+  const byDate = weather.days.find((d) => d.date === stamp)
+  if (byDate && Number.isFinite(byDate.tempMax)) return byDate.tempMax
+  return null
+}
+
+function sameCityStay(a: JourneyWeatherSpot, b: JourneyWeatherSpot): boolean {
+  return (
+    a.city.trim().toLowerCase() === b.city.trim().toLowerCase() &&
+    (a.country || '').trim().toLowerCase() ===
+      (b.country || '').trim().toLowerCase()
+  )
+}
+
+/** One chart tick per consecutive city stay (first arrival date). */
+export function collapseConsecutiveCityRows(
+  rows: JourneyWeatherRow[],
+): JourneyWeatherRow[] {
+  const out: JourneyWeatherRow[] = []
+  for (const row of rows) {
+    const prev = out[out.length - 1]
+    if (prev && sameCityStay(prev.spot, row.spot)) continue
+    out.push(row)
+  }
+  return out
 }
 
 /** Y-axis ticks for small/medium temp charts (adaptive step). */
@@ -83,14 +134,25 @@ export function buildJourneyWeatherRows(
 ): JourneyWeatherRow[] {
   return spots.map((spot) => {
     const entry = getWeatherEntry(spot.city, spot.country)
-    const day = entry.weather
-      ? pickTripWeatherDay(entry.weather, spot.date)
-      : null
+    const weather = entry.weather
+    const day = weather ? pickTripWeatherDay(weather, spot.date) : null
+    const inWindow = arriveInForecastWindow(spot.date)
+    const tempMax = day && Number.isFinite(day.tempMax) ? day.tempMax : null
     return {
       spot,
       entry,
       day,
-      tempMax: day?.tempMax ?? null,
+      tempMax,
+      tempNow: pickTempNow(weather),
+      tempArrive: inWindow ? tempMax : null,
+      arriveInForecastWindow: inWindow,
     }
   })
+}
+
+/** Overview chart: collapsed city ticks, same weather lookup as list cards. */
+export function buildJourneyWeatherChartRows(
+  spots: JourneyWeatherSpot[],
+): JourneyWeatherRow[] {
+  return collapseConsecutiveCityRows(buildJourneyWeatherRows(spots))
 }
