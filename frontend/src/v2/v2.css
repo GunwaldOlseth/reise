@@ -3815,7 +3815,7 @@ html[data-theme='plasma'] .v2-shell {
 .v2-live-sights li,
 .v2-live-sights .v2-live-sight-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) max-content 1.75rem;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: center;
   column-gap: 0.65rem;
   row-gap: 0.1rem;
