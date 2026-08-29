@@ -27,6 +27,10 @@ const API_BASE = (() => {
   return 'http://localhost:8082/api'
 })()
 
+if (import.meta.env.DEV) {
+  console.info('[reise] API', API_BASE)
+}
+
 /** Origin of the API base (API_BASE without the trailing /api). */
 const API_ORIGIN = API_BASE.replace(/\/api$/, '')
 

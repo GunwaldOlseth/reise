@@ -23,7 +23,8 @@ Write-Host "=== Reise lokal dev ===" -ForegroundColor Cyan
 Write-Host "Repo:      $Root"
 Write-Host "Frontend:  http://localhost:5174/   (ikke 5173)"
 Write-Host "Backend:   http://localhost:8082/api/health"
-Write-Host "Vite-dev kaller /api (proxy) — ikke Cloud Run."
+Write-Host "Backend bruker samme Firestore som produksjon (ikke emulator)."
+Write-Host "Vite-dev kaller /api (proxy til :8082)."
 Write-Host ""
 
 $envLocal = Join-Path $Root "frontend\.env.local"
@@ -58,9 +59,10 @@ if (-not (Test-Path $KeyPath)) {
 $backendCmd = @"
 `$host.UI.RawUI.WindowTitle = 'Reise backend :8082'
 Set-Location '$Root\backend\api'
+Remove-Item Env:FIRESTORE_EMULATOR_HOST -ErrorAction SilentlyContinue
 if (Test-Path '$KeyPath') { `$env:FIREBASE_KEY_PATH = '$KeyPath' }
 `$env:PORT = '8082'
-Write-Host 'Starter backend. La dette vinduet sta apent.'
+Write-Host 'Starter backend mot produksjons-Firestore (ingen emulator).'
 go run .
 Write-Host 'Backend avsluttet. Les feilmeldingen over.' -ForegroundColor Red
 Read-Host 'Enter for a lukke'
