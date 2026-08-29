@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { api, normalizeCompleteClockTime } from '../api'
 import { CitySuggestFields } from '../CitySuggest'
-import { PlaceMetaIcon, TrashIcon, TransportModeIcon } from '../TransportModeIcon'
+import { CheckIcon, PencilIcon, PlaceMetaIcon, TrashIcon, TransportModeIcon } from '../TransportModeIcon'
 import { PackageWizard, OnwardChoiceSheet } from './CruiseWizard'
 import {
   applyRegisteredHome,
@@ -1359,16 +1359,17 @@ function PlaceStopPanel({
       {open && (
         <div className="v2-transport-body v2-place-body">
           <div className="v2-place-basics">
-            <div className="v2-sights-head">
+            <div className="v2-sights-head v2-place-basics-head">
               <span>By og dato</span>
               <button
                 type="button"
-                className="v2-chip-btn"
+                className={`v2-place-edit-btn${editingBasics ? ' is-on' : ''}`}
                 disabled={disabled}
+                aria-label={editingBasics ? 'Ferdig med by og dato' : 'Endre by og dato'}
                 title={editingBasics ? 'Ferdig' : 'Endre by og dato'}
                 onClick={() => setEditingBasics((v) => !v)}
               >
-                {editingBasics ? 'Ferdig' : 'Endre'}
+                {editingBasics ? <CheckIcon size={14} /> : <PencilIcon size={14} />}
               </button>
             </div>
             {editingBasics && (

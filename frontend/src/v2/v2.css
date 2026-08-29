@@ -4666,6 +4666,44 @@ html[data-theme='plasma'] .v2-shell {
   gap: 0.45rem;
 }
 
+.v2-place-basics-head {
+  flex-wrap: nowrap;
+  flex-direction: row;
+  align-items: center;
+}
+
+.v2-place-edit-btn {
+  appearance: none;
+  flex-shrink: 0;
+  width: 1.7rem;
+  height: 1.7rem;
+  min-height: 0;
+  padding: 0;
+  border: 1px solid var(--v2-line-strong);
+  border-radius: 0.4rem;
+  background: transparent;
+  color: var(--v2-ink);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.v2-place-edit-btn:hover:not(:disabled),
+.v2-place-edit-btn:focus-visible {
+  border-color: var(--v2-accent);
+  color: var(--v2-accent);
+}
+
+.v2-place-edit-btn.is-on {
+  border-color: var(--v2-accent);
+  background: color-mix(in srgb, var(--v2-accent) 14%, transparent);
+  color: var(--v2-accent);
+}
+
+.v2-place-edit-btn:disabled {
+  opacity: 0.35;
+}
+
 .v2-place-basics textarea {
   width: 100%;
   min-height: 4.5rem;
@@ -6569,6 +6607,11 @@ html[data-theme='plasma'] .v2-shell {
     align-items: stretch;
     gap: 0.35rem;
     margin-bottom: 0.2rem;
+  }
+
+  .v2-place-body .v2-place-basics-head {
+    flex-direction: row;
+    align-items: center;
   }
 
   .v2-place-body .v2-sights-add {
