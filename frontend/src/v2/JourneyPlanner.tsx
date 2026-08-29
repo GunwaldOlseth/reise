@@ -1,17 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { api, normalizeCompleteClockTime } from '../api'
 import { CitySuggestFields } from '../CitySuggest'
-import { PlaceMetaIcon, TrashIcon, TransportModeIcon } from '../TransportModeIcon'
+import { CheckIcon, PencilIcon, PlaceMetaIcon, TrashIcon, TransportModeIcon } from '../TransportModeIcon'
 import { PackageWizard, OnwardChoiceSheet } from './CruiseWizard'
 import {
   applyRegisteredHome,
   formatHomePlace,
   hasHomePlace,
-  loadTransportOptionSort,
-  saveTransportOptionSort,
   type HomePlace,
   type PlannerSettings,
-  type TransportOptionSort,
 } from '../userSettings'
 import {
   activitiesForDay,
@@ -1362,16 +1359,17 @@ function PlaceStopPanel({
       {open && (
         <div className="v2-transport-body v2-place-body">
           <div className="v2-place-basics">
-            <div className="v2-sights-head">
+            <div className="v2-sights-head v2-place-basics-head">
               <span>By og dato</span>
               <button
                 type="button"
-                className="v2-chip-btn"
+                className={`v2-place-edit-btn${editingBasics ? ' is-on' : ''}`}
                 disabled={disabled}
+                aria-label={editingBasics ? 'Ferdig med by og dato' : 'Endre by og dato'}
                 title={editingBasics ? 'Ferdig' : 'Endre by og dato'}
                 onClick={() => setEditingBasics((v) => !v)}
               >
-                {editingBasics ? 'Ferdig' : 'Endre'}
+                {editingBasics ? <CheckIcon size={14} /> : <PencilIcon size={14} />}
               </button>
             </div>
             {editingBasics && (
@@ -2042,9 +2040,6 @@ function TransportBlock({
   const [overSegId, setOverSegId] = useState<string | null>(null)
   /** Which departure-row mode menu is open (`placeIdx-optIdx`). */
   const [modeMenuKey, setModeMenuKey] = useState<string | null>(null)
-  const [optionSort, setOptionSort] = useState<TransportOptionSort>(() =>
-    loadTransportOptionSort(),
-  )
   const [draft, setDraft] = useState<JourneyLeg>(() =>
     withTransportSegments(leg, transportSegments(leg)),
   )
@@ -2103,10 +2098,7 @@ function TransportBlock({
   const latestSegs = useRef(segments)
   latestSegs.current = segments
 
-  function cleanSegments(
-    list: JourneyVia[],
-    by: TransportOptionSort = optionSort,
-  ): JourneyVia[] {
+  function cleanSegments(list: JourneyVia[]): JourneyVia[] {
     return list
       .map((v, i) => {
         let opts: JourneyTransportOption[] = viaTransportOptions(v)
@@ -2183,7 +2175,7 @@ function TransportBlock({
           )
         const flight = opts.find((o) => o.mode === 'flight')
         if (flight) opts = [flight]
-        else opts = sortTransportOptions(opts, by)
+        else opts = sortTransportOptions(opts)
         return withViaOptions(
           {
             ...v,
@@ -2207,28 +2199,21 @@ function TransportBlock({
       .filter((v) => v.title.trim() || viaTransportOptions(v).length > 0)
   }
 
-  function persistNow(
-    list: JourneyVia[],
-    by: TransportOptionSort = optionSort,
-    immediate = false,
-  ) {
+  function persistNow(list: JourneyVia[], immediate = false) {
     if (persistTimer.current) {
       clearTimeout(persistTimer.current)
       persistTimer.current = null
     }
-    onChange(withTransportSegments(leg, cleanSegments(list, by)), {
+    onChange(withTransportSegments(leg, cleanSegments(list)), {
       immediate,
     })
   }
 
-  function schedulePersist(
-    list: JourneyVia[],
-    by: TransportOptionSort = optionSort,
-  ) {
+  function schedulePersist(list: JourneyVia[]) {
     if (persistTimer.current) clearTimeout(persistTimer.current)
     persistTimer.current = setTimeout(() => {
       persistTimer.current = null
-      onChange(withTransportSegments(leg, cleanSegments(list, by)))
+      onChange(withTransportSegments(leg, cleanSegments(list)))
     }, 450)
   }
 
@@ -2382,7 +2367,7 @@ function TransportBlock({
     const modeChange = Object.prototype.hasOwnProperty.call(partial, 'mode')
     setOptions(
       placeIdx,
-      resort ? sortTransportOptions(next, optionSort) : next,
+      resort ? sortTransportOptions(next) : next,
       modeChange || resort || immediate,
     )
   }
@@ -2404,22 +2389,9 @@ function TransportBlock({
     if (!via) return
     setOptions(
       placeIdx,
-      sortTransportOptions(viaTransportOptions(via), optionSort),
+      sortTransportOptions(viaTransportOptions(via)),
       true,
     )
-  }
-
-  function applyOptionSort(by: TransportOptionSort) {
-    const next = saveTransportOptionSort(by)
-    setOptionSort(next)
-    const sorted = segments.map((via) =>
-      withViaOptions(
-        via,
-        sortTransportOptions(viaTransportOptions(via), next),
-      ),
-    )
-    setDraft(withTransportSegments(draft, sorted))
-    persistNow(sorted, next)
   }
 
   function removeOption(placeIdx: number, optIdx: number) {
@@ -2566,6 +2538,16 @@ function TransportBlock({
                 </button>
               ))}
             </nav>
+            <p className="v2-meta" style={{ margin: 0 }}>
+              Sti fra{' '}
+              <strong>
+                {from.kind === 'home' ? 'start' : from.city || 'fra'}
+              </strong>{' '}
+              til <strong>{goalName}</strong>
+              {requireTransportMode
+                ? '. Hvert sted trenger navn og minst én reise (buss, tog, fly …).'
+                : '. Du kan legge hovedlinjen med bare steder; reisemåte er valgfritt.'}
+            </p>
 
             <div className="v2-via-list">
               <div className="v2-via-head">

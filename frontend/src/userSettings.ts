@@ -5,7 +5,6 @@ const PLANNER_KEY = 'reise.plannerSettings'
 const THEME_KEY = 'reise.theme'
 const LINKS_KEY = 'reise.usefulLinks'
 const ALERTS_KEY = 'reise.timeAlerts'
-const TRANSPORT_SORT_KEY = 'reise.transportOptionSort'
 
 export const THEME_IDS = [
   'skog',
@@ -519,29 +518,3 @@ export function saveTimeAlertSettings(
   return next
 }
 
-export const TRANSPORT_OPTION_SORTS = ['depart', 'arrive', 'duration'] as const
-export type TransportOptionSort = (typeof TRANSPORT_OPTION_SORTS)[number]
-
-export function isTransportOptionSort(
-  value: unknown,
-): value is TransportOptionSort {
-  return TRANSPORT_OPTION_SORTS.includes(value as TransportOptionSort)
-}
-
-export function loadTransportOptionSort(): TransportOptionSort {
-  try {
-    const raw = localStorage.getItem(TRANSPORT_SORT_KEY)
-    if (isTransportOptionSort(raw)) return raw
-  } catch {
-    /* ignore */
-  }
-  return 'depart'
-}
-
-export function saveTransportOptionSort(
-  by: TransportOptionSort,
-): TransportOptionSort {
-  const next = isTransportOptionSort(by) ? by : 'depart'
-  localStorage.setItem(TRANSPORT_SORT_KEY, next)
-  return next
-}
