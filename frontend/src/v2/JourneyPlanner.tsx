@@ -833,10 +833,10 @@ export function JourneyPlanner({
                     <table className="v2-cruise-day-table">
                       <thead>
                         <tr>
-                          <th scope="col">Dato</th>
                           <th scope="col">
                             {packType === 'cruise' ? 'Havn' : 'Sted'}
                           </th>
+                          <th scope="col">Dato</th>
                           <th scope="col">Ank.</th>
                           {packType === 'cruise' && (
                             <th scope="col">A.ab.</th>
@@ -864,8 +864,8 @@ export function JourneyPlanner({
                               key={day.id}
                               className={row.atSea ? 'is-sea' : undefined}
                             >
-                              <td className="v2-cruise-day-date">{date}</td>
                               <td>{row.place}</td>
+                              <td className="v2-cruise-day-date">{date}</td>
                               <td>{row.arrive || '—'}</td>
                               {packType === 'cruise' && (
                                 <td>{row.allAboard || '—'}</td>
