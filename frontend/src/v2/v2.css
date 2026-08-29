@@ -3883,7 +3883,7 @@ html[data-theme='plasma'] .v2-shell {
 }
 
 .v2-cruise-day-table .v2-cruise-day-date,
-.v2-cruise-day-table tr.is-sea td:not(:nth-child(2)) {
+.v2-cruise-day-table tr.is-sea td:not(:nth-child(1)) {
   color: var(--v2-label);
 }
 
@@ -3897,7 +3897,7 @@ html[data-theme='plasma'] .v2-shell {
   width: 1%;
 }
 
-.v2-cruise-day-table td:nth-child(2) {
+.v2-cruise-day-table td:nth-child(1) {
   width: auto;
   padding-right: 0.75rem;
 }
