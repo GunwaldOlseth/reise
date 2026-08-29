@@ -491,7 +491,7 @@ export function TripMap({
   const [mapSaveHint, setMapSaveHint] = useState('')
   const [savingMap, setSavingMap] = useState(false)
   const [showTravelTime, setShowTravelTime] = useState(loadShowTravelTime)
-  const { user, configured, login, getAccessToken } = useGoogleAuth()
+  const { user, configured, getAccessToken } = useGoogleAuth()
 
   useEffect(() => {
     if (!stops.length) {
@@ -985,17 +985,15 @@ export function TripMap({
           >
             Oppdater kart
           </button>
-          {markerPoints.length > 0 && (
+          {user && markerPoints.length > 0 && (
             <button
               type="button"
               className="btn btn-soft btn-sm"
               disabled={savingMap}
               title={
-                user
+                configured
                   ? 'Lagre markører til Google Drive og åpne Mine kart'
-                  : configured
-                    ? 'Logg inn med Google for å lagre kartet på kontoen din'
-                    : 'Last ned KML og importer i Google Mine kart'
+                  : 'Last ned KML og importer i Google Mine kart'
               }
               onClick={() => {
                 void (async () => {
@@ -1003,13 +1001,6 @@ export function TripMap({
                   setSavingMap(true)
                   try {
                     if (configured) {
-                      if (!user) {
-                        login()
-                        setMapSaveHint(
-                          'Logg inn med Google — innloggingen huskes i nettleseren. Trykk «Lagre i Mine kart» igjen etterpå.',
-                        )
-                        return
-                      }
                       const kml = buildTripMapKml(tripName, markerPoints)
                       if (!kml) return
                       const token = await getAccessToken()
@@ -1042,7 +1033,7 @@ export function TripMap({
                     const ok = downloadTripMapKml(tripName, markerPoints)
                     if (ok) {
                       setMapSaveHint(
-                        'KML lastet ned. I Mine kart: Importer → velg filen. Sett VITE_GOOGLE_CLIENT_ID for innlogging og lagring til Drive.',
+                        'KML lastet ned. I Mine kart: Importer → velg filen.',
                       )
                       window.open(
                         GOOGLE_MY_MAPS_CREATE_URL,
@@ -1062,13 +1053,7 @@ export function TripMap({
                 })()
               }}
             >
-              {savingMap
-                ? 'Lagrer…'
-                : user
-                  ? 'Lagre i Mine kart'
-                  : configured
-                    ? 'Logg inn og lagre kart'
-                    : 'Lagre i Mine kart'}
+              {savingMap ? 'Lagrer…' : 'Lagre i Mine kart'}
             </button>
           )}
           <button
@@ -1089,13 +1074,6 @@ export function TripMap({
       </div>
       {gpsHint && <p className="meta trip-map-gps-hint">{gpsHint}</p>}
       {mapSaveHint && <p className="meta trip-map-gps-hint">{mapSaveHint}</p>}
-      {markerPoints.length > 0 && (
-        <p className="meta">
-          Med Google-innlogging lagres byene som markører på kontoen din (Drive)
-          — innloggingen huskes til du logger ut. Deretter: Mine kart →{' '}
-          <em>Importer</em> fra Drive.
-        </p>
-      )}
       <div className="trip-map-frame">
         <div
           ref={mapEl}
