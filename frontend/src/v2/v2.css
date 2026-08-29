@@ -257,26 +257,26 @@ html[data-theme='lavendel-lys'] {
 html[data-theme='stein-lys'] {
   color-scheme: light;
   --v2-scheme: light;
-  --v2-bg: #c4beb4;
-  --v2-panel: #d3ccc2;
-  --v2-ink: #413e39;
-  --v2-muted: rgba(65, 62, 57, 0.68);
-  --v2-label: rgba(65, 62, 57, 0.92);
-  --v2-accent: #6e6346;
-  --v2-accent-ink: #dcd8d0;
-  --v2-warn: #7b632d;
-  --v2-danger: #a34d43;
-  --v2-line: rgba(65, 62, 57, 0.14);
-  --v2-field: #dedacf;
-  --v2-option-bg: #dedacf;
-  --v2-option-ink: #413e39;
-  --v2-glow-1: rgba(110, 99, 70, 0.16);
-  --v2-glow-2: rgba(140, 136, 128, 0.05);
-  --v2-scrim: rgba(196, 190, 180, 0.96);
-  --v2-scrim-mid: rgba(196, 190, 180, 0.88);
-  --v2-nav: rgba(196, 190, 180, 0.92);
-  --v2-shade: rgba(65, 62, 57, 0.06);
-  --v2-hover: #b6b0a3;
+  --v2-bg: #d6d0c6;
+  --v2-panel: #ebe6dc;
+  --v2-ink: #2a2722;
+  --v2-muted: rgba(42, 39, 34, 0.68);
+  --v2-label: rgba(42, 39, 34, 0.94);
+  --v2-accent: #5c4f38;
+  --v2-accent-ink: #f0ece4;
+  --v2-warn: #6b4f1f;
+  --v2-danger: #8f3d32;
+  --v2-line: rgba(42, 39, 34, 0.18);
+  --v2-field: #f2eee6;
+  --v2-option-bg: #f2eee6;
+  --v2-option-ink: #2a2722;
+  --v2-glow-1: rgba(92, 79, 56, 0.14);
+  --v2-glow-2: rgba(120, 112, 100, 0.08);
+  --v2-scrim: rgba(235, 230, 220, 0.97);
+  --v2-scrim-mid: rgba(235, 230, 220, 0.9);
+  --v2-nav: rgba(235, 230, 220, 0.94);
+  --v2-shade: rgba(42, 39, 34, 0.1);
+  --v2-hover: #c9c2b6;
 }
 
 html[data-theme='nordlys-lys'] {
@@ -615,10 +615,13 @@ html[data-theme='sand-lys'],
 html[data-theme='lavendel-lys'],
 html[data-theme='stein-lys'],
 html[data-theme='nordlys-lys'] {
-  --v2-bg: color-mix(in srgb, var(--v2-bg) 70%, var(--v2-ink) 30%);
-  --v2-panel: color-mix(in srgb, var(--v2-panel) 50%, #ffffff 50%);
-  --v2-field: color-mix(in srgb, var(--v2-field) 62%, #ffffff 38%);
-  --v2-shade: color-mix(in srgb, var(--v2-shade) 55%, var(--v2-ink) 45%);
+  /* Light themes: lift surfaces toward white — never darken bg with ink */
+  --v2-bg: color-mix(in srgb, var(--v2-bg) 76%, #ffffff 24%);
+  --v2-panel: color-mix(in srgb, var(--v2-panel) 38%, #ffffff 62%);
+  --v2-field: color-mix(in srgb, var(--v2-field) 34%, #ffffff 66%);
+  --v2-shade: color-mix(in srgb, var(--v2-ink) 14%, transparent);
+  --v2-line: color-mix(in srgb, var(--v2-ink) 20%, transparent);
+  --v2-accent-text: color-mix(in srgb, var(--v2-accent) 58%, var(--v2-ink) 42%);
 }
 
 html {
