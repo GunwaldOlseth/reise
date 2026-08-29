@@ -426,6 +426,20 @@ a:hover {
   border-bottom: 1px solid var(--line);
 }
 
+.expense-total-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 0.5rem;
+}
+
+.expense-total-side {
+  display: flex;
+  gap: 0.75rem;
+  text-align: right;
+  flex-shrink: 0;
+}
+
 .expense-total-label {
   margin: 0;
   font-size: 0.85rem;
@@ -438,13 +452,34 @@ a:hover {
 .expense-total-amount {
   margin: 0.15rem 0 0.35rem;
   font-family: var(--font-display);
-  font-size: clamp(1.5rem, 3.2vw + 0.55rem, 2.2rem);
+  font-size: clamp(1rem, 2.6vw + 0.35rem, 1.65rem);
   line-height: 1.05;
   color: var(--teal-deep);
+  font-variant-numeric: tabular-nums;
 }
 
 .expense-total-breakdown {
   margin: 0;
+  font-size: 0.82rem;
+  line-height: 1.35;
+}
+
+@media (max-width: 520px) {
+  .expense-total-side {
+    gap: 0.5rem;
+  }
+
+  .expense-total-label {
+    font-size: 0.75rem;
+  }
+
+  .expense-total-amount {
+    font-size: clamp(0.95rem, 4.2vw, 1.25rem);
+  }
+
+  .expense-total-breakdown {
+    font-size: 0.78rem;
+  }
 }
 
 .expense-cruise-avg {

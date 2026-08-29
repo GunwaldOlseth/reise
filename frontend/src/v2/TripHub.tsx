@@ -657,14 +657,14 @@ function JourneyExpensesView({
   return (
     <div className="expense-overview">
       <div className="expense-total-card">
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
+        <div className="expense-total-row">
           <div>
             <p className="expense-total-label">Totalt</p>
             <p className="expense-total-amount">
               {formatExpenseAmount(summary.total)}
             </p>
           </div>
-          <div style={{ display: 'flex', gap: '1.5rem', textAlign: 'right' }}>
+          <div className="expense-total-side">
             <div>
               <p className="expense-total-label" style={{ color: 'var(--color-success-text)' }}>Betalt</p>
               <p className="expense-total-amount" style={{ color: 'var(--color-success-text)' }}>
