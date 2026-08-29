@@ -2482,10 +2482,15 @@ function TransportBlock({
   }
 
   return (
-    <div className={`v2-transport-wrap${open ? ' is-open' : ''}`}>
-      <div className="v2-rail v2-transport-rail" aria-hidden>
-        <div className="v2-rail-line" />
-      </div>
+    <div
+      className={`v2-transport-wrap${open ? ' is-open' : ''}`}
+      data-transport-open={open ? 'true' : 'false'}
+    >
+      {!open ? (
+        <div className="v2-rail v2-transport-rail" aria-hidden>
+          <div className="v2-rail-line" />
+        </div>
+      ) : null}
       <div
         className={`v2-transport${showWarn ? ' is-warn' : ''}${
           open ? ' is-open' : ''
