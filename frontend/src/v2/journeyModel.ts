@@ -992,7 +992,7 @@ export function journeyVisitPlaces(journey: Journey): {
     for (const activity of sights || []) {
       if (activityPurpose(activity) === 'transfer') continue
       if (sameCity(activity.title, parentCity)) continue
-      addPlace(activity.title, country)
+      addPlace(activity.title, country, activity.notes, activity.docs)
     }
   }
 
