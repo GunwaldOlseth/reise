@@ -75,6 +75,7 @@ export function TripHub({
   onOpenAdmin,
   onTripDeleted,
   onTripUpdated,
+  onTabChange,
 }: {
   tripId: string
   tripName: string
@@ -91,6 +92,7 @@ export function TripHub({
   onTripDeleted: () => void
   trip?: Trip | null
   onTripUpdated: (trip: Trip) => void
+  onTabChange?: (tab: TripHubTab) => void
 }) {
   const [tab, setTab] = useState<TripHubTab>(initialTab)
   const [menuOpen, setMenuOpen] = useState(false)
@@ -143,6 +145,13 @@ export function TripHub({
     if (!journeyReady) return
     enqueueJourneyWeather(journey)
   }, [journey, journeyReady])
+
+  function goTab(id: TripHubTab) {
+    setMenuOpen(false)
+    if (tab === 'live' && id !== 'live') flushLiveSave()
+    setTab(id)
+    onTabChange?.(id)
+  }
 
   const mapStops = useMemo(
     () => journeyMapStopsInOrder(journey),
@@ -423,11 +432,7 @@ export function TripHub({
             type="button"
             className={`v2-hub-tab${tab === t.id ? ' is-active' : ''}`}
             title={t.title}
-            onClick={() => {
-              setMenuOpen(false)
-              if (tab === 'live' && t.id !== 'live') flushLiveSave()
-              setTab(t.id)
-            }}
+            onClick={() => goTab(t.id)}
           >
             {t.label}
           </button>
@@ -511,7 +516,7 @@ export function TripHub({
                   <button
                     type="button"
                     className="v2-text-link"
-                    onClick={() => setTab('plan')}
+                    onClick={() => goTab('plan')}
                   >
                     Plan
                   </button>
@@ -519,7 +524,7 @@ export function TripHub({
                   <button
                     type="button"
                     className="v2-text-link"
-                    onClick={() => setTab('live')}
+                    onClick={() => goTab('live')}
                   >
                     Live
                   </button>
