@@ -2224,17 +2224,20 @@ html[data-theme='plasma'] .v2-shell {
 }
 
 /* Open editor: drop the dashed rail and use full thread width.
-   :is() keeps class + data-attr in one rule (a comma list with :has()
-   was dropped by Chrome). Rail is also unmounted in JSX when open. */
-.v2-transport-wrap:is(.is-open, [data-transport-open='true']) {
+   Rail is unmounted in JSX when open; these rules are a fallback. */
+.v2-transport-wrap.is-open,
+.v2-transport-wrap[data-transport-open='true'] {
   grid-template-columns: minmax(0, 1fr);
   gap: 0;
   padding-left: 0;
 }
 
-.v2-transport-wrap:is(.is-open, [data-transport-open='true']) .v2-transport-rail,
-.v2-transport-wrap:is(.is-open, [data-transport-open='true']) .v2-rail-line,
-.v2-transport-wrap:is(.is-open, [data-transport-open='true']) .v2-rail::after {
+.v2-transport-wrap.is-open .v2-transport-rail,
+.v2-transport-wrap[data-transport-open='true'] .v2-transport-rail,
+.v2-transport-wrap.is-open .v2-rail-line,
+.v2-transport-wrap[data-transport-open='true'] .v2-rail-line,
+.v2-transport-wrap.is-open .v2-rail::after,
+.v2-transport-wrap[data-transport-open='true'] .v2-rail::after {
   display: none !important;
   width: 0;
   min-width: 0;
@@ -2243,13 +2246,19 @@ html[data-theme='plasma'] .v2-shell {
   background: none;
 }
 
-.v2-transport-wrap:is(.is-open, [data-transport-open='true']) > .v2-transport,
-.v2-transport-wrap:is(.is-open, [data-transport-open='true']) .v2-transport-body,
-.v2-transport-wrap:is(.is-open, [data-transport-open='true']) .v2-via-list,
-.v2-transport-wrap:is(.is-open, [data-transport-open='true']) .v2-seg-card,
-.v2-transport-wrap:is(.is-open, [data-transport-open='true']) .v2-hop-opt {
+.v2-transport-wrap.is-open > .v2-transport,
+.v2-transport-wrap[data-transport-open='true'] > .v2-transport,
+.v2-transport-wrap.is-open .v2-transport-body,
+.v2-transport-wrap[data-transport-open='true'] .v2-transport-body,
+.v2-transport-wrap.is-open .v2-via-list,
+.v2-transport-wrap[data-transport-open='true'] .v2-via-list,
+.v2-transport-wrap.is-open .v2-seg-card,
+.v2-transport-wrap[data-transport-open='true'] .v2-seg-card,
+.v2-transport-wrap.is-open .v2-hop-opt,
+.v2-transport-wrap[data-transport-open='true'] .v2-hop-opt {
   width: 100%;
   min-width: 0;
+  max-width: none;
 }
 
 .v2-transport-wrap .v2-transport-summary {
@@ -4246,6 +4255,29 @@ html[data-theme='plasma'] .v2-shell {
 
 .v2-stop > div:last-child > .v2-place-panel.is-open {
   background: rgba(61, 190, 165, 0.06);
+}
+
+/* Open city card: full width (not only on narrow screens). */
+.v2-stop.is-place-open {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0;
+}
+
+.v2-stop.is-place-open > .v2-dot {
+  display: none;
+}
+
+.v2-stop.is-place-open > div:last-child {
+  grid-column: 1;
+  width: 100%;
+  min-width: 0;
+}
+
+.v2-stop.is-place-open .v2-place-panel,
+.v2-stop.is-place-open .v2-place-body.v2-transport-body {
+  width: 100%;
+  min-width: 0;
+  max-width: none;
 }
 
 .v2-dot {
@@ -6669,6 +6701,13 @@ html[data-theme='plasma'] .v2-shell {
 }
 
 @media (max-width: 640px) {
+  .v2-transport-wrap.is-open,
+  .v2-transport-wrap[data-transport-open='true'] {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+    padding-left: 0;
+  }
+
   .v2-stop {
     grid-template-columns: 1fr;
     gap: 0;
