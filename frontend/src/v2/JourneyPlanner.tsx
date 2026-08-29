@@ -2546,16 +2546,6 @@ function TransportBlock({
 
         {open && (
           <div className="v2-transport-body">
-            <p className="v2-meta" style={{ margin: 0 }}>
-              Sti fra{' '}
-              <strong>
-                {from.kind === 'home' ? 'start' : from.city || 'fra'}
-              </strong>{' '}
-              til <strong>{goalName}</strong>
-              {requireTransportMode
-                ? '. Hvert sted trenger navn og minst én reise (buss, tog, fly …).'
-                : '. Du kan legge hovedlinjen med bare steder; reisemåte er valgfritt.'}
-            </p>
             <nav className="v2-hop-sort" aria-label="Sorter transport">
               {(
                 [
