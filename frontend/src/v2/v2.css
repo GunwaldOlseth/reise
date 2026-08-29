@@ -5862,6 +5862,10 @@ html[data-theme='plasma'] .v2-shell {
   font-weight: 700;
 }
 
+.v2-shell .expense-total-amount {
+  font-size: clamp(1.5rem, 3.2vw + 0.55rem, 2.2rem);
+}
+
 .v2-shell .expense-total-breakdown,
 .v2-shell .expense-cruise-avg > span:first-child,
 .v2-shell .expense-empty,
