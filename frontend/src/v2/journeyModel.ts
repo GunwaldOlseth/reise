@@ -2064,6 +2064,32 @@ export function replaceDayActivities(
   return normalizeSights([...others, ...nextDay])
 }
 
+/** Move one activity to another calendar day within the same stop. */
+export function moveActivityToDay(
+  sights: JourneyActivity[] | null | undefined,
+  activityId: string,
+  targetDayOffset: number,
+): JourneyActivity[] {
+  const list = normalizeSights(sights)
+  const activity = list.find((s) => s.id === activityId)
+  if (!activity) return list
+  const sourceOffset = activity.dayOffset ?? 0
+  const targetOffset =
+    typeof targetDayOffset === 'number' && targetDayOffset >= 0
+      ? Math.floor(targetDayOffset)
+      : 0
+  if (sourceOffset === targetOffset) return list
+
+  const without = list.filter((s) => s.id !== activityId)
+  const targetDay = without.filter((s) => (s.dayOffset ?? 0) === targetOffset)
+  const moved: JourneyActivity = {
+    ...activity,
+    dayOffset: targetOffset,
+    sortOrder: targetDay.length,
+  }
+  return normalizeSights([...without, moved])
+}
+
 export function newLegId(): string {
   return crypto.randomUUID()
 }
