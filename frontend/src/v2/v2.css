@@ -4650,16 +4650,17 @@ html[data-theme='plasma'] .v2-shell {
 
 .v2-city-docs-add {
   appearance: none;
-  min-width: 1.45rem;
-  min-height: 1.45rem;
+  flex-shrink: 0;
+  min-width: 1.55rem;
+  min-height: 1.55rem;
   padding: 0;
-  border: 0;
+  border: 1px solid color-mix(in srgb, var(--v2-accent) 45%, transparent);
   border-radius: 0.35rem;
-  background: transparent;
-  color: var(--v2-label);
+  background: color-mix(in srgb, var(--v2-accent) 12%, transparent);
+  color: var(--v2-accent);
   font: inherit;
-  font-size: 1.05rem;
-  font-weight: 700;
+  font-size: 1.1rem;
+  font-weight: 800;
   line-height: 1;
   cursor: pointer;
 }
@@ -4688,6 +4689,19 @@ html[data-theme='plasma'] .v2-shell {
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
+}
+
+.v2-city-doc-title-row {
+  display: flex;
+  align-items: center;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.v2-city-doc-title-row .v2-city-doc-title,
+.v2-city-doc-title-row .v2-city-doc-title-input {
+  flex: 1;
+  min-width: 0;
 }
 
 .v2-city-doc-title {
