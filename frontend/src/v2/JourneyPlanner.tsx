@@ -104,6 +104,7 @@ import {
   warningsForStop,
   withTransportSegments,
   withViaOptions,
+  type JourneyPackageDay,
   type Journey,
   type JourneyLeg,
   type JourneyLegMode,
@@ -297,6 +298,8 @@ export function JourneyPlanner({
   )
   /** Expanded package/cruise card on the thread. */
   const [openPackId, setOpenPackId] = useState<string | null>(null)
+  /** Expanded package day panel (`stopId:dayId`). */
+  const [openPackDayKey, setOpenPackDayKey] = useState<string | null>(null)
   const transportCompanyOptionsByMode = useMemo(() => {
     const values = new Map<string, Set<string>>()
     const add = (mode: string, company: string) => {
@@ -688,9 +691,15 @@ export function JourneyPlanner({
                       }
                       onClick={() => {
                         if (isPack && isPackageType(stop.kind)) {
-                          setOpenPackId((id) =>
-                            id === stop.id ? null : stop.id,
-                          )
+                          setOpenPackId((id) => {
+                            if (id === stop.id) {
+                              setOpenPackDayKey((key) =>
+                                key?.startsWith(`${stop.id}:`) ? null : key,
+                              )
+                              return null
+                            }
+                            return stop.id
+                          })
                           return
                         }
                         setWizard({ kind: 'edit', stopId: stop.id })
@@ -784,7 +793,9 @@ export function JourneyPlanner({
                       </button>
                     </div>
                   )}
-                  {isPack && (pack?.days || []).length > 0 && (
+                  {isPack &&
+                    (pack?.days || []).length > 0 &&
+                    openPackId !== stop.id && (
                     <table className="v2-cruise-day-table">
                       <thead>
                         <tr>
@@ -832,9 +843,19 @@ export function JourneyPlanner({
                       </tbody>
                     </table>
                   )}
-                  {isPack && openPackId === stop.id && (pack?.days || []).length > 0 && (
+                  {isPack &&
+                    openPackId === stop.id &&
+                    (pack?.days || []).length > 0 && (
                     <div className="v2-pack-day-programs">
                       {(pack?.days || []).map((day) => {
+                        const row = packageDayTableRow(day, {
+                          type: packType,
+                          nights: packageNightsOf(pack),
+                          basePlace: pack?.basePlace,
+                          freeLabel: freeDayLabel,
+                          placeFallback:
+                            packType === 'cruise' ? 'Havn' : 'Sted',
+                        })
                         const place =
                           day.atSea
                             ? freeDayLabel
@@ -847,90 +868,83 @@ export function JourneyPlanner({
                               addDaysIso(stop.arriveDate, day.offset),
                             )
                           : `Dag ${day.offset + 1}`
+                        const dayKey = `${stop.id}:${day.id}`
+                        const packCityDays =
+                          (pack?.days || []).length > 1
+                            ? (pack?.days || []).map((d) => ({
+                                offset: d.offset,
+                                date: stop.arriveDate
+                                  ? addDaysIso(stop.arriveDate, d.offset)
+                                  : '',
+                                label: d.atSea
+                                  ? freeDayLabel
+                                  : d.city?.trim() ||
+                                    pack?.basePlace?.trim() ||
+                                    '',
+                              }))
+                            : undefined
                         return (
-                          <div key={day.id} className="v2-city-day">
-                            <div className="v2-city-day-head">
-                              <span className="v2-cruise-day-date">{date}</span>
-                              <span>{place}</span>
-                              {!day.atSea ? (
-                                <CityInfoTip
-                                  text={day.notes}
-                                  docs={day.docs}
-                                  disabled={loading}
-                                />
-                              ) : null}
-                            </div>
-                            {!day.atSea ? (
-                              <CityDocsEditor
-                                value={day}
-                                disabled={loading}
-                                onChange={(next, opts) =>
-                                  patchPlaceStop(
-                                    {
-                                      ...stop,
-                                      pack: {
-                                        ...pack!,
-                                        days: (pack?.days || []).map((d) =>
-                                          d.id === day.id ? { ...d, ...next } : d,
-                                        ),
-                                      },
-                                    },
-                                    opts,
-                                  )
-                                }
-                              />
-                            ) : null}
-                            <SightList
-                              sights={activitiesForDay(stop.sights, day.offset)}
-                              dayOffset={day.offset}
-                              disabled={loading}
-                              heading="Utflukter og severdigheter"
-                              suggestCountry={
-                                day.country || pack?.baseCountry || stop.country
-                              }
-                              cityDays={
-                                (pack?.days || []).length > 1
-                                  ? (pack?.days || []).map((d) => ({
-                                      offset: d.offset,
-                                      date: stop.arriveDate
-                                        ? addDaysIso(stop.arriveDate, d.offset)
-                                        : '',
-                                      label: d.atSea
-                                        ? freeDayLabel
-                                        : d.city?.trim() ||
-                                          pack?.basePlace?.trim() ||
-                                          '',
-                                    }))
-                                  : undefined
-                              }
-                              onMoveToDay={(activityId, targetOffset) =>
-                                patchPlaceStop(
-                                  {
-                                    ...stop,
-                                    sights: moveActivityToDay(
-                                      stop.sights,
-                                      activityId,
-                                      targetOffset,
+                          <PackDayPanel
+                            key={day.id}
+                            day={day}
+                            dateLabel={date}
+                            placeLabel={place}
+                            tableRow={row}
+                            packType={packType}
+                            sights={activitiesForDay(stop.sights, day.offset)}
+                            dayOffset={day.offset}
+                            cityDays={packCityDays}
+                            disabled={loading}
+                            open={openPackDayKey === dayKey}
+                            suggestCountry={
+                              day.country || pack?.baseCountry || stop.country
+                            }
+                            onToggle={() =>
+                              setOpenPackDayKey((key) =>
+                                key === dayKey ? null : dayKey,
+                              )
+                            }
+                            onChangeDay={(next, opts) =>
+                              patchPlaceStop(
+                                {
+                                  ...stop,
+                                  pack: {
+                                    ...pack!,
+                                    days: (pack?.days || []).map((d) =>
+                                      d.id === day.id ? { ...d, ...next } : d,
                                     ),
                                   },
-                                  { immediate: true },
-                                )
-                              }
-                              onChange={(dayList) =>
-                                patchPlaceStop(
-                                  {
-                                    ...stop,
-                                    sights: replaceDayActivities(
-                                      stop.sights,
-                                      day.offset,
-                                      dayList,
-                                    ),
-                                  },
-                                  { immediate: true },
-                                )
-                              }
-                            />
-                          </div>
+                                },
+                                opts,
+                              )
+                            }
+                            onChangeSights={(dayList) =>
+                              patchPlaceStop(
+                                {
+                                  ...stop,
+                                  sights: replaceDayActivities(
+                                    stop.sights,
+                                    day.offset,
+                                    dayList,
+                                  ),
+                                },
+                                { immediate: true },
+                              )
+                            }
+                            onMoveToDay={(activityId, targetOffset) =>
+                              patchPlaceStop(
+                                {
+                                  ...stop,
+                                  sights: moveActivityToDay(
+                                    stop.sights,
+                                    activityId,
+                                    targetOffset,
+                                  ),
+                                },
+                                { immediate: true },
+                              )
+                            }
+                          />
                         )
                       })}
                     </div>
@@ -1016,6 +1030,9 @@ export function JourneyPlanner({
                               void persist(removeStop(journey, stop.id))
                               setOpenPackId((id) =>
                                 id === stop.id ? null : id,
+                              )
+                              setOpenPackDayKey((key) =>
+                                key?.startsWith(`${stop.id}:`) ? null : key,
                               )
                             })
                           }}
@@ -1146,6 +1163,145 @@ export function JourneyPlanner({
             setWizard(null)
           }}
         />
+      )}
+    </div>
+  )
+}
+
+/**
+ * One calendar day inside an expanded package/cruise stop — accordion like a place city.
+ */
+function PackDayPanel({
+  day,
+  dateLabel,
+  placeLabel,
+  tableRow,
+  packType,
+  sights,
+  dayOffset,
+  cityDays,
+  disabled,
+  open,
+  suggestCountry,
+  onToggle,
+  onChangeDay,
+  onChangeSights,
+  onMoveToDay,
+}: {
+  day: JourneyPackageDay
+  dateLabel: string
+  placeLabel: string
+  tableRow: ReturnType<typeof packageDayTableRow>
+  packType: JourneyPackageType | string
+  sights: ReturnType<typeof activitiesForDay>
+  dayOffset: number
+  cityDays?: { offset: number; date: string; label?: string }[]
+  disabled?: boolean
+  open: boolean
+  suggestCountry?: string
+  onToggle: () => void
+  onChangeDay: (
+    next: Partial<JourneyPackageDay>,
+    opts?: { immediate?: boolean },
+  ) => void
+  onChangeSights: (sights: ReturnType<typeof normalizeSights>) => void
+  onMoveToDay?: (activityId: string, targetOffset: number) => void
+}) {
+  const activityCount = normalizeSights(sights).length
+  const timeMeta = [
+    tableRow.arrive ? `Ank. ${tableRow.arrive}` : '',
+    packType === 'cruise' && tableRow.allAboard
+      ? `A.ab. ${tableRow.allAboard}`
+      : '',
+    tableRow.leave ? `Avg. ${tableRow.leave}` : '',
+  ]
+    .filter(Boolean)
+    .join(' · ')
+
+  return (
+    <div
+      className={`v2-transport v2-place-panel v2-pack-day-panel${
+        open ? ' is-open' : ''
+      }${day.atSea ? ' is-sea' : ''}`}
+    >
+      <div className="v2-transport-bar">
+        <button
+          type="button"
+          className="v2-transport-summary v2-place-summary"
+          disabled={disabled}
+          onClick={onToggle}
+          aria-expanded={open}
+          title={open ? 'Skjul dag' : 'Åpne dag'}
+        >
+          <span className="v2-place-bits">
+            <span className="v2-place-bit">
+              <PlaceMetaIcon name="dates" size={16} />
+              <span className="v2-place-bit-text">{dateLabel}</span>
+            </span>
+            <span className="v2-place-bit">
+              <PlaceMetaIcon name="city" size={16} />
+              <span className="v2-place-bit-text">{placeLabel}</span>
+            </span>
+          </span>
+          {(timeMeta || activityCount > 0) && (
+            <span className="v2-place-bits is-meta">
+              {timeMeta ? (
+                <span className="v2-place-bit-text">{timeMeta}</span>
+              ) : null}
+              {activityCount > 0 ? (
+                <span className="v2-place-bit">
+                  <PlaceMetaIcon name="plan" size={13} />
+                  <span className="v2-place-bit-text">{activityCount}</span>
+                </span>
+              ) : null}
+            </span>
+          )}
+        </button>
+        {!day.atSea ? (
+          <CityInfoTip
+            text={day.notes}
+            docs={day.docs}
+            disabled={disabled}
+          />
+        ) : null}
+        <button
+          type="button"
+          className="v2-transport-toggle"
+          disabled={disabled}
+          aria-label={open ? 'Skjul dag' : 'Vis dag'}
+          title={open ? 'Skjul dag' : 'Vis dag'}
+          onClick={onToggle}
+        >
+          {open ? '▴' : '▾'}
+        </button>
+      </div>
+      {!open && activityCount > 0 && (
+        <SightPreview sights={sights} />
+      )}
+      {open && (
+        <div className="v2-transport-body v2-place-body">
+          {!day.atSea ? (
+            <CityDocsEditor
+              value={day}
+              disabled={disabled}
+              onChange={(next, opts) => onChangeDay(next, opts)}
+            />
+          ) : (
+            <p className="v2-meta" style={{ margin: 0 }}>
+              {placeLabel}
+            </p>
+          )}
+          <SightList
+            sights={sights}
+            dayOffset={dayOffset}
+            disabled={disabled}
+            heading="Utflukter og severdigheter"
+            suggestCountry={suggestCountry}
+            cityDays={cityDays}
+            onMoveToDay={onMoveToDay}
+            onChange={onChangeSights}
+          />
+        </div>
       )}
     </div>
   )
