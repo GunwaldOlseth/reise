@@ -1610,8 +1610,11 @@ function PlaceStopPanel({
       {!open && (
         <PlaceLinkedPreview
           hotel={hotel}
+          stay={stay}
           lodgingKind={lodgingKind}
           nights={nights}
+          arriveDate={stop.arriveDate}
+          departDate={depart}
           warnMissingStay={visiting && warnMissingStay}
           sights={stop.sights}
         />
