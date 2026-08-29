@@ -2195,7 +2195,11 @@ html[data-theme='plasma'] .v2-shell {
 }
 
 .v2-transport-wrap.is-open > .v2-transport,
+.v2-transport-wrap:has(> .v2-transport.is-open) > .v2-transport,
+.v2-transport-wrap[data-transport-open='true'] > .v2-transport,
 .v2-transport-wrap.is-open .v2-transport-body,
+.v2-transport-wrap:has(> .v2-transport.is-open) .v2-transport-body,
+.v2-transport-wrap[data-transport-open='true'] .v2-transport-body,
 .v2-transport-wrap.is-open .v2-via-list,
 .v2-transport-wrap.is-open .v2-seg-card,
 .v2-transport-wrap.is-open .v2-hop-opt {
