@@ -5785,22 +5785,26 @@ html[data-theme='plasma'] .v2-shell {
   font-style: italic;
 }
 
-.v2-hotel-linked-chip {
+.v2-hotel-linked-chip,
+.v2-city-linked-chip {
   padding: 0;
   overflow: visible;
 }
 
-.v2-hotel-linked-chip.is-open {
+.v2-hotel-linked-chip.is-open,
+.v2-city-linked-chip.is-open {
   z-index: 20;
   position: relative;
 }
 
-.v2-place-panel:has(.v2-hotel-linked-chip.is-open) {
+.v2-place-panel:has(.v2-hotel-linked-chip.is-open),
+.v2-place-panel:has(.v2-city-linked-chip.is-open) {
   z-index: 16;
   overflow: visible;
 }
 
-.v2-hotel-linked-chip-btn {
+.v2-hotel-linked-chip-btn,
+.v2-city-linked-chip-btn {
   appearance: none;
   display: block;
   width: 100%;
@@ -5818,13 +5822,24 @@ html[data-theme='plasma'] .v2-shell {
 }
 
 .v2-hotel-linked-chip-btn:hover,
-.v2-hotel-linked-chip.is-open .v2-hotel-linked-chip-btn {
+.v2-hotel-linked-chip.is-open .v2-hotel-linked-chip-btn,
+.v2-city-linked-chip-btn:hover,
+.v2-city-linked-chip.is-open .v2-city-linked-chip-btn {
   filter: brightness(1.06);
 }
 
-.v2-hotel-linked-chip-btn:focus-visible {
+.v2-hotel-linked-chip-btn:focus-visible,
+.v2-city-linked-chip-btn:focus-visible {
   outline: 2px solid var(--v2-accent);
   outline-offset: 1px;
+}
+
+.v2-city-linked-chip-title {
+  margin: 0 0 0.55rem;
+  font-size: 1.05rem;
+  font-weight: 700;
+  line-height: 1.3;
+  color: var(--v2-ink);
 }
 
 .v2-hotel-info-pop .v2-hotel-info-title,

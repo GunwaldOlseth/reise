@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { ClockTimeInput } from './ClockTimeInput'
 import { CityDocsEditor } from './CityDocsEditor'
-import { CityInfoTip } from './CityInfoTip'
+import { CityInfoTip, CityLinkedChip } from './CityInfoTip'
 import { HotelLinkedChip } from './HotelInfoTip'
 import { CitySuggestFields } from '../CitySuggest'
 import { TrashIcon, PlaceMetaIcon } from '../TransportModeIcon'
@@ -793,8 +793,11 @@ export function PlaceLinkedPreview({
         </li>
       ) : null}
       {list.map((s) => (
-        <li
+        <CityLinkedChip
           key={s.id}
+          label={activityDisplayName(s)}
+          text={s.notes}
+          docs={s.docs}
           className={[
             s.kind === 'excursion'
               ? 'is-excursion'
@@ -805,14 +808,12 @@ export function PlaceLinkedPreview({
           ]
             .filter(Boolean)
             .join(' ')}
-          title={
+          hint={
             activityPurpose(s) === 'transfer'
               ? `${activityKindLabel(s.kind)} · Ikke stopp`
               : activityKindLabel(s.kind)
           }
-        >
-          {activityDisplayName(s)}
-        </li>
+        />
       ))}
     </ul>
   )
