@@ -1459,7 +1459,11 @@ function PlaceStopPanel({
           </div>
 
           {daysInCity.length > 0 && (
-            <ul className="v2-cruise-days v2-city-days">
+            <ul
+              className={`v2-cruise-days v2-city-days${
+                daysInCity.length > 1 ? ' v2-city-days--multi' : ''
+              }`}
+            >
               {daysInCity.map((day) => (
                 <li key={day.offset} className="v2-city-day">
                   <div className="v2-city-day-head">

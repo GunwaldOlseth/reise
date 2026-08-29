@@ -3816,6 +3816,7 @@ html[data-theme='plasma'] .v2-shell {
 
 .v2-place-body .v2-city-days {
   margin: 0;
+  gap: 0.55rem;
 }
 
 .v2-city-day,
@@ -3835,6 +3836,26 @@ html[data-theme='plasma'] .v2-shell {
   align-items: stretch;
 }
 
+/* Single-day city: no extra nested card. */
+.v2-place-body .v2-city-days:not(.v2-city-days--multi) > li.v2-city-day {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.v2-place-body .v2-city-days.v2-city-days--multi {
+  gap: 1.15rem;
+}
+
+.v2-place-body .v2-city-days.v2-city-days--multi > li.v2-city-day {
+  padding: 0.75rem 0.8rem 0.85rem;
+  border: 1px solid color-mix(in srgb, var(--v2-accent) 24%, var(--v2-line-strong));
+  border-radius: 0.8rem;
+  background: color-mix(in srgb, var(--v2-field) 78%, var(--v2-panel));
+  box-shadow: 0 0.4rem 0.9rem var(--v2-shade);
+}
+
 .v2-city-day-head {
   display: flex;
   align-items: baseline;
@@ -3844,9 +3865,22 @@ html[data-theme='plasma'] .v2-shell {
   color: var(--v2-accent);
 }
 
+.v2-place-body .v2-city-days .v2-city-day-head {
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  padding-bottom: 0.4rem;
+  margin-bottom: 0.05rem;
+  border-bottom: 1px solid color-mix(in srgb, var(--v2-accent) 42%, var(--v2-line));
+}
+
 .v2-city-day-head .v2-cruise-day-date {
   color: var(--v2-accent);
   font-weight: 750;
+}
+
+.v2-place-body .v2-city-days .v2-city-day-head .v2-cruise-day-date {
+  font-weight: 800;
 }
 
 .v2-pack-day-programs {
@@ -6703,11 +6737,11 @@ html[data-theme='plasma'] .v2-shell {
     gap: 0.4rem;
   }
 
-  .v2-place-body .v2-city-days {
+  .v2-place-body .v2-city-days:not(.v2-city-days--multi) {
     gap: 0;
   }
 
-  .v2-place-body .v2-city-day,
+  .v2-place-body .v2-city-days:not(.v2-city-days--multi) > li.v2-city-day,
   .v2-pack-day-programs .v2-city-day {
     padding: 0.5rem 0;
     border: 0;
@@ -6716,10 +6750,18 @@ html[data-theme='plasma'] .v2-shell {
     gap: 0.35rem;
   }
 
-  .v2-place-body .v2-city-days .v2-city-day + .v2-city-day {
-    border-top: 1px solid var(--v2-line);
-    margin-top: 0.35rem;
-    padding-top: 0.6rem;
+  .v2-place-body .v2-city-days.v2-city-days--multi {
+    gap: 1.05rem;
+  }
+
+  .v2-place-body .v2-city-days.v2-city-days--multi > li.v2-city-day {
+    padding: 0.65rem 0.7rem 0.75rem;
+    border: 1px solid color-mix(in srgb, var(--v2-accent) 24%, var(--v2-line-strong));
+    border-radius: 0.75rem;
+    background: color-mix(in srgb, var(--v2-field) 78%, var(--v2-panel));
+    box-shadow: 0 0.3rem 0.7rem var(--v2-shade);
+    gap: 0.35rem;
+    margin-top: 0;
   }
 
   .v2-pack-day-programs {
