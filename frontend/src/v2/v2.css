@@ -3812,11 +3812,40 @@ html[data-theme='plasma'] .v2-shell {
   margin: 0.65rem 0 0 0.65rem;
 }
 
-.v2-live-sights li {
+.v2-live-sights li,
+.v2-live-sights .v2-live-sight-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  column-gap: 0.65rem;
+  row-gap: 0.1rem;
+}
+
+.v2-live-sight-place {
+  min-width: 0;
   display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 0.35rem 0.5rem;
+  flex-direction: column;
+  gap: 0.05rem;
+}
+
+.v2-live-sight-place strong {
+  font-weight: 700;
+}
+
+.v2-live-sight-place .v2-meta {
+  font-size: 0.75rem;
+}
+
+.v2-live-sights .v2-activity-kind {
+  justify-self: center;
+}
+
+.v2-live-sight-info {
+  justify-self: end;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  min-height: 1.5rem;
 }
 
 .v2-choice-grid {
@@ -6094,7 +6123,6 @@ html[data-theme='plasma'] .v2-shell {
 }
 
 .v2-live-places li,
-.v2-live-sights li,
 .v2-live-history li {
   display: flex;
   align-items: baseline;
