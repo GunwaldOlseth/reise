@@ -33,9 +33,11 @@ Hvis `8082` er opptatt, bruk f.eks. `$env:PORT = "8083"` og sett samme port i `f
 
 ```powershell
 cd frontend
-npm install
-npm run dev
+npm.cmd install
+npm.cmd run dev
 ```
+
+Hvis PowerShell sier at `npm.ps1 cannot be loaded because running scripts is disabled`, bruk `npm.cmd` (ikke `npm`). Alternativt: `Set-ExecutionPolicy -Scope Process Bypass` i det vinduet, deretter `npm run dev`.
 
 Åpne **`http://localhost:5174/`** (Reise bruker port **5174**, ikke 5173 — beer/brygge bruker 5173).
 
