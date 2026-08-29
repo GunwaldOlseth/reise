@@ -4512,6 +4512,36 @@ html[data-theme='plasma'] .v2-shell {
   gap: 0.4rem;
 }
 
+.v2-activity-prices,
+.v2-price-paid-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.55rem;
+  align-items: end;
+}
+
+.v2-activity-prices .v2-change-check,
+.v2-price-paid-row .v2-check-row {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center;
+  gap: 0.4rem;
+  min-height: 2.5rem;
+  padding-bottom: 0.1rem;
+  white-space: nowrap;
+}
+
+.v2-activity-body input[type='checkbox'],
+.v2-activity-prices .v2-change-check input,
+.v2-price-paid-row .v2-check-row input {
+  width: 1.15rem;
+  height: 1.15rem;
+  min-height: 0;
+  min-width: 0;
+  padding: 0;
+  flex: 0 0 auto;
+}
+
 .v2-place-panel.v2-transport {
   margin: 0;
   border-radius: 1rem;
@@ -5217,11 +5247,8 @@ html[data-theme='plasma'] .v2-shell {
   width: 100%;
 }
 
-.v2-hotel-remove-row {
+.v2-hotel-card-body .v2-price-paid-row {
   grid-column: 1 / -1;
-  display: flex;
-  justify-content: flex-start;
-  padding-top: 0.15rem;
 }
 
 .v2-hotel-row {
