@@ -378,8 +378,9 @@ function AppMain() {
   }
 
   useEffect(() => {
-    const canonical = viewToHash(parseAppHash(window.location.hash))
-    if (!hashesEqual(window.location.hash, canonical)) {
+    const current = window.location.hash
+    const canonical = viewToHash(parseAppHash(current))
+    if (!current || current === '#' || !hashesEqual(current, canonical)) {
       window.history.replaceState(null, '', canonical)
     }
 
