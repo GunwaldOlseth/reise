@@ -2126,6 +2126,26 @@ html[data-theme='plasma'] .v2-shell {
   gap: var(--v2-stack-gap);
 }
 
+/* One open hop editor: hide every dashed transport rail in the thread. */
+.v2-thread.is-transport-editing .v2-transport-wrap {
+  padding-left: 0;
+}
+
+.v2-thread.is-transport-editing .v2-transport-wrap:not(.is-open) {
+  display: block;
+  gap: 0;
+}
+
+.v2-thread.is-transport-editing .v2-transport-rail,
+.v2-thread.is-transport-editing .v2-transport-rail .v2-rail-line {
+  display: none !important;
+  width: 0;
+  min-width: 0;
+  min-height: 0;
+  border: none !important;
+  background: none !important;
+}
+
 .v2-thread-item {
   display: flex;
   flex-direction: column;

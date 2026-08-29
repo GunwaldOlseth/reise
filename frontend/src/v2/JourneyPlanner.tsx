@@ -290,6 +290,10 @@ export function JourneyPlanner({
   autoOnwardRef.current = autoOnward
   /** Expanded place-stop accordion on the thread. */
   const [openPlaceId, setOpenPlaceId] = useState<string | null>(null)
+  /** When set, a transport hop editor is open — hide dashed rails on other hops. */
+  const [openTransportLegId, setOpenTransportLegId] = useState<string | null>(
+    null,
+  )
   /** Expanded package/cruise card on the thread. */
   const [openPackId, setOpenPackId] = useState<string | null>(null)
   const transportCompanyOptionsByMode = useMemo(() => {
@@ -563,7 +567,11 @@ export function JourneyPlanner({
         </header>
       )}
 
-      <div className="v2-thread">
+      <div
+        className={`v2-thread${
+          openTransportLegId ? ' is-transport-editing' : ''
+        }`}
+      >
         {error && <p className="v2-error">{error}</p>}
         {loading && journey.stops.length === 0 && (
           <p className="v2-meta">Henter reisen…</p>
@@ -615,6 +623,8 @@ export function JourneyPlanner({
                   warn={warnings.includes('travel')}
                   requireTransportMode={settings.requireTransportMode}
                   disabled={loading}
+                  openTransportLegId={openTransportLegId}
+                  onTransportOpenChange={setOpenTransportLegId}
                   onChange={patchTransportLeg}
                   onGoalStationChange={(station) =>
                     patchPlaceStop({ ...stop, station }, { immediate: true })
@@ -2043,6 +2053,8 @@ function TransportBlock({
   warn,
   requireTransportMode = true,
   disabled,
+  openTransportLegId = null,
+  onTransportOpenChange,
   onChange,
   onGoalStationChange,
 }: {
@@ -2053,6 +2065,8 @@ function TransportBlock({
   warn: boolean
   requireTransportMode?: boolean
   disabled?: boolean
+  openTransportLegId?: string | null
+  onTransportOpenChange?: (legId: string | null) => void
   onChange: (leg: JourneyLeg, opts?: { immediate?: boolean }) => void
   onGoalStationChange?: (station: string) => void
 }) {
@@ -2258,15 +2272,18 @@ function TransportBlock({
   }
 
   function toggleOpen() {
-    setOpen((v) => {
-      if (v) {
-        flushTransportDraft(true)
-        return false
-      }
-      setDraft(withTransportSegments(leg, transportSegments(leg)))
-      return true
-    })
+    if (open) {
+      flushTransportDraft(true)
+      setOpen(false)
+      onTransportOpenChange?.(null)
+      return
+    }
+    setDraft(withTransportSegments(leg, transportSegments(leg)))
+    setOpen(true)
+    onTransportOpenChange?.(leg.id)
   }
+
+  const showRail = !open && !openTransportLegId
 
   useEffect(() => {
     if (open) return
@@ -2492,7 +2509,7 @@ function TransportBlock({
           : undefined
       }
     >
-      {!open ? (
+      {showRail ? (
         <div className="v2-rail v2-transport-rail" aria-hidden>
           <div className="v2-rail-line" />
         </div>
