@@ -1249,6 +1249,11 @@ function PlaceStopPanel({
   const hasStay = stayNights(stop) >= 1
   const daysInCity = cityStayDays(stop)
   const hotelTimes = hasStay ? formatHotelStayTimes(stay) : ''
+  const nightsLabel =
+    nights > 0 ? `${nights} ${nights === 1 ? 'natt' : 'netter'}` : ''
+  const hotelMeta = [nightsLabel, hotelPrice, hotelTimes]
+    .filter(Boolean)
+    .join(' · ')
   const dateSpan =
     stop.arriveDate && nights > 0
       ? `${formatDateNO(stop.arriveDate)}–${formatDateNO(depart)} (${nights}n)`
@@ -1490,7 +1495,7 @@ function PlaceStopPanel({
           <div className="v2-linked">
             {stopPurpose(stop) === 'visit' && (
             <>
-            <div className="v2-sights-head">
+            <div className="v2-sights-head v2-place-basics-head">
               <span>Hotell / Overnatting</span>
               {!editingHotel && !(hotel || hasStay) && (
                 <button
@@ -1506,26 +1511,28 @@ function PlaceStopPanel({
               {!editingHotel && (hotel || hasStay) && (
                 <button
                   type="button"
-                  className="v2-chip-btn"
+                  className="v2-place-edit-btn"
                   disabled={disabled}
+                  aria-label="Endre hotell"
                   title="Endre hotell"
                   onClick={() => setEditingHotel(true)}
                 >
-                  Endre
+                  <PencilIcon size={14} />
                 </button>
               )}
               {editingHotel && (
                 <button
                   type="button"
-                  className="v2-chip-btn"
+                  className="v2-place-edit-btn is-on"
                   disabled={disabled}
+                  aria-label="Ferdig med hotell"
                   title="Ferdig"
                   onClick={() => {
                     patchStay({}, true, { immediate: true })
                     setEditingHotel(false)
                   }}
                 >
-                  Ferdig
+                  <CheckIcon size={14} />
                 </button>
               )}
             </div>
@@ -1578,30 +1585,36 @@ function PlaceStopPanel({
                               </span>
                             )}
                           </span>
-                          {(hotelAddress || hotelPrice || nights > 0 || hotelTimes) && (
+                          {hotelAddress ? (
                             <span className="v2-hotel-row-addr">
-                              {[
-                                hotelTimes,
-                                hotelAddress,
-                                nights > 0
-                                  ? `${nights} ${nights === 1 ? 'natt' : 'netter'}`
-                                  : '',
-                                hotelPrice,
-                              ]
-                                .filter(Boolean)
-                                .join(' · ')}
+                              {hotelAddress}
                             </span>
-                          )}
+                          ) : null}
+                          {hotelMeta ? (
+                            <span className="v2-hotel-row-meta">
+                              {hotelMeta}
+                            </span>
+                          ) : null}
                         </>
                       ) : hasStay ? (
                         <>
                           <span className="v2-hotel-row-name">
                             {stayUnsetLabel(lodgingKind)}
                           </span>
-                          <span className="v2-hotel-row-addr">
-                            {withoutOvernight
-                              ? `${nights} ${nights === 1 ? 'natt' : 'netter'} · ingen overnatting`
-                              : `${nights} ${nights === 1 ? 'natt' : 'netter'} · trykk for å legge inn navn`}
+                          {hotelAddress ? (
+                            <span className="v2-hotel-row-addr">
+                              {hotelAddress}
+                            </span>
+                          ) : null}
+                          <span className="v2-hotel-row-meta">
+                            {[
+                              hotelMeta,
+                              withoutOvernight
+                                ? 'ingen overnatting'
+                                : 'trykk for å legge inn navn',
+                            ]
+                              .filter(Boolean)
+                              .join(' · ')}
                           </span>
                         </>
                       ) : (
@@ -1609,7 +1622,7 @@ function PlaceStopPanel({
                           <span className="v2-hotel-row-name">
                             Ingen hotell ennå
                           </span>
-                          <span className="v2-hotel-row-addr">
+                          <span className="v2-hotel-row-meta">
                             Trykk her eller + Hotell for å legge til
                           </span>
                         </>
