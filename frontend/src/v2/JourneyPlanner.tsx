@@ -3127,18 +3127,19 @@ function TransportBlock({
                             </div>
                             <label className="v2-seg-notes">
                               Notat
-                              <textarea
+                              <NoteEditor
                                 value={seg.notes || ''}
                                 disabled={disabled}
-                                rows={2}
                                 placeholder="Notat om stedet…"
-                                onChange={(e) =>
-                                  updateSegment(idx, { notes: e.target.value })
+                                onChange={(html) =>
+                                  updateSegment(idx, {
+                                    notes: compactNoteHtml(html),
+                                  })
                                 }
-                                onBlur={(e) =>
+                                onBlur={(html) =>
                                   updateSegment(
                                     idx,
-                                    { notes: e.target.value.trim() },
+                                    { notes: compactNoteHtml(html) },
                                     true,
                                   )
                                 }
