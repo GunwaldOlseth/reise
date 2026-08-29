@@ -44,6 +44,24 @@ function CloseIcon({ size = 18 }: { size?: number }) {
 
 type PopPos = { top: number; left: number; width: number }
 
+function useThemeFieldColor(open: boolean) {
+  const [fieldColor, setFieldColor] = useState('')
+
+  useLayoutEffect(() => {
+    if (!open) return
+    const root = document.documentElement
+    const read = () =>
+      getComputedStyle(root).getPropertyValue('--v2-field').trim() || '#2a3340'
+    setFieldColor(read())
+    const mq = window.matchMedia('(prefers-color-scheme: dark)')
+    const onTheme = () => setFieldColor(read())
+    mq.addEventListener('change', onTheme)
+    return () => mq.removeEventListener('change', onTheme)
+  }, [open])
+
+  return fieldColor
+}
+
 function useMobileSheet() {
   const [mobile, setMobile] = useState(() =>
     typeof window !== 'undefined' ? window.matchMedia(MOBILE_MQ).matches : false,
@@ -106,6 +124,10 @@ export function CityInfoTip({
   const stamp = items.map((d) => d.html).join('|')
   const mobile = useMobileSheet()
   const [open, setOpen] = useState(false)
+  const fieldColor = useThemeFieldColor(open)
+  const surfaceStyle = fieldColor
+    ? { backgroundColor: fieldColor }
+    : undefined
   const [pos, setPos] = useState<PopPos | null>(null)
   const root = useRef<HTMLDivElement>(null)
   const btn = useRef<HTMLButtonElement>(null)
@@ -194,6 +216,7 @@ export function CityInfoTip({
         role="dialog"
         aria-modal="true"
         aria-label={heading}
+        style={surfaceStyle}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="v2-city-info-pop-head">
@@ -209,28 +232,41 @@ export function CityInfoTip({
             <CloseIcon />
           </button>
         </div>
-        <div className="v2-city-info-pop-body">
+        <div className="v2-city-info-pop-body" style={surfaceStyle}>
           <DocList items={items} many={many} />
         </div>
       </div>
     </div>
   ) : (
-    <div
-      ref={pop}
-      className={`v2-city-info-pop${many ? ' is-many' : ''}`}
-      role="dialog"
-      style={
-        pos
-          ? {
-              top: pos.top,
-              left: pos.left,
-              width: pos.width,
-            }
-          : undefined
-      }
-    >
-      <DocList items={items} many={many} />
-    </div>
+    <>
+      <button
+        type="button"
+        className="v2-city-info-backdrop"
+        aria-label="Lukk"
+        onClick={() => setOpen(false)}
+      />
+      <div
+        ref={pop}
+        className={`v2-city-info-pop${many ? ' is-many' : ''}`}
+        role="dialog"
+        aria-modal="true"
+        aria-label={heading}
+        style={
+          pos
+            ? {
+                top: pos.top,
+                left: pos.left,
+                width: pos.width,
+                ...surfaceStyle,
+              }
+            : surfaceStyle
+        }
+      >
+        <div className="v2-city-info-pop-inner" style={surfaceStyle}>
+          <DocList items={items} many={many} />
+        </div>
+      </div>
+    </>
   )
 
   return (
