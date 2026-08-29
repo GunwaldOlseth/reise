@@ -1307,7 +1307,11 @@ function PlaceStopPanel({
               ) : stop.hideOnMap ? (
                 <span className="v2-place-bit-text">Ikke på kart</span>
               ) : hotel ? (
-                <span className="v2-place-bit">
+                <span
+                  className={`v2-place-bit is-lodging ${
+                    lodgingKind === 'airbnb' ? 'is-airbnb' : 'is-hotel'
+                  }`}
+                >
                   <PlaceMetaIcon name="hotel" size={13} />
                   <span className="v2-place-bit-text">{hotel}</span>
                 </span>
