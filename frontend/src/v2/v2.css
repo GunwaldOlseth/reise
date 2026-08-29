@@ -2167,6 +2167,11 @@ html[data-theme='plasma'] .v2-shell {
   background: rgba(61, 190, 165, 0.05);
 }
 
+/* Dashed connector is for the compact closed hop; hide it while editing. */
+.v2-transport-wrap.is-open .v2-transport-rail {
+  visibility: hidden;
+}
+
 .v2-transport-wrap .v2-transport-summary {
   padding: 0.4rem 0.6rem;
 }

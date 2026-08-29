@@ -2482,7 +2482,7 @@ function TransportBlock({
   }
 
   return (
-    <div className="v2-transport-wrap">
+    <div className={`v2-transport-wrap${open ? ' is-open' : ''}`}>
       <div className="v2-rail v2-transport-rail" aria-hidden>
         <div className="v2-rail-line" />
       </div>
