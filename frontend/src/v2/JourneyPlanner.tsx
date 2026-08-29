@@ -3125,6 +3125,25 @@ function TransportBlock({
                                 />
                               </label>
                             </div>
+                            <label className="v2-seg-notes">
+                              Notat
+                              <textarea
+                                value={seg.notes || ''}
+                                disabled={disabled}
+                                rows={2}
+                                placeholder="Notat om stedet…"
+                                onChange={(e) =>
+                                  updateSegment(idx, { notes: e.target.value })
+                                }
+                                onBlur={(e) =>
+                                  updateSegment(
+                                    idx,
+                                    { notes: e.target.value.trim() },
+                                    true,
+                                  )
+                                }
+                              />
+                            </label>
                           </div>
 
                           <div className="v2-hop">
