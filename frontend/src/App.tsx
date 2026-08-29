@@ -41,6 +41,14 @@ import { AdminPage } from './v2/AdminPage'
 import { enqueueJourneyWeather } from './v2/JourneyWeather'
 import { cacheJourney } from './v2/journeyCache'
 import { MissingHotelDaysCard } from './v2/MissingHotelDaysCard'
+import {
+  hashesEqual,
+  mergeAppView,
+  parseAppHash,
+  sameAppRoute,
+  viewToHash,
+  type AppView,
+} from './appRoute'
 import './v2/v2.css'
 
 function GoogleLoginButton() {
@@ -77,18 +85,7 @@ function GoogleLoginButton() {
   )
 }
 
-type View =
-  | { name: 'home' }
-  | { name: 'settings'; returnTo?: View }
-  | { name: 'admin'; returnTo?: View }
-  | { name: 'appearance'; returnTo?: View }
-  | { name: 'links'; returnTo?: View }
-  | {
-      name: 'trip'
-      tripId: string
-      autoOnward?: boolean
-      tab?: 'plan' | 'live' | 'overview' | 'map' | 'weather' | 'expenses'
-    }
+type View = AppView
 
 function journeyListStats(journey: Journey) {
   const { cityCount, countryCount } = journeyVisitStats(journey)
@@ -352,7 +349,57 @@ export default function App() {
 }
 
 function AppMain() {
-  const [view, setView] = useState<View>({ name: 'home' })
+  const [view, setViewState] = useState<View>(() =>
+    parseAppHash(window.location.hash),
+  )
+
+  function applyLocationView() {
+    const next = parseAppHash(window.location.hash)
+    setViewState((prev) => {
+      const merged = mergeAppView(prev, next)
+      if (
+        sameAppRoute(prev, merged) &&
+        (prev.name !== 'trip' ||
+          merged.name !== 'trip' ||
+          prev.autoOnward === merged.autoOnward)
+      ) {
+        return prev
+      }
+      return merged
+    })
+  }
+
+  function setView(next: View) {
+    setViewState((prev) => mergeAppView(prev, next))
+    const hash = viewToHash(next)
+    if (!hashesEqual(window.location.hash, hash)) {
+      window.history.pushState(null, '', hash)
+    }
+  }
+
+  useEffect(() => {
+    const canonical = viewToHash(parseAppHash(window.location.hash))
+    if (!hashesEqual(window.location.hash, canonical)) {
+      window.history.replaceState(null, '', canonical)
+    }
+
+    let navQueued = false
+    function onNav() {
+      if (navQueued) return
+      navQueued = true
+      queueMicrotask(() => {
+        navQueued = false
+        applyLocationView()
+      })
+    }
+
+    window.addEventListener('hashchange', onNav)
+    window.addEventListener('popstate', onNav)
+    return () => {
+      window.removeEventListener('hashchange', onNav)
+      window.removeEventListener('popstate', onNav)
+    }
+  }, [])
   const [trips, setTrips] = useState<Trip[]>([])
   const [homePlace, setHomePlace] = useState<HomePlace>(() => loadHomePlace())
   const [plannerSettings, setPlannerSettings] = useState<PlannerSettings>(() =>
@@ -469,6 +516,7 @@ function AppMain() {
       setView({
         name: 'trip',
         tripId: created.id,
+        tab: 'plan',
         autoOnward: startsFromHome,
       })
     } catch (err) {
@@ -587,6 +635,14 @@ function AppMain() {
           setView({ name: 'home' })
           void loadTrips()
         }}
+        onTabChange={(tab) =>
+          setView({
+            name: 'trip',
+            tripId: view.tripId,
+            tab,
+            autoOnward: view.autoOnward,
+          })
+        }
         onOpenSettings={() =>
           setView({
             name: 'settings',
@@ -663,7 +719,9 @@ function AppMain() {
         setError('')
         setView({ name: 'admin', returnTo: { name: 'home' } })
       }}
-      onOpenTrip={(tripId) => setView({ name: 'trip', tripId })}
+      onOpenTrip={(tripId) =>
+        setView({ name: 'trip', tripId, tab: 'plan' })
+      }
       onShowNewTrip={() => {
         setStartsFromHome(hasHomePlace(homePlace))
         setShowNewTrip(true)
