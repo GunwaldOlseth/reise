@@ -5432,9 +5432,21 @@ html[data-theme='plasma'] .v2-shell {
   background: color-mix(in srgb, var(--v2-accent) 22%, var(--v2-surface-solid));
 }
 
+.v2-city-info-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 118;
+  border: 0;
+  margin: 0;
+  padding: 0;
+  appearance: none;
+  background: rgba(0, 0, 0, 0.42);
+  cursor: default;
+}
+
 .v2-city-info-pop {
   position: fixed;
-  z-index: 80;
+  z-index: 120;
   max-width: calc(100vw - 2rem);
   max-height: min(36rem, calc(100dvh - 3rem));
   overflow: auto;
@@ -5443,29 +5455,27 @@ html[data-theme='plasma'] .v2-shell {
   border: 1px solid var(--v2-line-strong);
   background-color: var(--v2-surface-solid);
   color: var(--v2-ink);
-  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.45);
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--v2-ink) 10%, transparent),
+    0 16px 40px rgba(0, 0, 0, 0.55);
   font-size: 0.95rem;
   font-weight: 500;
   line-height: 1.5;
   white-space: normal;
-  isolation: isolate;
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
+  opacity: 1;
+  contain: paint;
 }
 
-.v2-city-info-pop::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  border-radius: inherit;
+.v2-city-info-pop-inner {
   background-color: var(--v2-surface-solid);
+  border-radius: inherit;
+  min-height: 100%;
 }
 
 .v2-city-info-layer {
   position: fixed;
   inset: 0;
-  z-index: 80;
+  z-index: 120;
   display: flex;
   justify-content: center;
   align-items: stretch;
@@ -5489,12 +5499,10 @@ html[data-theme='plasma'] .v2-shell {
   border: 0;
   border-radius: 0;
   background-color: var(--v2-surface-solid);
-  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.55);
   font-size: 1rem;
   line-height: 1.5;
-  isolation: isolate;
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
+  z-index: 121;
 }
 
 .v2-city-info-pop-head {
