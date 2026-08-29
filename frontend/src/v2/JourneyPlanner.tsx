@@ -1764,32 +1764,49 @@ function PlaceStopPanel({
                       }
                     />
                   </label>
-                  <label>
-                    Pris
-                    <input
-                      value={stay.price || ''}
-                      disabled={disabled}
-                      placeholder="4500 kr"
-                      inputMode="decimal"
-                      onChange={(e) =>
-                        onChange({
-                          ...stop,
-                          stay: {
-                            ...stay,
-                            nights: stay.nights || 1,
-                            price: e.target.value,
-                          },
-                        })
-                      }
-                      onBlur={(e) =>
-                        patchStay(
-                          { price: e.target.value },
-                          true,
-                          { immediate: true },
-                        )
-                      }
-                    />
-                  </label>
+                  <div className="v2-price-paid-row full">
+                    <label>
+                      Pris
+                      <input
+                        value={stay.price || ''}
+                        disabled={disabled}
+                        placeholder="4500 kr"
+                        inputMode="decimal"
+                        onChange={(e) =>
+                          onChange({
+                            ...stop,
+                            stay: {
+                              ...stay,
+                              nights: stay.nights || 1,
+                              price: e.target.value,
+                            },
+                          })
+                        }
+                        onBlur={(e) =>
+                          patchStay(
+                            { price: e.target.value },
+                            true,
+                            { immediate: true },
+                          )
+                        }
+                      />
+                    </label>
+                    <label className="v2-check-row">
+                      <input
+                        type="checkbox"
+                        checked={stay.paid || false}
+                        disabled={disabled}
+                        onChange={(e) =>
+                          patchStay(
+                            { paid: e.target.checked },
+                            true,
+                            { immediate: true },
+                          )
+                        }
+                      />
+                      Betalt
+                    </label>
+                  </div>
                   <label className="v2-check-row">
                     <input
                       type="checkbox"
@@ -1832,21 +1849,6 @@ function PlaceStopPanel({
                       />
                     </label>
                   )}
-                  <label className="v2-check-row">
-                    <input
-                      type="checkbox"
-                      checked={stay.paid || false}
-                      disabled={disabled}
-                      onChange={(e) =>
-                        patchStay(
-                          { paid: e.target.checked },
-                          true,
-                          { immediate: true },
-                        )
-                      }
-                    />
-                    Betalt
-                  </label>
                   <label className="full">
                     Notat
                     <NoteEditor
