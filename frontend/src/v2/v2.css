@@ -4668,6 +4668,21 @@ html[data-theme='plasma'] .v2-shell {
   font-size: 0.8rem;
 }
 
+.v2-activity-reorder {
+  flex-shrink: 0;
+}
+
+.v2-sight-row .v2-activity-reorder {
+  width: 1.85rem;
+  min-height: 1.85rem;
+  font-size: 0.8rem;
+}
+
+.v2-activity-actions .v2-activity-reorder {
+  width: 2.1rem;
+  min-height: 2.1rem;
+}
+
 .v2-activity-head .v2-seg-toggle {
   min-height: 2.1rem;
   width: 2.1rem;

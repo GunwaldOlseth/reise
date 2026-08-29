@@ -289,6 +289,44 @@ export function SightList({
     })
   }
 
+  function move(idx: number, direction: -1 | 1) {
+    const list = draftRef.current
+    const toIdx = idx + direction
+    if (toIdx < 0 || toIdx >= list.length) return
+    const next = [...list]
+    const [item] = next.splice(idx, 1)
+    next.splice(toIdx, 0, item)
+    emit(next, true)
+  }
+
+  function reorderButtons(idx: number) {
+    if (draft.length <= 1) return null
+    return (
+      <>
+        <button
+          type="button"
+          className="v2-seg-move v2-activity-reorder"
+          disabled={disabled || idx === 0}
+          title="Flytt opp"
+          aria-label="Flytt opp"
+          onClick={() => move(idx, -1)}
+        >
+          ↑
+        </button>
+        <button
+          type="button"
+          className="v2-seg-move v2-activity-reorder"
+          disabled={disabled || idx >= draft.length - 1}
+          title="Flytt ned"
+          aria-label="Flytt ned"
+          onClick={() => move(idx, 1)}
+        >
+          ↓
+        </button>
+      </>
+    )
+  }
+
   return (
     <div className={`v2-sights${compact ? ' is-compact' : ''}`}>
       <div className="v2-sights-head">
@@ -370,6 +408,7 @@ export function SightList({
                     )
                   }
                 />
+                {reorderButtons(idx)}
                 <MoveDaySelect
                   activityId={sight.id}
                   dayOffset={dayOffset}
@@ -445,6 +484,7 @@ export function SightList({
                   )}
                 </button>
                 <div className="v2-activity-actions">
+                  {reorderButtons(idx)}
                   <CityInfoTip
                     text={sight.notes}
                     docs={sight.docs}
