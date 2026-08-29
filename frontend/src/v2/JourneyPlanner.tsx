@@ -622,7 +622,13 @@ export function JourneyPlanner({
                 />
               )}
 
-              <div className="v2-stop">
+              <div
+                className={`v2-stop${
+                  !isHome && !isPack && openPlaceId === stop.id
+                    ? ' is-place-open'
+                    : ''
+                }`}
+              >
                 <div
                   className={`v2-dot${
                     stop.kind === 'home'
