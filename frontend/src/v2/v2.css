@@ -2167,6 +2167,17 @@ html[data-theme='plasma'] .v2-shell {
   background: rgba(61, 190, 165, 0.05);
 }
 
+/* Open editor: drop the dashed rail and use full thread width. */
+.v2-transport-wrap.is-open {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0;
+  padding-left: 0;
+}
+
+.v2-transport-wrap.is-open .v2-transport-rail {
+  display: none;
+}
+
 .v2-transport-wrap .v2-transport-summary {
   padding: 0.4rem 0.6rem;
 }
