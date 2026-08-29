@@ -33,7 +33,7 @@ import {
 function emptySummary(): TripExpenseSummary {
   return {
     cruise: { total: 0, days: 0, avgPerDay: 0, lines: [] },
-    hotel: { total: 0, lines: [] },
+    hotel: { total: 0, nights: 0, avgPerNight: 0, lines: [] },
     transport: { total: 0, lines: [] },
     live: { total: 0, lines: [] },
     program: { total: 0, lines: [] },
@@ -61,6 +61,10 @@ function addDaysIso(iso: string, days: number): string {
   const m = String(d.getMonth() + 1).padStart(2, '0')
   const day = String(d.getDate()).padStart(2, '0')
   return `${y}-${m}-${day}`
+}
+
+function hotelNightCount(lines: ExpenseLine[]): number {
+  return lines.reduce((sum, l) => sum + Math.max(1, l.nights || 1), 0)
 }
 
 /** Expense overview from the v2 journey (hotel, package, transport prices). */
@@ -468,6 +472,9 @@ export function journeyExpenseSummary(journey: Journey): TripExpenseSummary {
 
   const cruiseTotal = cruiseLines.reduce((s, l) => s + l.amount, 0)
   const hotelTotal = hotelLines.reduce((s, l) => s + l.amount, 0)
+  const hotelNights = hotelNightCount(hotelLines)
+  const hotelAvgPerNight =
+    hotelNights > 0 ? hotelTotal / hotelNights : 0
   const transportTotal = transportLines.reduce((s, l) => s + l.amount, 0)
   const liveTotal = liveLines.reduce((s, l) => s + l.amount, 0)
   const programTotal = programLines.reduce((s, l) => s + l.amount, 0)
@@ -510,7 +517,12 @@ export function journeyExpenseSummary(journey: Journey): TripExpenseSummary {
       avgPerDay: cruiseDays > 0 ? cruiseTotal / cruiseDays : 0,
       lines: cruiseLines,
     },
-    hotel: { total: hotelTotal, lines: hotelLines },
+    hotel: {
+      total: hotelTotal,
+      nights: hotelNights,
+      avgPerNight: hotelAvgPerNight,
+      lines: hotelLines,
+    },
     transport: { total: transportTotal, lines: transportLines },
     live: { total: liveTotal, lines: liveLines },
     program: { total: programTotal, lines: programLines },

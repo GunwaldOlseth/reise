@@ -570,7 +570,13 @@ export type DayExpenseSummary = {
 
 export type TripExpenseSummary = {
   cruise: { total: number; days: number; avgPerDay: number; lines: ExpenseLine[] };
-  hotel: { total: number; lines: ExpenseLine[] };
+  hotel: {
+    total: number;
+    /** Sum of hotel nights (multi-night stays split by registered price). */
+    nights: number;
+    avgPerNight: number;
+    lines: ExpenseLine[];
+  };
   transport: { total: number; lines: ExpenseLine[] };
   live: { total: number; lines: ExpenseLine[] };
   program: { total: number; lines: ExpenseLine[] };
@@ -813,6 +819,10 @@ export function tripExpenseSummary(days: TripDay[]): TripExpenseSummary {
     lines.reduce((acc, l) => acc + l.amount, 0);
   const cruiseTotal = sum(cruiseLines);
   const hotelTotal = sum(hotelLines);
+  const hotelNightTotal = hotelLines.reduce(
+    (acc, l) => acc + Math.max(1, l.nights || 1),
+    0,
+  );
   const transportTotal = sum(transportLines);
 
   const byDay: DayExpenseSummary[] = [...byDate.entries()]
@@ -837,7 +847,12 @@ export function tripExpenseSummary(days: TripDay[]): TripExpenseSummary {
       avgPerDay: cruiseDays > 0 ? cruiseTotal / cruiseDays : 0,
       lines: cruiseLines,
     },
-    hotel: { total: hotelTotal, lines: hotelLines },
+    hotel: {
+      total: hotelTotal,
+      nights: hotelNightTotal,
+      avgPerNight: hotelNightTotal > 0 ? hotelTotal / hotelNightTotal : 0,
+      lines: hotelLines,
+    },
     transport: { total: transportTotal, lines: transportLines },
     live: { total: 0, lines: [] },
     program: { total: 0, lines: [] },

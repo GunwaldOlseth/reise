@@ -621,12 +621,9 @@ function JourneyExpensesView({
   const dayCount = summary.byDay.length
   const avgDay = dayCount > 0 ? summary.total / dayCount : null
   const hotels = summary.hotel.lines
-  const hotelNights = hotels.reduce(
-    (sum, h) => sum + Math.max(1, h.nights || 1),
-    0,
-  )
+  const hotelNights = summary.hotel.nights
   const hotelAvg =
-    hotelNights > 0 ? summary.hotel.total / hotelNights : null
+    summary.hotel.avgPerNight > 0 ? summary.hotel.avgPerNight : null
   const perNight = (h: (typeof hotels)[number]) =>
     h.amount / Math.max(1, h.nights || 1)
   let cheapestHotel: (typeof hotels)[number] | null = null
@@ -703,9 +700,12 @@ function JourneyExpensesView({
           ) : null}
           {hotelAvg != null ? (
             <li>
-              <span className="expense-stats-label">Hotell snitt</span>
+              <span className="expense-stats-label">Hotell snitt pr dag</span>
               <strong>{formatExpenseAmount(hotelAvg)}</strong>
-              <span className="meta">pr natt · {hotelNights}n</span>
+              <span className="meta">
+                {hotelNights} {hotelNights === 1 ? 'natt' : 'netter'} · uten
+                cruise
+              </span>
             </li>
           ) : null}
           {cheapestHotel ? (
