@@ -41,7 +41,9 @@ npm run dev
 
 API-kall går til `http://localhost:8082/api` via Vite-proxy (se `frontend/vite.config.ts`) eller `VITE_API_URL` i `.env.local` (se `.env.example`).
 
-**Én kommando (Windows):** `powershell -File scripts/start-dev.ps1` — starter backend og frontend i egne vinduer.
+**Én kommando (Windows):** `powershell -File scripts/start-dev.ps1` — starter backend og frontend i egne vinduer, og åpner nettleseren når Vite er klar.
+
+**Tom side / «kommer ikke opp» lokalt:** Vite må kjøre *etter* `git pull`. Stopp gamle `npm run dev` / `go run` (`Ctrl+C`), kjør `scripts/start-dev.ps1` på nytt, og vent til vinduet viser `Local: http://localhost:5174/`. Hard refresh: `Ctrl+Shift+R`. Ikke bruk `localhost:5173`.
 
 **Produksjon (alltid oppdatert):** https://reise-frontend-624978663833.europe-north1.run.app/
 
