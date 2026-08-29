@@ -57,7 +57,7 @@ export const THEMES: {
     blurb: 'Dyp mose og stille mint',
     tone: 'dark',
     group: 'nature',
-    swatch: ['#2e4945', '#47c4ac', '#d2e6e3'],
+    swatch: ['#395a55', '#47c4ac', '#d2e6e3'],
   },
   {
     id: 'kyst',
@@ -65,7 +65,7 @@ export const THEMES: {
     blurb: 'Nattblått og sjøglass',
     tone: 'dark',
     group: 'nature',
-    swatch: ['#324051', '#669bad', '#d1dde4'],
+    swatch: ['#3d4e62', '#669bad', '#d1dde4'],
   },
   {
     id: 'sand',
@@ -73,7 +73,7 @@ export const THEMES: {
     blurb: 'Varm kveld og dempet gull',
     tone: 'dark',
     group: 'nature',
-    swatch: ['#473f34', '#bb975f', '#e6dac9'],
+    swatch: ['#574d40', '#bb975f', '#e6dac9'],
   },
   {
     id: 'lavendel',
@@ -81,7 +81,7 @@ export const THEMES: {
     blurb: 'Dusk og støvet lilla',
     tone: 'dark',
     group: 'nature',
-    swatch: ['#3a3749', '#977eb6', '#ddd3e3'],
+    swatch: ['#474359', '#977eb6', '#ddd3e3'],
   },
   {
     id: 'stein',
@@ -89,7 +89,7 @@ export const THEMES: {
     blurb: 'Grafitt og varm stein',
     tone: 'dark',
     group: 'nature',
-    swatch: ['#3b3b3b', '#b9a483', '#dcd9d3'],
+    swatch: ['#494949', '#b9a483', '#dcd9d3'],
   },
   {
     id: 'skog-lys',
@@ -137,7 +137,7 @@ export const THEMES: {
     blurb: 'Elektrisk cyan og midnattslilla',
     tone: 'dark',
     group: 'vibrant',
-    swatch: ['#1e274b', '#51decf', '#b090e0'],
+    swatch: ['#26315f', '#51decf', '#b090e0'],
   },
   {
     id: 'solglod',
@@ -145,7 +145,7 @@ export const THEMES: {
     blurb: 'Het korall og solnedgang',
     tone: 'dark',
     group: 'vibrant',
-    swatch: ['#472218', '#e87d41', '#f9d9c7'],
+    swatch: ['#5c2c1f', '#e87d41', '#f9d9c7'],
   },
   {
     id: 'neonrosa',
@@ -153,7 +153,7 @@ export const THEMES: {
     blurb: 'Magenta neon og nattby',
     tone: 'dark',
     group: 'vibrant',
-    swatch: ['#451945', '#ea53b6', '#f9c7ea'],
+    swatch: ['#5a205a', '#ea53b6', '#f9c7ea'],
   },
   {
     id: 'elektrisk',
@@ -161,7 +161,7 @@ export const THEMES: {
     blurb: 'Lime og neongrønt lys',
     tone: 'dark',
     group: 'vibrant',
-    swatch: ['#1c4521', '#6de841', '#c7f9c7'],
+    swatch: ['#24592b', '#6de841', '#c7f9c7'],
   },
   {
     id: 'polarnatt',
@@ -169,7 +169,7 @@ export const THEMES: {
     blurb: 'Isblått og elektrisk blå',
     tone: 'dark',
     group: 'vibrant',
-    swatch: ['#0f1b4b', '#4198e8', '#c7e1f9'],
+    swatch: ['#142362', '#4198e8', '#c7e1f9'],
   },
   {
     id: 'plasma',
@@ -177,7 +177,7 @@ export const THEMES: {
     blurb: 'Fiolett glød og rosa puls',
     tone: 'dark',
     group: 'vibrant',
-    swatch: ['#3a1945', '#a353ea', '#e1c7f9'],
+    swatch: ['#4b205a', '#a353ea', '#e1c7f9'],
   },
   {
     id: 'nordlys-lys',
@@ -193,7 +193,7 @@ export const THEMES: {
     blurb: 'Gammelt foto og varm brun',
     tone: 'dark',
     group: 'vintage',
-    swatch: ['#50412f', '#bb925a', '#e3cfb1'],
+    swatch: ['#624f39', '#bb925a', '#e3cfb1'],
   },
   {
     id: 'blekk',
@@ -201,7 +201,7 @@ export const THEMES: {
     blurb: 'Blått blekk og pergament',
     tone: 'dark',
     group: 'vintage',
-    swatch: ['#333a4c', '#7594be', '#d8d3c4'],
+    swatch: ['#3e475d', '#7594be', '#d8d3c4'],
   },
   {
     id: 'pergament',
@@ -209,7 +209,7 @@ export const THEMES: {
     blurb: 'Gulnede sider og voks',
     tone: 'dark',
     group: 'vintage',
-    swatch: ['#554a2e', '#bda66b', '#e3d8b9'],
+    swatch: ['#675a38', '#bda66b', '#e3d8b9'],
   },
   {
     id: 'kobber',
@@ -217,7 +217,7 @@ export const THEMES: {
     blurb: 'Patinert kobber og malakitt',
     tone: 'dark',
     group: 'vintage',
-    swatch: ['#483d31', '#69ab7c', '#ddd3c3'],
+    swatch: ['#594b3c', '#69ab7c', '#ddd3c3'],
   },
   {
     id: 'bibliotek',
@@ -225,7 +225,7 @@ export const THEMES: {
     blurb: 'Mørkt tre og grønn lampe',
     tone: 'dark',
     group: 'vintage',
-    swatch: ['#2d422d', '#5a9a57', '#d8d3c4'],
+    swatch: ['#385338', '#5a9a57', '#d8d3c4'],
   },
   {
     id: 'bordeaux',
@@ -233,7 +233,7 @@ export const THEMES: {
     blurb: 'Vinkjeller og dyp rød',
     tone: 'dark',
     group: 'vintage',
-    swatch: ['#45262f', '#af5868', '#e2ccc6'],
+    swatch: ['#57303b', '#af5868', '#e2ccc6'],
   },
 ]
 
