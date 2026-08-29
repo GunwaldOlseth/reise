@@ -937,13 +937,6 @@ html[data-theme='plasma'] .v2-shell {
   box-shadow: 0 0 0 1px var(--v2-accent);
 }
 
-.v2-hop-sort {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.4rem;
-  margin: 0.15rem 0 0.15rem;
-}
-
 .v2-overview-list {
   list-style: none;
   margin: 0.75rem 0 0;
