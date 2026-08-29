@@ -702,22 +702,27 @@ export function JourneyLive({
         <section className="v2-live-block">
           <h3>På programmet</h3>
           <ul className="v2-live-sights">
-            {sights.map((sight) => (
-              <li key={sight.id}>
-                <span
-                  className={`v2-activity-kind is-${sight.kind || 'sight'}`}
-                >
-                  {activityKindLabel(sight.kind)}
-                </span>
-                <strong>{activityDisplayName(sight)}</strong>
-                {sight.startTime || sight.endTime ? (
-                  <span className="v2-meta">
-                    {[sight.startTime, sight.endTime].filter(Boolean).join('–')}
+            {sights.map((sight) => {
+              const times = [sight.startTime, sight.endTime]
+                .filter(Boolean)
+                .join('–')
+              return (
+                <li key={sight.id} className="v2-live-sight-row">
+                  <div className="v2-live-sight-place">
+                    <strong>{activityDisplayName(sight)}</strong>
+                    {times ? <span className="v2-meta">{times}</span> : null}
+                  </div>
+                  <span
+                    className={`v2-activity-kind is-${sight.kind || 'sight'}`}
+                  >
+                    {activityKindLabel(sight.kind)}
                   </span>
-                ) : null}
-                <CityInfoTip text={sight.notes} docs={sight.docs} />
-              </li>
-            ))}
+                  <div className="v2-live-sight-info">
+                    <CityInfoTip text={sight.notes} docs={sight.docs} />
+                  </div>
+                </li>
+              )
+            })}
           </ul>
         </section>
       )}
