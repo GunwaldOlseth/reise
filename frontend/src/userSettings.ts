@@ -286,6 +286,8 @@ export interface PlannerSettings {
    * When false, you can sketch the main place line without modes.
    */
   requireTransportMode: boolean
+  /** Lines shown in note preview before «les mer» (klikk utvider). */
+  notePreviewLines: number
 }
 
 export function emptyHomePlace(): HomePlace {
@@ -299,6 +301,7 @@ export function defaultPlannerSettings(): PlannerSettings {
     warnMissingStay: true,
     warnMissingTravel: true,
     requireTransportMode: true,
+    notePreviewLines: 12,
   }
 }
 
@@ -361,14 +364,26 @@ export function loadPlannerSettings(): PlannerSettings {
       askTravel?: boolean
     }
     const { askTravel: _ignored, ...rest } = parsed
-    return { ...defaultPlannerSettings(), ...rest }
+    const merged = { ...defaultPlannerSettings(), ...rest }
+    merged.notePreviewLines = Math.min(
+      30,
+      Math.max(3, Math.round(Number(merged.notePreviewLines) || 12)),
+    )
+    return merged
   } catch {
     return defaultPlannerSettings()
   }
 }
 
 export function savePlannerSettings(settings: PlannerSettings): PlannerSettings {
-  const next = { ...defaultPlannerSettings(), ...settings }
+  const next = {
+    ...defaultPlannerSettings(),
+    ...settings,
+    notePreviewLines: Math.min(
+      30,
+      Math.max(3, Math.round(Number(settings.notePreviewLines) || 12)),
+    ),
+  }
   localStorage.setItem(PLANNER_KEY, JSON.stringify(next))
   return next
 }

@@ -5192,6 +5192,88 @@ html[data-theme='plasma'] .v2-shell {
   color: var(--v2-label);
 }
 
+.v2-note-label-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.v2-note-edit-btn {
+  appearance: none;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.5rem;
+  min-height: 1.5rem;
+  padding: 0.1rem 0.3rem;
+  border: none;
+  border-radius: 0.35rem;
+  background: transparent;
+  color: var(--v2-muted);
+  cursor: pointer;
+  line-height: 1;
+}
+
+.v2-note-edit-btn:hover:not(:disabled),
+.v2-note-edit-btn:focus-visible {
+  color: var(--v2-accent);
+  background: color-mix(in srgb, var(--v2-accent) 14%, transparent);
+}
+
+.v2-note-edit-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.v2-note-title-edit-btn {
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.v2-note-preview {
+  border: 1px solid var(--v2-line);
+  border-radius: 0.45rem;
+  padding: 0.45rem 0.55rem;
+  background: var(--v2-field);
+  color: var(--v2-ink);
+  cursor: pointer;
+  overflow: hidden;
+  min-width: 0;
+}
+
+.v2-note-preview.is-clamped {
+  max-height: calc(var(--v2-note-preview-lines, 12) * 1.45em);
+}
+
+.v2-note-preview.is-expanded {
+  max-height: none;
+  cursor: pointer;
+}
+
+.v2-city-doc-title-row .v2-note-edit-btn {
+  margin-left: 0.15rem;
+}
+
+.v2-settings-inline {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin-top: 0.65rem;
+  font-size: 0.92rem;
+}
+
+.v2-settings-inline input[type='number'] {
+  max-width: 5.5rem;
+  padding: 0.35rem 0.5rem;
+  border: 1px solid var(--v2-line);
+  border-radius: 0.4rem;
+  background: var(--v2-field);
+  color: var(--v2-ink);
+  font: inherit;
+}
+
 .v2-city-docs {
   display: flex;
   flex-direction: column;

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { TrashIcon } from '../TransportModeIcon'
-import { NoteEditor } from './NoteEditor'
+import { NoteEditButton, NoteField } from './NoteField'
 import {
   applyCityDocs,
   cityDocsForEdit,
@@ -8,7 +8,7 @@ import {
   type CityDocHolder,
   type JourneyCityDoc,
 } from './journeyModel'
-import { compactNoteHtml } from './noteHtml'
+import { compactNoteHtml, noteHasContent } from './noteHtml'
 import { useConfirmDelete } from './ConfirmDelete'
 
 function CityDocTitle({
@@ -79,6 +79,7 @@ export function CityDocsEditor({
   heading = 'Dokumenter',
   firstTitlePlaceholder = 'Om byen',
   firstBodyPlaceholder = 'Tips, område, hvorfor vi er her…',
+  previewLines,
   onChange,
 }: {
   value: CityDocHolder
@@ -87,6 +88,7 @@ export function CityDocsEditor({
   heading?: string
   firstTitlePlaceholder?: string
   firstBodyPlaceholder?: string
+  previewLines?: number
   onChange: (
     next: CityDocHolder,
     opts?: { immediate?: boolean },
@@ -96,6 +98,7 @@ export function CityDocsEditor({
   const docs = cityDocsForEdit(value, firstTitlePlaceholder)
   const compact = heading === ''
   const [titleEditId, setTitleEditId] = useState<string | null>(null)
+  const [editingBodyId, setEditingBodyId] = useState<string | null>(null)
 
   const showSectionHead = !compact || docs.length > 1
   const sectionLabel = compact && docs.length > 1 ? 'Dokumenter' : heading
@@ -115,6 +118,7 @@ export function CityDocsEditor({
     const newDoc = newCityDoc(docs.length, '')
     commit([...docs, newDoc])
     setTitleEditId(newDoc.id)
+    setEditingBodyId(newDoc.id)
   }
 
   return (
@@ -150,6 +154,25 @@ export function CityDocsEditor({
                 onCommit={(title) => patchDoc(doc.id, { title }, true)}
                 onEndEdit={() => setTitleEditId(null)}
               />
+              {noteHasContent(doc.body) && editingBodyId !== doc.id ? (
+                <NoteEditButton
+                  disabled={disabled}
+                  title="Rediger tekst"
+                  onClick={() => setEditingBodyId(doc.id)}
+                />
+              ) : null}
+              {titleEditId !== doc.id && noteHasContent(doc.body) ? (
+                <button
+                  type="button"
+                  className="v2-note-edit-btn v2-note-title-edit-btn"
+                  disabled={disabled}
+                  aria-label="Rediger tittel"
+                  title="Rediger tittel"
+                  onClick={() => setTitleEditId(doc.id)}
+                >
+                  T
+                </button>
+              ) : null}
               {compact && docs.length === 1 && titleEditId !== doc.id ? (
                 <button
                   type="button"
@@ -163,53 +186,49 @@ export function CityDocsEditor({
                 </button>
               ) : null}
             </div>
-            <NoteEditor
+            <NoteField
               value={doc.body}
               disabled={disabled}
               placeholder={
                 i === 0 ? firstBodyPlaceholder : 'Skriv notatet her…'
               }
+              previewLines={previewLines}
+              editing={
+                editingBodyId === doc.id || !noteHasContent(doc.body)
+              }
+              onEditingChange={(editing) => {
+                if (editing) setEditingBodyId(doc.id)
+                else if (editingBodyId === doc.id) setEditingBodyId(null)
+              }}
               toolbarExtra={
-                <>
+                docs.length > 1 ? (
                   <button
                     type="button"
-                    className="v2-note-tool v2-note-tool-title"
+                    className="v2-note-tool v2-note-tool-del"
                     disabled={disabled}
-                    aria-label="Rediger tittel"
-                    title="Rediger tittel"
+                    aria-label="Slett dokument"
+                    title="Slett dokument"
                     onMouseDown={(e) => e.preventDefault()}
-                    onClick={() => setTitleEditId(doc.id)}
+                    onClick={() => {
+                      const name =
+                        doc.title.trim() ||
+                        (i === 0 ? firstTitlePlaceholder : 'dokumentet')
+                      void askDelete({ title: `Slette ${name}?` }).then(
+                        (ok) => {
+                          if (!ok) return
+                          if (titleEditId === doc.id) setTitleEditId(null)
+                          if (editingBodyId === doc.id) setEditingBodyId(null)
+                          commit(
+                            docs.filter((d) => d.id !== doc.id),
+                            true,
+                          )
+                        },
+                      )
+                    }}
                   >
-                    T
+                    <TrashIcon size={14} />
                   </button>
-                  {docs.length > 1 ? (
-                    <button
-                      type="button"
-                      className="v2-note-tool v2-note-tool-del"
-                      disabled={disabled}
-                      aria-label="Slett dokument"
-                      title="Slett dokument"
-                      onMouseDown={(e) => e.preventDefault()}
-                      onClick={() => {
-                        const name =
-                          doc.title.trim() ||
-                          (i === 0 ? firstTitlePlaceholder : 'dokumentet')
-                        void askDelete({ title: `Slette ${name}?` }).then(
-                          (ok) => {
-                            if (!ok) return
-                            if (titleEditId === doc.id) setTitleEditId(null)
-                            commit(
-                              docs.filter((d) => d.id !== doc.id),
-                              true,
-                            )
-                          },
-                        )
-                      }}
-                    >
-                      <TrashIcon size={14} />
-                    </button>
-                  ) : null}
-                </>
+                ) : null
               }
               onChange={(html) => patchDoc(doc.id, { body: html })}
               onBlur={(html) =>

@@ -245,6 +245,24 @@ function SettingsPage({
             />
             <span>Spør om notater</span>
           </label>
+          <label className="v2-settings-inline">
+            <span>Forhåndsvisning av notater (linjer)</span>
+            <input
+              type="number"
+              min={3}
+              max={30}
+              value={planner.notePreviewLines}
+              onChange={(e) =>
+                setPlanner((p) => ({
+                  ...p,
+                  notePreviewLines: Math.min(
+                    30,
+                    Math.max(3, Number(e.target.value) || 12),
+                  ),
+                }))
+              }
+            />
+          </label>
         </section>
 
         <section className="v2-settings-card">

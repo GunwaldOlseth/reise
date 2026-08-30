@@ -119,8 +119,8 @@ import {
 import { localizeJourneyPlaces } from '../placeNames'
 import { CityDocsEditor } from './CityDocsEditor'
 import { CityInfoTip } from './CityInfoTip'
-import { NoteEditor } from './NoteEditor'
-import { compactNoteHtml } from './noteHtml'
+import { NoteEditButton, NoteField } from './NoteField'
+import { compactNoteHtml, noteHasContent } from './noteHtml'
 import { ClockTimeInput } from './ClockTimeInput'
 import { useConfirmDelete } from './ConfirmDelete'
 import {
@@ -662,6 +662,7 @@ export function JourneyPlanner({
                   companyOptionsByMode={transportCompanyOptionsByMode}
                   warn={warnings.includes('travel')}
                   requireTransportMode={settings.requireTransportMode}
+                  notePreviewLines={settings.notePreviewLines}
                   disabled={loading}
                   onTransportOpenChange={setOpenTransportLegId}
                   onChange={patchTransportLeg}
@@ -697,6 +698,7 @@ export function JourneyPlanner({
                       nights={nights}
                       depart={depart}
                       warnMissingStay={settings.warnMissingStay}
+                      notePreviewLines={settings.notePreviewLines}
                       open={openPlaceId === stop.id}
                       disabled={loading}
                       calendarMin={activityCalendarBounds.min}
@@ -990,6 +992,7 @@ export function JourneyPlanner({
                             onMoveActivityToDate={(activityId, date) =>
                               moveActivityToDate(stop.id, activityId, date)
                             }
+                            notePreviewLines={settings.notePreviewLines}
                           />
                         )
                       })}
@@ -1236,6 +1239,7 @@ function PackDayPanel({
   calendarMin,
   calendarMax,
   onMoveActivityToDate,
+  notePreviewLines,
 }: {
   day: JourneyPackageDay
   dateLabel: string
@@ -1258,6 +1262,7 @@ function PackDayPanel({
   calendarMin?: string
   calendarMax?: string
   onMoveActivityToDate?: (activityId: string, date: string) => void
+  notePreviewLines?: number
 }) {
   const activityCount = normalizeSights(sights).length
   const timeMeta = [
@@ -1336,6 +1341,7 @@ function PackDayPanel({
             <CityDocsEditor
               value={day}
               disabled={disabled}
+              previewLines={notePreviewLines}
               onChange={(next, opts) => onChangeDay(next, opts)}
             />
           ) : (
@@ -1378,6 +1384,7 @@ function PlaceStopPanel({
   calendarMin,
   calendarMax,
   onMoveActivityToDate,
+  notePreviewLines,
   onToggle,
   onChange,
 }: {
@@ -1392,6 +1399,7 @@ function PlaceStopPanel({
   calendarMin?: string
   calendarMax?: string
   onMoveActivityToDate?: (activityId: string, date: string) => void
+  notePreviewLines?: number
   onToggle: () => void
   onChange: (
     stop: JourneyStop,
@@ -1401,6 +1409,7 @@ function PlaceStopPanel({
   const askDelete = useConfirmDelete()
   const [editingBasics, setEditingBasics] = useState(false)
   const [editingHotel, setEditingHotel] = useState(false)
+  const [stayNoteEditing, setStayNoteEditing] = useState(false)
   const [removeHotelOpen, setRemoveHotelOpen] = useState(false)
   const nightsAtEditStart = useRef(nights)
   const activityCount = normalizeSights(stop.sights).length
@@ -1410,6 +1419,7 @@ function PlaceStopPanel({
     if (!open) {
       setEditingBasics(false)
       setEditingHotel(false)
+      setStayNoteEditing(false)
       setRemoveHotelOpen(false)
     }
   }, [open])
@@ -1718,6 +1728,7 @@ function PlaceStopPanel({
             <CityDocsEditor
               value={stop}
               disabled={disabled}
+              previewLines={notePreviewLines}
               onChange={(next, opts) => onChange({ ...stop, ...next }, opts)}
             />
           </div>
@@ -2128,11 +2139,23 @@ function PlaceStopPanel({
                     </label>
                   )}
                   <label className="full">
-                    Notat
-                    <NoteEditor
+                    <span className="v2-note-label-row">
+                      Notat
+                      {noteHasContent(stay.notes) && !stayNoteEditing ? (
+                        <NoteEditButton
+                          disabled={disabled}
+                          title="Rediger notat"
+                          onClick={() => setStayNoteEditing(true)}
+                        />
+                      ) : null}
+                    </span>
+                    <NoteField
                       value={stay.notes || ''}
                       disabled={disabled}
                       placeholder="Notat om hotellet"
+                      previewLines={notePreviewLines}
+                      editing={stayNoteEditing || !noteHasContent(stay.notes)}
+                      onEditingChange={setStayNoteEditing}
                       onChange={(html) =>
                         patchStay(
                           { notes: compactNoteHtml(html) },
@@ -2307,6 +2330,7 @@ function TransportBlock({
   companyOptionsByMode = {},
   warn,
   requireTransportMode = true,
+  notePreviewLines,
   disabled,
   onTransportOpenChange,
   onChange,
@@ -2318,6 +2342,7 @@ function TransportBlock({
   companyOptionsByMode?: Record<string, string[]>
   warn: boolean
   requireTransportMode?: boolean
+  notePreviewLines?: number
   disabled?: boolean
   onTransportOpenChange?: (legId: string | null) => void
   onChange: (leg: JourneyLeg, opts?: { immediate?: boolean }) => void
@@ -2332,6 +2357,7 @@ function TransportBlock({
   const [overSegId, setOverSegId] = useState<string | null>(null)
   /** Which departure-row mode menu is open (`placeIdx-optIdx`). */
   const [modeMenuKey, setModeMenuKey] = useState<string | null>(null)
+  const [editingSegNoteIdx, setEditingSegNoteIdx] = useState<number | null>(null)
   const [draft, setDraft] = useState<JourneyLeg>(() =>
     withTransportSegments(leg, transportSegments(leg)),
   )
@@ -3119,11 +3145,29 @@ function TransportBlock({
                               </label>
                             </div>
                             <label className="v2-seg-notes">
-                              Notat
-                              <NoteEditor
+                              <span className="v2-note-label-row">
+                                Notat
+                                {noteHasContent(seg.notes) &&
+                                editingSegNoteIdx !== idx ? (
+                                  <NoteEditButton
+                                    disabled={disabled}
+                                    title="Rediger notat"
+                                    onClick={() => setEditingSegNoteIdx(idx)}
+                                  />
+                                ) : null}
+                              </span>
+                              <NoteField
                                 value={seg.notes || ''}
                                 disabled={disabled}
                                 placeholder="Notat om stedet…"
+                                previewLines={notePreviewLines}
+                                editing={
+                                  editingSegNoteIdx === idx ||
+                                  !noteHasContent(seg.notes)
+                                }
+                                onEditingChange={(editing) =>
+                                  setEditingSegNoteIdx(editing ? idx : null)
+                                }
                                 onChange={(html) =>
                                   updateSegment(idx, {
                                     notes: compactNoteHtml(html),
@@ -4045,6 +4089,7 @@ function StopWizard({
     inboundLeg?: Partial<JourneyLeg> | null,
   ) => Promise<void>
 }) {
+  const [notesEditing, setNotesEditing] = useState(true)
   const editing = kind === 'edit' && stopId
   const existing = editing
     ? journey.stops.find((s) => s.id === stopId)
@@ -4418,10 +4463,21 @@ function StopWizard({
         {step === 'notes' && (
           <div className="form-grid">
             <div className="v2-note-field">
-              <span>Notater</span>
-              <NoteEditor
+              <span className="v2-note-label-row">
+                Notater
+                {noteHasContent(stop.notes) && !notesEditing ? (
+                  <NoteEditButton
+                    title="Rediger notater"
+                    onClick={() => setNotesEditing(true)}
+                  />
+                ) : null}
+              </span>
+              <NoteField
                 value={stop.notes || ''}
                 placeholder="Tips, møtested, billetter…"
+                previewLines={settings.notePreviewLines}
+                editing={notesEditing || !noteHasContent(stop.notes)}
+                onEditingChange={setNotesEditing}
                 onChange={(html) =>
                   setStop((p) => ({ ...p, notes: html }))
                 }
