@@ -153,16 +153,18 @@ export function TicketToggle({
 export function PaidToggle({
   checked,
   disabled,
+  compact,
   onChange,
 }: {
   checked: boolean
   disabled?: boolean
+  compact?: boolean
   onChange: (next: boolean) => void
 }) {
   return (
     <button
       type="button"
-      className={`v2-status-toggle${checked ? ' is-on' : ' is-off'}`}
+      className={`v2-status-toggle${checked ? ' is-on' : ' is-off'}${compact ? ' is-compact' : ''}`}
       disabled={disabled}
       aria-pressed={checked}
       title={checked ? 'Betalt' : 'Merk som betalt'}

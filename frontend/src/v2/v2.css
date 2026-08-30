@@ -4650,18 +4650,54 @@ html[data-theme='plasma'] .v2-shell {
 }
 
 .v2-sight-row {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  gap: 0.35rem;
-  align-items: center;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  align-items: stretch;
 }
 
-.v2-sights.is-compact .v2-sight-row {
-  grid-template-columns: auto minmax(0, 1fr) auto;
+.v2-sight-row-main {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3rem;
+  min-width: 0;
+}
+
+.v2-sight-row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.22rem;
+  flex: 0 0 auto;
+}
+
+.v2-sights.is-compact .v2-sight-row-main .city-suggest {
+  flex: 1 1 5.5rem;
+  min-width: 0;
+}
+
+.v2-sights.is-compact .v2-sight-row-main .v2-activity-place-inline {
+  flex: 1 1 5.5rem;
+  min-width: 0;
+}
+
+.v2-sights.is-compact .v2-sight-row-main .v2-hop-price {
+  flex: 0 0 4.2rem;
+  width: 4.2rem;
+  max-width: 4.2rem;
+}
+
+.v2-sights.is-compact .v2-sight-row input {
+  padding: 0.3rem 0.45rem;
+  font-size: 0.82rem;
 }
 
 .v2-sight-row-purpose {
-  grid-column: 2 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.22rem;
 }
 
 .v2-sight-row-purpose .v2-purpose-btn {
@@ -4994,6 +5030,12 @@ html[data-theme='plasma'] .v2-shell {
 .v2-status-toggle:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+.v2-status-toggle.is-compact {
+  min-height: 1.85rem;
+  padding: 0.2rem 0.55rem;
+  font-size: 0.78rem;
 }
 
 .v2-activity-prices {
