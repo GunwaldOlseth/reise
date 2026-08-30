@@ -737,14 +737,14 @@ function JourneyExpensesView({
           {avgDay != null ? (
             <li>
               <span className="expense-stats-label">Snitt / dag</span>
-              <strong>{formatExpenseAmount(avgDay)}</strong>
+              <strong>{formatExpenseAmount(Math.round(avgDay))}</strong>
               <span className="meta">{dayCount} dager</span>
             </li>
           ) : null}
           {hotelAvg != null ? (
             <li>
               <span className="expense-stats-label">Hotell snitt pr dag</span>
-              <strong>{formatExpenseAmount(hotelAvg)}</strong>
+              <strong>{formatExpenseAmount(Math.round(hotelAvg))}</strong>
               <span className="meta">
                 {hotelNights} {hotelNights === 1 ? 'natt' : 'netter'} · uten
                 cruise
@@ -754,7 +754,9 @@ function JourneyExpensesView({
           {cheapestHotel ? (
             <li>
               <span className="expense-stats-label">Billigst</span>
-              <strong>{formatExpenseAmount(perNight(cheapestHotel))}</strong>
+              <strong>
+                {formatExpenseAmount(Math.round(perNight(cheapestHotel)))}
+              </strong>
               <span className="meta expense-stats-name">
                 {hotelStatLabel(cheapestHotel)}
               </span>
@@ -763,7 +765,9 @@ function JourneyExpensesView({
           {dearestHotel && dearestHotel.id !== cheapestHotel?.id ? (
             <li>
               <span className="expense-stats-label">Dyrest</span>
-              <strong>{formatExpenseAmount(perNight(dearestHotel))}</strong>
+              <strong>
+                {formatExpenseAmount(Math.round(perNight(dearestHotel)))}
+              </strong>
               <span className="meta expense-stats-name">
                 {hotelStatLabel(dearestHotel)}
               </span>
