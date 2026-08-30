@@ -1808,6 +1808,13 @@ export interface JourneyLiveEntry {
   sortOrder: number
 }
 
+/** Live: user skipped registering sight / excursion / other for a city-day. */
+export interface JourneyLiveActivitySkip {
+  date: string
+  stopId: string
+  dayOffset: number
+}
+
 export interface Journey {
   id?: string
   tripId: string
@@ -1815,6 +1822,8 @@ export interface Journey {
   legs: JourneyLeg[]
   /** Off-plan log (food, drinks, purchases) while travelling. */
   live?: JourneyLiveEntry[]
+  /** Days where planned activities were intentionally not logged in Live. */
+  liveActivitySkips?: JourneyLiveActivitySkip[]
   createdAt?: string
   updatedAt?: string
 }
@@ -1897,6 +1906,64 @@ export function compactLive(
         (e.rating || 0) > 0 ||
         (e.photos || []).length > 0),
   )
+}
+
+export function normalizeLiveActivitySkips(
+  list?: JourneyLiveActivitySkip[] | null,
+): JourneyLiveActivitySkip[] {
+  const seen = new Set<string>()
+  const out: JourneyLiveActivitySkip[] = []
+  for (const raw of list || []) {
+    const date = (raw.date || '').trim()
+    const stopId = (raw.stopId || '').trim()
+    const dayOffset =
+      typeof raw.dayOffset === 'number' && raw.dayOffset >= 0
+        ? Math.floor(raw.dayOffset)
+        : 0
+    if (!date || !stopId) continue
+    const key = `${date}\0${stopId}\0${dayOffset}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    out.push({ date, stopId, dayOffset })
+  }
+  return out
+}
+
+export function isLiveActivitySkipped(
+  journey: Journey,
+  date: string,
+  stopId: string,
+  dayOffset: number,
+): boolean {
+  const d = date.trim()
+  const id = stopId.trim()
+  if (!d || !id) return false
+  const offset = Math.max(0, Math.floor(dayOffset))
+  return normalizeLiveActivitySkips(journey.liveActivitySkips).some(
+    (s) => s.date === d && s.stopId === id && s.dayOffset === offset,
+  )
+}
+
+export function withLiveActivitySkip(
+  journey: Journey,
+  date: string,
+  stopId: string,
+  dayOffset: number,
+  skipped: boolean,
+): Journey {
+  const d = date.trim()
+  const id = stopId.trim()
+  const offset = Math.max(0, Math.floor(dayOffset))
+  const rest = normalizeLiveActivitySkips(journey.liveActivitySkips).filter(
+    (s) => s.date !== d || s.stopId !== id || s.dayOffset !== offset,
+  )
+  if (!skipped || !d || !id) {
+    return { ...journey, liveActivitySkips: rest }
+  }
+  return {
+    ...journey,
+    liveActivitySkips: [...rest, { date: d, stopId: id, dayOffset: offset }],
+  }
 }
 
 export function todayIsoOslo(): string {

@@ -16,7 +16,7 @@ import {
 import { journeyExpenseSummary } from './journeyExpenses'
 import { journeyMapRouteKey, journeyMapStopsInOrder } from './journeyMap'
 import { localizeJourneyPlaces } from '../placeNames'
-import { compactLive, emptyJourney, formatDateNO, compactActivity, normalizeSights, type Journey } from './journeyModel'
+import { compactLive, emptyJourney, formatDateNO, compactActivity, normalizeLiveActivitySkips, normalizeSights, type Journey } from './journeyModel'
 import { shareOrCopy, sharePageUrl } from './shareItinerary'
 import { downloadItineraryPdf } from './itineraryPdf'
 import { DeleteTripSheet } from './DeleteTripSheet'
@@ -177,6 +177,7 @@ export function TripHub({
     const payload: Journey = {
       ...next,
       live: compactLive(next.live),
+      liveActivitySkips: normalizeLiveActivitySkips(next.liveActivitySkips),
       stops: (next.stops || []).map((s) => ({
         ...s,
         sights: normalizeSights(s.sights).map(compactActivity),

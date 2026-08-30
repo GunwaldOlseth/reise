@@ -15,6 +15,7 @@ import {
   formatChangeTimeLabel,
   formatCityStation,
   formatTransportOptionLabel,
+  isLiveActivitySkipped,
   isPackageStop,
   journeyActivityCalendarBounds,
   journeyDateSpan,
@@ -25,6 +26,7 @@ import {
   moveActivityToDay,
   newLiveEntry,
   normalizeLive,
+  normalizeSights,
   optionIsTaken,
   chosenFromOptions,
   clearTakenTransportOptions,
@@ -40,6 +42,7 @@ import {
   viaPurposeLabel,
   viaTransportOptions,
   sortTransportOptions,
+  withLiveActivitySkip,
   withTakenTransportOption,
   type Journey,
   type JourneyActivity,
@@ -364,17 +367,33 @@ export function JourneyLive({
     dayOffset: number,
     daySights: JourneyActivity[],
   ) {
-    patchJourney({
+    const cleaned = normalizeSights(daySights)
+    let next = {
       ...journey,
       stops: (journey.stops || []).map((stop) =>
         stop.id !== stopId
           ? stop
           : {
               ...stop,
-              sights: replaceDayActivities(stop.sights, dayOffset, daySights),
+              sights: replaceDayActivities(stop.sights, dayOffset, cleaned),
             },
       ),
-    })
+    }
+    if (
+      cleaned.length > 0 &&
+      isLiveActivitySkipped(next, date, stopId, dayOffset)
+    ) {
+      next = withLiveActivitySkip(next, date, stopId, dayOffset, false)
+    }
+    patchJourney(next)
+  }
+
+  function setActivitySkip(
+    stopId: string,
+    dayOffset: number,
+    skipped: boolean,
+  ) {
+    patchJourney(withLiveActivitySkip(journey, date, stopId, dayOffset, skipped))
   }
 
   function moveActivityOnStop(
@@ -767,41 +786,91 @@ export function JourneyLive({
 
       {activityTargets.length > 0 && (
         <section className="v2-live-block v2-live-activities">
-          {activityTargets.map((target) => (
-            <div
-              key={`${target.stop.id}:${target.dayOffset}`}
-              className="v2-live-activity-group"
-            >
-              <SightList
-                compact
-                heading={
-                  activityTargets.length > 1
-                    ? localizeCity(target.city) || target.city
-                    : 'På programmet'
-                }
-                sights={activitiesForDay(target.stop.sights, target.dayOffset)}
-                dayOffset={target.dayOffset}
-                disabled={disabled}
-                suggestCountry={target.stop.country}
-                cityDays={calendarDaysForStop(target.stop)}
-                calendarMin={activityCalendar.min}
-                calendarMax={activityCalendar.max}
-                onMoveToDay={(activityId, offset) =>
-                  moveActivityOnStop(target.stop.id, activityId, offset)
-                }
-                onMoveToDate={(activityId, targetDate) =>
-                  moveActivityToDate(target.stop.id, activityId, targetDate)
-                }
-                onChange={(sights) =>
-                  updateStopActivities(
-                    target.stop.id,
-                    target.dayOffset,
-                    sights,
-                  )
-                }
-              />
-            </div>
-          ))}
+          {activityTargets.map((target) => {
+            const daySights = activitiesForDay(
+              target.stop.sights,
+              target.dayOffset,
+            )
+            const skipped = isLiveActivitySkipped(
+              journey,
+              date,
+              target.stop.id,
+              target.dayOffset,
+            )
+            const heading =
+              activityTargets.length > 1
+                ? localizeCity(target.city) || target.city
+                : 'På programmet'
+            return (
+              <div
+                key={`${target.stop.id}:${target.dayOffset}`}
+                className="v2-live-activity-group"
+              >
+                {skipped && daySights.length === 0 ? (
+                  <div className="v2-live-activity-skipped">
+                    <p className="v2-live-activity-skipped-label">
+                      Hoppet over severdighet, utflukt og annet
+                    </p>
+                    <button
+                      type="button"
+                      className="v2-chip-btn"
+                      disabled={disabled}
+                      title="Vis registrering igjen"
+                      onClick={() =>
+                        setActivitySkip(target.stop.id, target.dayOffset, false)
+                      }
+                    >
+                      Registrer likevel
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    <SightList
+                      compact
+                      heading={heading}
+                      sights={daySights}
+                      dayOffset={target.dayOffset}
+                      disabled={disabled}
+                      suggestCountry={target.stop.country}
+                      cityDays={calendarDaysForStop(target.stop)}
+                      calendarMin={activityCalendar.min}
+                      calendarMax={activityCalendar.max}
+                      onMoveToDay={(activityId, offset) =>
+                        moveActivityOnStop(target.stop.id, activityId, offset)
+                      }
+                      onMoveToDate={(activityId, targetDate) =>
+                        moveActivityToDate(target.stop.id, activityId, targetDate)
+                      }
+                      onChange={(sights) =>
+                        updateStopActivities(
+                          target.stop.id,
+                          target.dayOffset,
+                          sights,
+                        )
+                      }
+                    />
+                    {daySights.length === 0 ? (
+                      <button
+                        type="button"
+                        className="v2-chip-btn v2-live-activity-skip"
+                        disabled={disabled}
+                        title="Merk at du ikke registrerer severdighet, utflukt eller annet i dag"
+                        onClick={() =>
+                          setActivitySkip(
+                            target.stop.id,
+                            target.dayOffset,
+                            true,
+                          )
+                        }
+                      >
+                        Hoppet over severdighet, utflukt og annet
+                      </button>
+                    ) : null}
+                  </>
+                )}
+              </div>
+            )
+          })}
           <p className="v2-meta v2-live-activity-hint">
             Legg til severdighet, utflukt eller annet spontant — uten å gå til
             Plan.
