@@ -31,6 +31,18 @@ export function ShareItineraryView({
           {itinerary.places.map((place, i) => (
             <li key={`${place.title}|${i}`}>
               <strong>{localizeCity(place.title) || place.title}</strong>
+              {place.subs && place.subs.length > 0 ? (
+                <ul className="v2-share-subs">
+                  {place.subs.map((sub, si) => (
+                    <li key={`${sub.label}|${si}`}>
+                      {sub.label
+                        .split(' · ')
+                        .map((part) => localizeCity(part) || part)
+                        .join(' · ')}
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
               {place.hops.length > 0 ? (
                 <ul className="v2-share-hops">
                   {place.hops.map((hop, hi) => (

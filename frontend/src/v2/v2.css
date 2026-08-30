@@ -7335,6 +7335,21 @@ html[data-theme='plasma'] .v2-shell {
   font-weight: 700;
 }
 
+.v2-share-subs {
+  list-style: none;
+  margin: 0.25rem 0 0.15rem;
+  padding: 0 0 0 1.15rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.v2-share-subs li {
+  color: var(--v2-ink);
+  font-size: 0.92rem;
+  line-height: 1.35;
+}
+
 .v2-share-hops {
   list-style: none;
   margin: 0.2rem 0 0;
