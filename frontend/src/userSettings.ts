@@ -477,7 +477,61 @@ export function saveUsefulLinks(links: UsefulLink[]): UsefulLink[] {
     next.push(link)
   }
   localStorage.setItem(LINKS_KEY, JSON.stringify(next))
+  notifyUsefulLinksChanged()
   return next
+}
+
+export const DEFAULT_BOOKING_WHERE_TITLES = [
+  'Booking.com',
+  'Hotels.com',
+  'Expedia',
+  'Airbnb',
+] as const
+
+/** Titles for “Hvor er det booket?” — useful links first, then common defaults. */
+export function bookingWhereSuggestionTitles(current?: string): string[] {
+  const fromLinks = usableUsefulLinks(loadUsefulLinks()).map((link) =>
+    usefulLinkTitle(link),
+  )
+  const unique = new Set<string>()
+  const out: string[] = []
+  for (const title of fromLinks) {
+    const t = title.trim()
+    if (!t || unique.has(t)) continue
+    unique.add(t)
+    out.push(t)
+  }
+  for (const title of DEFAULT_BOOKING_WHERE_TITLES) {
+    if (!unique.has(title)) {
+      unique.add(title)
+      out.push(title)
+    }
+  }
+  const trimmed = (current || '').trim()
+  if (trimmed && !unique.has(trimmed)) {
+    out.unshift(trimmed)
+  }
+  return out
+}
+
+const USEFUL_LINKS_EVENT = 'reise-useful-links-change'
+
+function notifyUsefulLinksChanged() {
+  if (typeof window === 'undefined') return
+  window.dispatchEvent(new Event(USEFUL_LINKS_EVENT))
+}
+
+export function subscribeUsefulLinks(onChange: () => void): () => void {
+  if (typeof window === 'undefined') return () => {}
+  const onStorage = (e: StorageEvent) => {
+    if (e.key === LINKS_KEY || e.key === null) onChange()
+  }
+  window.addEventListener(USEFUL_LINKS_EVENT, onChange)
+  window.addEventListener('storage', onStorage)
+  return () => {
+    window.removeEventListener(USEFUL_LINKS_EVENT, onChange)
+    window.removeEventListener('storage', onStorage)
+  }
 }
 
 export function usableUsefulLinks(list?: UsefulLink[]): UsefulLink[] {
