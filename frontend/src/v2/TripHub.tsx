@@ -21,6 +21,7 @@ import { shareOrCopy, sharePageUrl } from './shareItinerary'
 import { downloadItineraryPdf } from './itineraryPdf'
 import { DeleteTripSheet } from './DeleteTripSheet'
 import { JourneyLive } from './JourneyLive'
+import { JourneyLog } from './JourneyLog'
 import { JourneyOverview } from './JourneyOverview'
 import { JourneyPlanner } from './JourneyPlanner'
 import { enqueueJourneyWeather, JourneyWeatherView } from './JourneyWeather'
@@ -29,6 +30,7 @@ import './v2.css'
 export type TripHubTab =
   | 'plan'
   | 'live'
+  | 'log'
   | 'overview'
   | 'map'
   | 'weather'
@@ -44,6 +46,11 @@ const TABS: { id: TripHubTab; label: string; title: string }[] = [
     id: 'live',
     label: 'Live',
     title: 'Dagens reise, priser og det som skjer utenom planen',
+  },
+  {
+    id: 'log',
+    label: 'Logg',
+    title: 'Alt logget utenom planen på alle dager',
   },
   {
     id: 'overview',
@@ -148,7 +155,7 @@ export function TripHub({
 
   function goTab(id: TripHubTab) {
     setMenuOpen(false)
-    if (tab === 'live' && id !== 'live') flushLiveSave()
+    if ((tab === 'live' || tab === 'log') && id !== tab) flushLiveSave()
     setTab(id)
     onTabChange?.(id)
   }
@@ -467,6 +474,19 @@ export function TripHub({
             )}
           </div>
         )}
+        {tab === 'log' && (
+          <div className="v2-hub-panel">
+            {!journeyReady ? (
+              <p className="v2-meta">Henter logg…</p>
+            ) : (
+              <JourneyLog
+                journey={journey}
+                disabled={!journeyReady}
+                onChange={handleLiveChange}
+              />
+            )}
+          </div>
+        )}
         {tab === 'overview' && (
           <div className="v2-hub-panel">
             {!journeyReady ? (
@@ -527,6 +547,14 @@ export function TripHub({
                     onClick={() => goTab('live')}
                   >
                     Live
+                  </button>
+                  {' '}eller se alt i{' '}
+                  <button
+                    type="button"
+                    className="v2-text-link"
+                    onClick={() => goTab('log')}
+                  >
+                    Logg
                   </button>
                   .
                 </p>
