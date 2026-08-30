@@ -637,10 +637,10 @@ export function JourneyLive({
                 : ride.options
               const focus = takenOption || chosenFromOptions(ride.options)
               return (
-                <li key={ride.via.id}>
+                <li key={ride.via.id} className={takenOption ? 'is-taken' : ''}>
                   <div className="v2-live-ride-main">
                     <div>
-                      <strong>
+                      <strong className="v2-live-ride-title">
                         {localizeCity(ride.fromLabel)} →{' '}
                         {localizeCity(ride.toLabel)}
                       </strong>

@@ -6924,6 +6924,10 @@ html[data-theme='plasma'] .v2-shell {
   background: var(--v2-panel);
 }
 
+.v2-live-rides li.is-taken .v2-live-ride-title {
+  color: color-mix(in srgb, #2d7a47 82%, var(--v2-ink));
+}
+
 .v2-live-ride-main {
   display: flex;
   align-items: flex-start;
