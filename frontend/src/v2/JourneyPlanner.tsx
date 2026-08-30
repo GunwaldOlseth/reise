@@ -848,7 +848,7 @@ export function JourneyPlanner({
                           <th scope="col">Dato</th>
                           <th scope="col">Ank.</th>
                           {packType === 'cruise' && (
-                            <th scope="col">A.ab.</th>
+                            <th scope="col">Omb.</th>
                           )}
                           <th scope="col">Avg.</th>
                         </tr>
@@ -1268,7 +1268,7 @@ function PackDayPanel({
   const timeMeta = [
     tableRow.arrive ? `Ank. ${tableRow.arrive}` : '',
     packType === 'cruise' && tableRow.allAboard
-      ? `A.ab. ${tableRow.allAboard}`
+      ? `Omb. ${tableRow.allAboard}`
       : '',
     tableRow.leave ? `Avg. ${tableRow.leave}` : '',
   ]

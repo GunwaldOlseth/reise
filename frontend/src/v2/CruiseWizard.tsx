@@ -604,7 +604,7 @@ export function PackageWizard({
                               }
                             />
                             <ClockTimeInput
-                              placeholder="A.ab."
+                              placeholder="Omb."
                               aria-label="All aboard"
                               value={day.allAboardTime || ''}
                               onChange={(value) =>
@@ -699,7 +699,7 @@ export function PackageWizard({
                               )}
                               {type === 'cruise' && !isLast && (
                                 <ClockTimeInput
-                                  placeholder="A.ab."
+                                  placeholder="Omb."
                                   aria-label="All aboard"
                                   value={day.allAboardTime || ''}
                                   onChange={(value) =>
