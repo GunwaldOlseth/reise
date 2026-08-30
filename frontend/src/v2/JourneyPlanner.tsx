@@ -2125,7 +2125,7 @@ function PlaceStopPanel({
                       />
                     </label>
                   )}
-                  <label className="full">
+                  <div className="full v2-note-field">
                     <span className="v2-note-label-row">
                       Notat
                       {noteHasContent(stay.notes) && !stayNoteEditing ? (
@@ -2158,7 +2158,7 @@ function PlaceStopPanel({
                         )
                       }
                     />
-                  </label>
+                  </div>
                   {(hotel || hasStay) && (
                     <div className="v2-hotel-remove-row">
                       <button
