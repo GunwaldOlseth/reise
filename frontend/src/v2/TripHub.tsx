@@ -16,7 +16,7 @@ import {
 import { journeyExpenseSummary } from './journeyExpenses'
 import { journeyMapRouteKey, journeyMapStopsInOrder } from './journeyMap'
 import { localizeJourneyPlaces } from '../placeNames'
-import { compactLive, emptyJourney, formatDateNO, type Journey } from './journeyModel'
+import { compactLive, emptyJourney, formatDateNO, compactActivity, normalizeSights, type Journey } from './journeyModel'
 import { shareOrCopy, sharePageUrl } from './shareItinerary'
 import { downloadItineraryPdf } from './itineraryPdf'
 import { DeleteTripSheet } from './DeleteTripSheet'
@@ -172,9 +172,23 @@ export function TripHub({
   const liveSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const livePending = useRef<Journey | null>(null)
 
-  function persistLiveNow(next: Journey) {
+  function persistJourneyQuiet(next: Journey) {
     livePending.current = null
-    const live = compactLive(next.live)
+    const payload: Journey = {
+      ...next,
+      live: compactLive(next.live),
+      stops: (next.stops || []).map((s) => ({
+        ...s,
+        sights: normalizeSights(s.sights).map(compactActivity),
+      })),
+      legs: (next.legs || []).map((l) => ({
+        ...l,
+        vias: (l.vias || []).map((v) => ({
+          ...v,
+          sights: normalizeSights(v.sights).map(compactActivity),
+        })),
+      })),
+    }
     void api
       .getJourney(tripId)
       .then((latest) =>
@@ -182,8 +196,8 @@ export function TripHub({
           tripId,
           localizeJourneyPlaces({
             ...latest,
+            ...payload,
             tripId,
-            live,
           }),
         ),
       )
@@ -195,7 +209,7 @@ export function TripHub({
       clearTimeout(liveSaveTimer.current)
       liveSaveTimer.current = null
     }
-    if (livePending.current) persistLiveNow(livePending.current)
+    if (livePending.current) persistJourneyQuiet(livePending.current)
   }
 
   function handleLiveChange(next: Journey) {
@@ -204,14 +218,14 @@ export function TripHub({
     if (liveSaveTimer.current) clearTimeout(liveSaveTimer.current)
     liveSaveTimer.current = setTimeout(() => {
       liveSaveTimer.current = null
-      if (livePending.current) persistLiveNow(livePending.current)
+      if (livePending.current) persistJourneyQuiet(livePending.current)
     }, 450)
   }
 
   useEffect(() => {
     return () => {
       if (liveSaveTimer.current) clearTimeout(liveSaveTimer.current)
-      if (livePending.current) persistLiveNow(livePending.current)
+      if (livePending.current) persistJourneyQuiet(livePending.current)
     }
   }, [tripId])
 
