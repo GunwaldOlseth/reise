@@ -317,11 +317,17 @@ func shareHopsForLeg(leg *JourneyLeg, destTitle string) []shareHop {
 			}}
 		}
 	}
-	hops := make([]shareHop, 0, len(vias))
+	hops := make([]shareHop, 0, 1)
+	total := 0
+	any := false
 	for _, via := range vias {
-		if label := formatShareHop(via); label != "" {
-			hops = append(hops, shareHop{Label: label})
+		if mins := shareOptionDurationMinutes(chosenShareOption(via)); mins > 0 {
+			total += mins
+			any = true
 		}
+	}
+	if any {
+		hops = append(hops, shareHop{Label: formatShareDuration(total)})
 	}
 	return hops
 }
@@ -390,23 +396,27 @@ func formatShareHop(via JourneyVia) string {
 	return shareHopTimeLabel(opt)
 }
 
-func shareHopTimeLabel(opt *JourneyTransportOption) string {
+func shareOptionDurationMinutes(opt *JourneyTransportOption) int {
 	if opt == nil {
-		return ""
+		return -1
 	}
 	if strings.TrimSpace(opt.Mode) == "walk" {
-		if m := shareParseMinutes(opt.Minutes); m > 0 {
-			return formatShareDuration(m)
-		}
-		return ""
+		return shareParseMinutes(opt.Minutes)
 	}
 	start := strings.TrimSpace(opt.StartTime)
 	end := strings.TrimSpace(opt.EndTime)
 	if mins := shareClockDurationMinutes(start, end, true); mins > 0 {
-		return formatShareDuration(mins)
+		return mins
 	}
-	if m := shareParseMinutes(opt.Minutes); m > 0 {
-		return formatShareDuration(m)
+	return shareParseMinutes(opt.Minutes)
+}
+
+func shareHopTimeLabel(opt *JourneyTransportOption) string {
+	if opt == nil {
+		return ""
+	}
+	if mins := shareOptionDurationMinutes(opt); mins > 0 {
+		return formatShareDuration(mins)
 	}
 	return ""
 }
