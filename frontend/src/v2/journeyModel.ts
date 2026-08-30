@@ -363,14 +363,16 @@ export function normalizeCityDocs(
   }))
   return keepEmpty
     ? mapped
-    : mapped.filter((d) => d.title || noteHasContent(d.body))
+    : mapped.filter((d) => noteHasContent(d.body))
 }
 
 /** Documents to show, including a legacy `notes` field. */
 export function cityDocsOf(
   stop: CityDocHolder | null | undefined,
 ): JourneyCityDoc[] {
-  const docs = normalizeCityDocs(stop?.docs)
+  const docs = normalizeCityDocs(stop?.docs).filter((d) =>
+    noteHasContent(d.body),
+  )
   if (docs.length) return docs
   const note = (stop?.notes || '').trim()
   if (!noteHasContent(note)) return []
@@ -389,10 +391,19 @@ export function cityDocsForEdit(
   stop: CityDocHolder | null | undefined,
   defaultFirstTitle = 'Om byen',
 ): JourneyCityDoc[] {
-  const raw = normalizeCityDocs(stop?.docs, true)
-  if (raw.length) return raw
   const note = (stop?.notes || '').trim()
+  const raw = normalizeCityDocs(stop?.docs, true)
+  const withBody = raw.filter((d) => noteHasContent(d.body))
+  if (withBody.length) return raw
   if (noteHasContent(note)) {
+    if (raw.length) {
+      const merged = [...raw]
+      const emptyIdx = merged.findIndex((d) => !noteHasContent(d.body))
+      if (emptyIdx >= 0) {
+        merged[emptyIdx] = { ...merged[emptyIdx], body: note }
+        return merged
+      }
+    }
     return [
       {
         id: 'notes',
@@ -402,6 +413,7 @@ export function cityDocsForEdit(
       },
     ]
   }
+  if (raw.length) return raw
   return [
     { id: 'notes', title: defaultFirstTitle, body: '', sortOrder: 0 },
   ]
@@ -2017,6 +2029,29 @@ export function activityDisplayName(
   return activityKindLabel(activity?.kind)
 }
 
+/** Sync `notes` into `docs` when legacy data only has notes text. */
+export function repairActivityNotesDocs(
+  activity: JourneyActivity,
+): JourneyActivity {
+  const note = (activity.notes || '').trim()
+  if (!noteHasContent(note)) return activity
+  const docs = normalizeCityDocs(activity.docs, true)
+  if (docs.some((d) => noteHasContent(d.body))) return activity
+  const first = docs[0]
+  return {
+    ...activity,
+    docs: [
+      {
+        id: first?.id || 'notes',
+        title: (first?.title || '').trim() || 'Notat',
+        body: note,
+        sortOrder: 0,
+      },
+      ...docs.slice(1),
+    ],
+  }
+}
+
 export function newSight(
   sortOrder = 0,
   kind: JourneyActivityKind = 'sight',
@@ -2040,11 +2075,12 @@ export function newSight(
 }
 
 export function compactActivity(activity: JourneyActivity): JourneyActivity {
-  const docs = compactCityDocs(cityDocsOf(activity))
+  const repaired = repairActivityNotesDocs(activity)
+  const docs = compactCityDocs(cityDocsOf(repaired))
   return {
-    ...activity,
+    ...repaired,
     docs,
-    notes: docs[0]?.body || compactNoteHtml(activity.notes || ''),
+    notes: docs[0]?.body || compactNoteHtml(repaired.notes || ''),
   }
 }
 
@@ -2059,7 +2095,7 @@ export function normalizeSights(
           : s.kind === 'other'
             ? 'other'
             : 'sight'
-      return {
+      return repairActivityNotesDocs({
         ...s,
         id: s.id || newSightId(),
         title: s.title || '',
@@ -2082,18 +2118,18 @@ export function normalizeSights(
         paid: s.paid || false,
         docs: normalizeCityDocs(s.docs),
         sortOrder: i,
-      }
+      })
     })
     .filter(
       (s) =>
         s.title.trim() ||
-        s.place.trim() ||
-        s.notes.trim() ||
+        (s.place || '').trim() ||
+        (s.notes || '').trim() ||
         cityDocsOf(s).some((d) => noteHasContent(d.body)) ||
-        s.url.trim() ||
-        s.startTime.trim() ||
-        s.endTime.trim() ||
-        s.price.trim(),
+        (s.url || '').trim() ||
+        (s.startTime || '').trim() ||
+        (s.endTime || '').trim() ||
+        (s.price || '').trim(),
     )
 }
 

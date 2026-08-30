@@ -1754,6 +1754,7 @@ function PlaceStopPanel({
                     disabled={disabled}
                     heading="Utflukter og severdigheter"
                     suggestCountry={stop.country}
+                    previewLines={notePreviewLines}
                     cityDays={
                       daysInCity.length > 1 ? daysInCity : undefined
                     }
@@ -2243,6 +2244,7 @@ function PlaceStopPanel({
                 disabled={disabled}
                 heading="Aktiviteter"
                 suggestCountry={stop.country}
+                previewLines={notePreviewLines}
                 calendarMin={calendarMin}
                 calendarMax={calendarMax}
                 onMoveToDate={onMoveActivityToDate}
