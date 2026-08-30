@@ -90,7 +90,7 @@ export function NoteField({
     if (noteHasContent(html)) setEditing(false)
   }
 
-  if (editing || !hasContent) {
+  if (editing || (!hasContent && editingProp == null)) {
     return (
       <NoteEditor
         value={value}
@@ -100,6 +100,29 @@ export function NoteField({
         onChange={onChange}
         onBlur={handleBlur}
       />
+    )
+  }
+
+  if (!hasContent) {
+    return (
+      <div
+        className="v2-note-preview v2-note-preview-empty"
+        role="button"
+        tabIndex={disabled ? -1 : 0}
+        title="Klikk for å redigere"
+        onClick={() => {
+          if (!disabled) setEditing(true)
+        }}
+        onKeyDown={(e) => {
+          if (disabled) return
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault()
+            setEditing(true)
+          }
+        }}
+      >
+        {placeholder || 'Notat…'}
+      </div>
     )
   }
 

@@ -2361,6 +2361,9 @@ function TransportBlock({
   const [draft, setDraft] = useState<JourneyLeg>(() =>
     withTransportSegments(leg, transportSegments(leg)),
   )
+  useEffect(() => {
+    setEditingSegNoteIdx(null)
+  }, [openSegId])
   const legSyncKey = useMemo(
     () => JSON.stringify({ id: leg.id, vias: leg.vias || [] }),
     [leg.id, leg.vias],
@@ -3147,8 +3150,7 @@ function TransportBlock({
                             <label className="v2-seg-notes">
                               <span className="v2-note-label-row">
                                 Notat
-                                {noteHasContent(seg.notes) &&
-                                editingSegNoteIdx !== idx ? (
+                                {editingSegNoteIdx !== idx ? (
                                   <NoteEditButton
                                     disabled={disabled}
                                     title="Rediger notat"
@@ -3161,10 +3163,7 @@ function TransportBlock({
                                 disabled={disabled}
                                 placeholder="Notat om stedet…"
                                 previewLines={notePreviewLines}
-                                editing={
-                                  editingSegNoteIdx === idx ||
-                                  !noteHasContent(seg.notes)
-                                }
+                                editing={editingSegNoteIdx === idx}
                                 onEditingChange={(editing) =>
                                   setEditingSegNoteIdx(editing ? idx : null)
                                 }
