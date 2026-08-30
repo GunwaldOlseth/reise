@@ -10,7 +10,6 @@ import {
   addDaysIso,
   calendarDaysForStop,
   cityStayDays,
-  clockMinutesFromMidnight,
   effectiveHotelName,
   formatDateNO,
   formatChangeTimeLabel,
@@ -27,6 +26,7 @@ import {
   newLiveEntry,
   normalizeLive,
   optionIsTaken,
+  chosenFromOptions,
   packageFreeDayLabel,
   packageOf,
   replaceDayActivities,
@@ -100,44 +100,6 @@ function dayOffsetOn(stop: JourneyStop, date: string): number {
   const b = new Date(`${date}T12:00:00`).getTime()
   if (Number.isNaN(a) || Number.isNaN(b)) return 0
   return Math.round((b - a) / 86_400_000)
-}
-
-function osloMinutesNow(): number {
-  const stamp = new Date().toLocaleTimeString('en-GB', {
-    timeZone: 'Europe/Oslo',
-    hour: '2-digit',
-    minute: '2-digit',
-    hourCycle: 'h23',
-  })
-  return clockMinutesFromMidnight(stamp) ?? 0
-}
-
-function optionClockMinutes(option: JourneyTransportOption): number | null {
-  return (
-    clockMinutesFromMidnight(option.startTime) ??
-    clockMinutesFromMidnight(option.endTime)
-  )
-}
-
-/**
- * Kvittert ride stays. Otherwise the next departure that has not passed yet;
- * if all times have passed, the last one.
- */
-function pickLiveOption(
-  options: JourneyTransportOption[],
-  isToday: boolean,
-  nowMins: number,
-): JourneyTransportOption | undefined {
-  if (!options.length) return undefined
-  const taken = options.find(optionIsTaken)
-  if (taken) return taken
-  if (!isToday) return options[0]
-  const next = options.find((option) => {
-    const at = optionClockMinutes(option)
-    if (at == null) return true
-    return at >= nowMins
-  })
-  return next ?? options[options.length - 1]
 }
 
 function NextRideCountdowns({
@@ -373,7 +335,6 @@ export function JourneyLive({
     return span.end
   })
 
-  const [nowMins, setNowMins] = useState(osloMinutesNow)
   const places = useMemo(() => placesOnDate(journey, date), [journey, date])
   const rides = useMemo(() => ridesOnDate(journey, date), [journey, date])
   const activityTargets = useMemo(
@@ -391,25 +352,7 @@ export function JourneyLive({
         .sort((a, b) => a.sortOrder - b.sortOrder),
     [journey.live, date],
   )
-  const history = useMemo(() => {
-    const byDate = new Map<string, JourneyLiveEntry[]>()
-    for (const e of normalizeLive(journey.live)) {
-      if (e.date === date) continue
-      if (!e.title.trim() && !(e.price || '').trim() && !(e.notes || '').trim()) continue
-      const list = byDate.get(e.date) || []
-      list.push(e)
-      byDate.set(e.date, list)
-    }
-    return [...byDate.entries()].sort(([a], [b]) => b.localeCompare(a))
-  }, [journey.live, date])
   const isToday = date === today
-
-  useEffect(() => {
-    if (!isToday) return
-    setNowMins(osloMinutesNow())
-    const timer = window.setInterval(() => setNowMins(osloMinutesNow()), 30_000)
-    return () => window.clearInterval(timer)
-  }, [isToday])
 
   function patchJourney(next: Journey) {
     onChange({ ...next, live: normalizeLive(next.live) })
@@ -670,7 +613,7 @@ export function JourneyLive({
           <NextRideCountdowns rides={rides} date={date} />
           <ul className="v2-live-rides">
             {rides.map((ride) => {
-              const focus = pickLiveOption(ride.options, isToday, nowMins)
+              const focus = chosenFromOptions(ride.options)
               return (
                 <li key={ride.via.id}>
                   <div className="v2-live-ride-main">
@@ -874,38 +817,11 @@ export function JourneyLive({
         )}
       </section>
 
-      {history.length > 0 && (
-        <section className="v2-live-block">
-          <h3>Andre dager utenom planen</h3>
-          <ul className="v2-live-history">
-            {history.map(([day, rows]) => (
-              <li key={day}>
-                <button
-                  type="button"
-                  className="v2-text-link"
-                  onClick={() => setDate(day)}
-                >
-                  {formatDateNO(day)}
-                </button>
-                <span className="v2-meta">
-                  {rows
-                    .map((e) =>
-                      [e.title || liveKindLabel(e.kind), e.price]
-                        .filter(Boolean)
-                        .join(' '),
-                    )
-                    .join(' · ')}
-                </span>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
     </div>
   )
 }
 
-function LiveEntryRow({
+export function LiveEntryRow({
   entry,
   disabled,
   onChange,

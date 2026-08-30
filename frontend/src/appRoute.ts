@@ -3,6 +3,7 @@
 export type AppTripTab =
   | 'plan'
   | 'live'
+  | 'log'
   | 'overview'
   | 'map'
   | 'weather'
@@ -24,6 +25,7 @@ export type AppView =
 const TRIP_TABS: AppTripTab[] = [
   'plan',
   'live',
+  'log',
   'overview',
   'map',
   'weather',

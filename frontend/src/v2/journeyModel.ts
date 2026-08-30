@@ -1401,7 +1401,11 @@ export function chosenTransportOption(
 export function chosenFromOptions(
   options: JourneyTransportOption[],
 ): JourneyTransportOption | undefined {
-  return options.find(optionIsTaken) || options[0]
+  return (
+    options.find(optionIsTaken) ||
+    options.find(optionHasTicket) ||
+    options[0]
+  )
 }
 
 /** Mark one alternative as taken (or clear if it was already taken). */
