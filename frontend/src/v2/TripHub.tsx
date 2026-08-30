@@ -36,7 +36,7 @@ export type TripHubTab =
   | 'weather'
   | 'expenses'
 
-const TABS: { id: TripHubTab; label: string; title: string }[] = [
+const MAIN_TABS: { id: TripHubTab; label: string; title: string }[] = [
   {
     id: 'plan',
     label: 'Plan',
@@ -46,11 +46,6 @@ const TABS: { id: TripHubTab; label: string; title: string }[] = [
     id: 'live',
     label: 'Live',
     title: 'Dagens reise, priser og det som skjer utenom planen',
-  },
-  {
-    id: 'log',
-    label: 'Logg',
-    title: 'Alt logget utenom planen på alle dager',
   },
   {
     id: 'overview',
@@ -65,6 +60,12 @@ const TABS: { id: TripHubTab; label: string; title: string }[] = [
     title: 'Priser og kostnader for turen',
   },
 ]
+
+const LOG_TAB: { id: TripHubTab; label: string; title: string } = {
+  id: 'log',
+  label: 'Logg',
+  title: 'Alt logget utenom planen på alle dager',
+}
 
 export function TripHub({
   tripId,
@@ -448,17 +449,29 @@ export function TripHub({
       </header>
 
       <nav className="v2-hub-nav" aria-label="Turmeny">
-        {TABS.map((t) => (
+        <div className="v2-hub-nav-main">
+          {MAIN_TABS.map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              className={`v2-hub-tab${tab === t.id ? ' is-active' : ''}`}
+              title={t.title}
+              onClick={() => goTab(t.id)}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+        <div className="v2-hub-nav-secondary">
           <button
-            key={t.id}
             type="button"
-            className={`v2-hub-tab${tab === t.id ? ' is-active' : ''}`}
-            title={t.title}
-            onClick={() => goTab(t.id)}
+            className={`v2-hub-tab${tab === LOG_TAB.id ? ' is-active' : ''}`}
+            title={LOG_TAB.title}
+            onClick={() => goTab(LOG_TAB.id)}
           >
-            {t.label}
+            {LOG_TAB.label}
           </button>
-        ))}
+        </div>
       </nav>
 
       <div className="v2-hub-body">

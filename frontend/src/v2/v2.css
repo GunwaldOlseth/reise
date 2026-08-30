@@ -926,12 +926,22 @@ html[data-theme='plasma'] .v2-shell {
   position: sticky;
   top: 3.6rem;
   z-index: 5;
-  display: grid;
-  grid-template-columns: repeat(6, 1fr);
-  gap: 0.2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
   padding: 0.45rem 0.75rem 0.55rem;
   background: var(--v2-nav);
   border-bottom: 1px solid var(--v2-line-strong);
+}
+
+.v2-hub-nav-main {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 0.2rem;
+}
+
+.v2-hub-nav-secondary {
+  display: flex;
 }
 
 .v2-shell .v2-hub-nav .v2-hub-tab {
