@@ -377,55 +377,25 @@ func shareModeLabel(mode string) string {
 
 func formatShareHop(via JourneyVia) string {
 	opt := chosenShareOption(via)
-	place := strings.TrimSpace(via.Title)
-	var bits []string
-	if opt != nil {
-		if timeLabel := shareHopTimeLabel(opt); timeLabel != "" {
-			bits = append(bits, timeLabel)
-		}
+	if opt == nil {
+		return ""
 	}
-	if place != "" {
-		bits = append(bits, place)
+	return shareHopTimeLabel(opt)
+}
+
+func shareClockSpan(start, end string) string {
+	s := strings.TrimSpace(start)
+	e := strings.TrimSpace(end)
+	if s != "" && e != "" && s != e {
+		return s + "–" + e
 	}
-	conn := strings.TrimSpace(via.Connection)
-	at := strings.TrimSpace(via.ChangePlace)
-	plat := strings.TrimSpace(via.ChangePlatform)
-	mins := strings.TrimSpace(via.ChangeMinutes)
-	if opt != nil {
-		if c := strings.TrimSpace(opt.Connection); c != "" {
-			conn = c
-		}
-		if p := strings.TrimSpace(opt.ChangePlace); p != "" {
-			at = p
-		}
-		if p := strings.TrimSpace(opt.ChangePlatform); p != "" {
-			plat = p
-		}
-		if m := strings.TrimSpace(opt.ChangeMinutes); m != "" {
-			mins = m
-		}
+	if s != "" {
+		return s
 	}
-	where := at
-	if plat != "" {
-		if where != "" {
-			where += " p." + plat
-		} else {
-			where = "p." + plat
-		}
+	if e != "" {
+		return e
 	}
-	if strings.EqualFold(conn, "change") || where != "" || mins != "" {
-		switch {
-		case where != "" && mins != "":
-			bits = append(bits, "bytte "+where+" "+mins+" m")
-		case where != "":
-			bits = append(bits, "bytte "+where)
-		case mins != "":
-			bits = append(bits, "bytte "+mins+" m")
-		default:
-			bits = append(bits, "med bytte")
-		}
-	}
-	return strings.Join(bits, " · ")
+	return ""
 }
 
 func shareHopTimeLabel(opt *JourneyTransportOption) string {
@@ -500,33 +470,54 @@ func packagePlaceFallback(kind string) string {
 	}
 }
 
+func packageNightsForShare(pack *JourneyPackage) int {
+	nights := pack.Nights
+	if nights < 1 {
+		nights = 1
+	}
+	for _, d := range pack.Days {
+		if d.Offset > nights {
+			nights = d.Offset
+		}
+	}
+	if nights > 30 {
+		nights = 30
+	}
+	return nights
+}
+
 func shareSubsForStop(stop JourneyStop) []shareHop {
 	if !isPackageKind(stop.Kind) {
 		return nil
 	}
 	pack := packageOfStop(stop)
-	if pack == nil || len(pack.Days) == 0 {
+	if pack == nil {
 		return nil
 	}
-	days := append([]JourneyPackageDay(nil), pack.Days...)
-	sort.SliceStable(days, func(i, k int) bool {
-		return days[i].Offset < days[k].Offset
-	})
-	nights := pack.Nights
-	if nights < 1 {
-		nights = 1
-	}
+	nights := packageNightsForShare(pack)
 	freeLabel := packageFreeDayLabel(stop.Kind)
 	fallback := packagePlaceFallback(stop.Kind)
-	out := make([]shareHop, 0, len(days))
-	for _, day := range days {
+	byOffset := make(map[int]JourneyPackageDay, len(pack.Days))
+	for _, day := range pack.Days {
+		byOffset[day.Offset] = day
+	}
+	out := make([]shareHop, 0, nights+1)
+	for offset := 0; offset <= nights; offset++ {
+		day, ok := byOffset[offset]
+		if !ok {
+			if stop.Kind == "cruise" {
+				day = JourneyPackageDay{Offset: offset, AtSea: true}
+			} else {
+				continue
+			}
+		}
 		row := formatSharePackageDayLine(stop, day, pack, freeLabel, fallback, nights)
 		if row == "" {
 			continue
 		}
 		date := strings.TrimSpace(stop.ArriveDate)
 		if date != "" {
-			dayISO := addDaysISO(date, day.Offset)
+			dayISO := addDaysISO(date, offset)
 			if dayISO != "" {
 				if formatted := formatDateNOShare(dayISO); formatted != "" {
 					row = formatted + " · " + row
@@ -545,10 +536,14 @@ func formatSharePackageDayLine(
 	freeLabel, placeFallback string,
 	nights int,
 ) string {
+	city := strings.TrimSpace(day.City)
 	if day.AtSea {
+		if city != "" {
+			return city + " · " + freeLabel
+		}
 		return freeLabel
 	}
-	place := strings.TrimSpace(day.City)
+	place := city
 	if place == "" {
 		if stop.Kind == "cruise" && day.Offset == 0 {
 			place = strings.TrimSpace(pack.BasePlace)
@@ -563,29 +558,15 @@ func formatSharePackageDayLine(
 	isLast := day.Offset >= nights
 	arrive := strings.TrimSpace(day.ArriveTime)
 	leave := strings.TrimSpace(day.LeaveTime)
-	allAboard := strings.TrimSpace(day.AllAboardTime)
 	if stop.Kind == "cruise" && isStart {
 		arrive = ""
 	}
 	if stop.Kind == "cruise" && isLast {
 		leave = ""
 	}
-	if stop.Kind != "cruise" || isLast {
-		allAboard = ""
-	}
 	parts := []string{place}
-	timeBits := make([]string, 0, 3)
-	if arrive != "" {
-		timeBits = append(timeBits, "Ank. "+arrive)
-	}
-	if allAboard != "" {
-		timeBits = append(timeBits, "All aboard "+allAboard)
-	}
-	if leave != "" {
-		timeBits = append(timeBits, "Avg. "+leave)
-	}
-	if len(timeBits) > 0 {
-		parts = append(parts, strings.Join(timeBits, " · "))
+	if span := shareClockSpan(arrive, leave); span != "" {
+		parts = append(parts, span)
 	}
 	return strings.Join(parts, " · ")
 }

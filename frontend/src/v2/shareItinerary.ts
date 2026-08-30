@@ -190,13 +190,15 @@ export function formatShareHop(
   detailed = false,
   timeOnly = false,
 ): string {
+  if (timeOnly) {
+    const opt = pickTransportOption(via, pick)
+    return opt ? formatShareTimeBit(opt) : ''
+  }
   const opt = pickTransportOption(via, pick)
   const place = formatCityStation(via.title, via.station)
   const bits: string[] = []
   if (opt) {
-    const bit = timeOnly
-      ? formatShareTimeBit(opt)
-      : formatTransportBit(opt, detailed)
+    const bit = formatTransportBit(opt, detailed)
     if (bit) bits.push(bit)
   }
   if (place) bits.push(place)
@@ -205,27 +207,80 @@ export function formatShareHop(
   return bits.filter(Boolean).join(' · ')
 }
 
+function formatSharePackageDayLine(
+  stop: JourneyStop,
+  day: import('./journeyModel').JourneyPackageDay,
+  pack: NonNullable<ReturnType<typeof packageOf>>,
+  freeLabel: string,
+  placeFallback: string,
+  nights: number,
+): string {
+  const city = (day.city || '').trim()
+  if (day.atSea) {
+    return city ? `${city} · ${freeLabel}` : freeLabel
+  }
+  let place = city
+  if (!place) {
+    if (stop.kind === 'cruise' && (day.offset ?? 0) === 0) {
+      place = (pack.basePlace || '').trim() || 'Hjemhavn'
+    } else {
+      place = placeFallback
+    }
+  }
+  const offset = day.offset ?? 0
+  const isStart = offset <= 0
+  const isLast = offset >= nights
+  let arrive = (day.arriveTime || '').trim()
+  let leave = (day.leaveTime || '').trim()
+  if (stop.kind === 'cruise' && isStart) arrive = ''
+  if (stop.kind === 'cruise' && isLast) leave = ''
+  const parts = [place]
+  const from = arrive
+  const to = leave
+  if (from && to && from !== to) parts.push(`${from}–${to}`)
+  else if (from) parts.push(from)
+  else if (to) parts.push(to)
+  return parts.join(' · ')
+}
+
 function shareSubsForStop(stop: JourneyStop): ShareHop[] {
   if (!isPackageStop(stop)) return []
   const pack = packageOf(stop)
-  if (!pack?.days?.length) return []
+  if (!pack) return []
   const type = stop.kind
   const nights = packageNightsOf(pack) || 1
   const freeLabel = packageFreeDayLabel(type)
-  const days = [...pack.days].sort((a, b) => a.offset - b.offset)
+  const placeFallback = type === 'cruise' ? 'Havn' : 'Sted'
+  const byOffset = new Map<number, import('./journeyModel').JourneyPackageDay>()
+  for (const day of pack.days || []) {
+    byOffset.set(day.offset ?? 0, day)
+  }
   const subs: ShareHop[] = []
-  for (const day of days) {
-    const row = formatPackageDayListLine(day, {
-      type,
-      nights,
-      basePlace: pack.basePlace,
+  for (let offset = 0; offset <= nights; offset++) {
+    let day = byOffset.get(offset)
+    if (!day) {
+      if (type === 'cruise') {
+        day = {
+          id: '',
+          offset,
+          atSea: true,
+        }
+      } else {
+        continue
+      }
+    }
+    const row = formatSharePackageDayLine(
+      stop,
+      day,
+      pack,
       freeLabel,
-      placeFallback: type === 'cruise' ? 'Havn' : 'Sted',
-    })
+      placeFallback,
+      nights,
+    )
     if (!row) continue
     const arrive = (stop.arriveDate || '').trim()
     const label = arrive
-      ? `${formatDateNO(addDaysIso(arrive, day.offset))} · ${row}`
+      ? `${formatDateNO(addDaysIso(arrive, offset))} · ${row}`
       : row
     subs.push({ label })
   }
