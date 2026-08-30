@@ -279,11 +279,13 @@ type DayActivityTarget = {
 }
 
 function activityTargetsOnDate(journey: Journey, date: string): DayActivityTarget[] {
-  const fromPlaces = placesOnDate(journey, date).map((p) => ({
-    stop: p.stop,
-    city: p.city,
-    dayOffset: dayOffsetOn(p.stop, date),
-  }))
+  const fromPlaces = placesOnDate(journey, date)
+    .filter((p) => p.stop.kind !== 'home')
+    .map((p) => ({
+      stop: p.stop,
+      city: p.city,
+      dayOffset: dayOffsetOn(p.stop, date),
+    }))
   if (fromPlaces.length > 0) return fromPlaces
 
   const stops = [...(journey.stops || [])].sort(
