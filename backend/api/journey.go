@@ -289,15 +289,17 @@ func normalizeJourney(j *Journey) {
 		if offset < 0 {
 			offset = 0
 		}
-		key := date + "\x00" + stopID + "\x00" + strconv.Itoa(offset)
+		activityID := strings.TrimSpace(s.ActivityID)
+		key := date + "\x00" + stopID + "\x00" + strconv.Itoa(offset) + "\x00" + activityID
 		if _, ok := seenSkips[key]; ok {
 			continue
 		}
 		seenSkips[key] = struct{}{}
 		normSkips = append(normSkips, JourneyLiveActivitySkip{
-			Date:      date,
-			StopID:    stopID,
-			DayOffset: offset,
+			Date:       date,
+			StopID:     stopID,
+			DayOffset:  offset,
+			ActivityID: activityID,
 		})
 	}
 	j.LiveActivitySkips = normSkips

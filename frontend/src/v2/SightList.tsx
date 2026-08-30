@@ -170,6 +170,7 @@ export function SightList({
   calendarMax,
   onMoveToDate,
   previewLines,
+  onSkipActivity,
   onChange,
 }: {
   sights?: JourneyActivity[] | null
@@ -190,6 +191,8 @@ export function SightList({
   calendarMax?: string
   onMoveToDate?: (activityId: string, date: string) => void
   previewLines?: number
+  /** Live: mark a planned activity as skipped without removing it from the plan. */
+  onSkipActivity?: (activityId: string) => void
   onChange: (sights: JourneyActivity[]) => void
 }) {
   const askDelete = useConfirmDelete()
@@ -492,6 +495,18 @@ export function SightList({
                       calendarMax={calendarMax}
                       onMoveToDate={onMoveToDate}
                     />
+                    {onSkipActivity ? (
+                      <button
+                        type="button"
+                        className="v2-activity-skip-btn"
+                        disabled={disabled}
+                        aria-label="Hopp over"
+                        title="Hopp over denne aktiviteten i dag"
+                        onClick={() => onSkipActivity(sight.id)}
+                      >
+                        Hopp over
+                      </button>
+                    ) : null}
                     <button
                       type="button"
                       className="v2-via-remove"

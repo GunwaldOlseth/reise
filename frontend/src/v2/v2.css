@@ -6911,6 +6911,50 @@ html[data-theme='plasma'] .v2-shell {
   color: color-mix(in srgb, #3a9a5c 72%, var(--v2-ink));
 }
 
+.v2-live-activity-skipped-list {
+  list-style: none;
+  margin: 0.35rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.v2-live-activity-skipped-item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.4rem 0.55rem;
+  border-radius: 0.55rem;
+  border: 1px dashed var(--v2-line);
+  background: color-mix(in srgb, var(--v2-panel) 94%, var(--v2-bg) 6%);
+}
+
+.v2-live-activity-skipped-item-label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: color-mix(in srgb, #3a9a5c 72%, var(--v2-ink));
+}
+
+.v2-sight-row-actions .v2-activity-skip-btn {
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 650;
+  padding: 0.2rem 0.45rem;
+  border-radius: 999px;
+  border: 1px solid var(--v2-line);
+  background: color-mix(in srgb, var(--v2-panel) 88%, var(--v2-bg) 12%);
+  color: var(--v2-muted);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.v2-sight-row-actions .v2-activity-skip-btn:hover:not(:disabled) {
+  color: var(--v2-ink);
+  border-color: color-mix(in srgb, var(--v2-line) 70%, var(--v2-ink) 30%);
+}
+
 .v2-log-head {
   margin-bottom: 0.75rem;
 }
