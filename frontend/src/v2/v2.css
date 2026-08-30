@@ -4937,6 +4937,66 @@ html[data-theme='plasma'] .v2-shell {
 
 .v2-activity-prices,
 .v2-price-paid-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.55rem;
+}
+
+.v2-price-paid-row .v2-price-paid-field {
+  flex: 1 1 8rem;
+  min-width: 0;
+}
+
+.v2-price-toggles {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  flex: 0 0 auto;
+}
+
+.v2-status-toggle {
+  appearance: none;
+  border: 1px solid var(--v2-line-strong);
+  border-radius: 999px;
+  padding: 0.45rem 0.8rem;
+  min-height: 2.5rem;
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 650;
+  line-height: 1.2;
+  cursor: pointer;
+  white-space: nowrap;
+  transition:
+    background 0.12s ease,
+    border-color 0.12s ease,
+    color 0.12s ease;
+}
+
+.v2-status-toggle.is-off {
+  border-color: color-mix(in srgb, #c44 58%, var(--v2-line));
+  background: color-mix(in srgb, #c44 14%, var(--v2-panel));
+  color: color-mix(in srgb, #c44 78%, var(--v2-ink));
+}
+
+.v2-status-toggle.is-on {
+  border-color: color-mix(in srgb, #3a9a5c 58%, var(--v2-line));
+  background: color-mix(in srgb, #3a9a5c 20%, var(--v2-panel));
+  color: color-mix(in srgb, #2d7a47 82%, var(--v2-ink));
+  box-shadow: 0 0 0 1px color-mix(in srgb, #3a9a5c 42%, transparent);
+}
+
+.v2-status-toggle:hover:not(:disabled) {
+  filter: brightness(1.04);
+}
+
+.v2-status-toggle:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.v2-activity-prices {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 0.55rem;
