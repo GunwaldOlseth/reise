@@ -123,7 +123,14 @@ import { NoteEditor } from './NoteEditor'
 import { compactNoteHtml } from './noteHtml'
 import { ClockTimeInput } from './ClockTimeInput'
 import { useConfirmDelete } from './ConfirmDelete'
-import { PurposeToggle, StayKindToggle, TicketToggle, PaidToggle, MapHideToggle } from './PurposeToggle'
+import {
+  PurposeToggle,
+  StayKindToggle,
+  TicketToggle,
+  PaidToggle,
+  BookedToggle,
+  MapHideToggle,
+} from './PurposeToggle'
 import { TransportCompanyInput } from './TransportCompanyInput'
 import { SightList, SightPreview, PlaceLinkedPreview } from './SightList'
 import './v2.css'
@@ -2050,7 +2057,7 @@ function PlaceStopPanel({
                     />
                   </label>
                   <div className="v2-price-paid-row full">
-                    <label>
+                    <label className="v2-price-paid-field">
                       Pris
                       <input
                         value={stay.price || ''}
@@ -2076,37 +2083,23 @@ function PlaceStopPanel({
                         }
                       />
                     </label>
-                    <label className="v2-check-row">
-                      <input
-                        type="checkbox"
+                    <div className="v2-price-toggles">
+                      <PaidToggle
                         checked={stay.paid || false}
                         disabled={disabled}
-                        onChange={(e) =>
-                          patchStay(
-                            { paid: e.target.checked },
-                            true,
-                            { immediate: true },
-                          )
+                        onChange={(paid) =>
+                          patchStay({ paid }, true, { immediate: true })
                         }
                       />
-                      Betalt
-                    </label>
+                      <BookedToggle
+                        checked={stay.booked || false}
+                        disabled={disabled}
+                        onChange={(booked) =>
+                          patchStay({ booked }, true, { immediate: true })
+                        }
+                      />
+                    </div>
                   </div>
-                  <label className="v2-check-row">
-                    <input
-                      type="checkbox"
-                      checked={stay.booked || false}
-                      disabled={disabled}
-                      onChange={(e) =>
-                        patchStay(
-                          { booked: e.target.checked },
-                          true,
-                          { immediate: true },
-                        )
-                      }
-                    />
-                    Er booket
-                  </label>
                   {stay.booked && (
                     <label>
                       Hvor er det booket?

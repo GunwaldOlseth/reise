@@ -160,17 +160,38 @@ export function PaidToggle({
   onChange: (next: boolean) => void
 }) {
   return (
-    <label
-      className="v2-change-check"
+    <button
+      type="button"
+      className={`v2-status-toggle${checked ? ' is-on' : ' is-off'}`}
+      disabled={disabled}
+      aria-pressed={checked}
       title={checked ? 'Betalt' : 'Merk som betalt'}
+      onClick={() => onChange(!checked)}
     >
-      <input
-        type="checkbox"
-        checked={checked}
-        disabled={disabled}
-        onChange={(e) => onChange(e.target.checked)}
-      />
       Betalt
-    </label>
+    </button>
+  )
+}
+
+export function BookedToggle({
+  checked,
+  disabled,
+  onChange,
+}: {
+  checked: boolean
+  disabled?: boolean
+  onChange: (next: boolean) => void
+}) {
+  return (
+    <button
+      type="button"
+      className={`v2-status-toggle${checked ? ' is-on' : ' is-off'}`}
+      disabled={disabled}
+      aria-pressed={checked}
+      title={checked ? 'Booket' : 'Merk som booket'}
+      onClick={() => onChange(!checked)}
+    >
+      Er booket
+    </button>
   )
 }
