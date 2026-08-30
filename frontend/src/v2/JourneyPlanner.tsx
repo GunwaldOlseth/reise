@@ -154,15 +154,48 @@ function HotelCheckTimesRow({
   disabled,
   onChange,
   onBlur,
+  nights,
+  onNightsChange,
+  onNightsBlur,
 }: {
   checkInTime: string
   checkOutTime: string
   disabled?: boolean
   onChange: (partial: Pick<JourneyStay, 'checkInTime' | 'checkOutTime'>) => void
   onBlur?: () => void
+  nights?: number
+  onNightsChange?: (nights: number) => void
+  onNightsBlur?: (nights: number) => void
 }) {
+  const showNights = onNightsChange != null
   return (
-    <div className="v2-hotel-check-times">
+    <div
+      className={`v2-hotel-stay-row${showNights ? ' has-nights' : ''}`}
+    >
+      {showNights ? (
+        <label>
+          Antall netter
+          <input
+            type="text"
+            inputMode="numeric"
+            pattern="[0-9]*"
+            disabled={disabled}
+            value={String(nights ?? '')}
+            onChange={(e) => {
+              const raw = e.target.value
+              if (raw !== '' && !/^\d+$/.test(raw)) return
+              onNightsChange!(raw === '' ? 0 : Number(raw))
+            }}
+            onBlur={(e) => {
+              const n = Math.max(
+                1,
+                Number(e.target.value.replace(/[^\d]/g, '') || '1'),
+              )
+              onNightsBlur?.(n)
+            }}
+          />
+        </label>
+      ) : null}
       <label>
         Innsjekk
         <ClockTimeInput
@@ -1976,57 +2009,39 @@ function PlaceStopPanel({
                       }
                     />
                   </label>
-                  <label>
-                    Antall netter
-                    <input
-                      type="text"
-                      inputMode="numeric"
-                      pattern="[0-9]*"
-                      disabled={disabled}
-                      value={String(stay.nights || '')}
-                      onChange={(e) => {
-                        const raw = e.target.value
-                        if (raw !== '' && !/^\d+$/.test(raw)) return
-                        const n = raw === '' ? 0 : Number(raw)
-                        onChange({
-                          ...stop,
-                          stay: {
-                            ...stay,
-                            nights: n,
-                          },
-                        })
-                      }}
-                      onBlur={(e) => {
-                        const n = Math.max(
-                          1,
-                          Number(e.target.value.replace(/[^\d]/g, '') || '1'),
-                        )
-                        const nextStay = {
+                  <HotelCheckTimesRow
+                    nights={stay.nights || 0}
+                    onNightsChange={(n) =>
+                      onChange({
+                        ...stop,
+                        stay: {
                           ...stay,
                           nights: n,
-                          hotelName: (stay.hotelName || '').trim(),
-                          address: (stay.address || '').trim(),
-                          price: (stay.price || '').trim(),
-                        }
-                        onChange(
-                          {
-                            ...stop,
-                            stay: nextStay,
-                            sights: normalizeSights(stop.sights),
-                            purpose: nextStay.hotelName
-                              ? 'visit'
-                              : stop.purpose,
-                          },
-                          {
-                            immediate: true,
-                            nightsDelta: n - nightsAtEditStart.current,
-                          },
-                        )
-                        nightsAtEditStart.current = n
-                      }}
-                    />
-                  </label>
-                  <HotelCheckTimesRow
+                        },
+                      })
+                    }
+                    onNightsBlur={(n) => {
+                      const nextStay = {
+                        ...stay,
+                        nights: n,
+                        hotelName: (stay.hotelName || '').trim(),
+                        address: (stay.address || '').trim(),
+                        price: (stay.price || '').trim(),
+                      }
+                      onChange(
+                        {
+                          ...stop,
+                          stay: nextStay,
+                          sights: normalizeSights(stop.sights),
+                          purpose: nextStay.hotelName ? 'visit' : stop.purpose,
+                        },
+                        {
+                          immediate: true,
+                          nightsDelta: n - nightsAtEditStart.current,
+                        },
+                      )
+                      nightsAtEditStart.current = n
+                    }}
                     checkInTime={hotelCheckInTime(stay)}
                     checkOutTime={hotelCheckOutTime(stay)}
                     disabled={disabled}
