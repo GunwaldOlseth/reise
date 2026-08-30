@@ -117,6 +117,7 @@ import {
   type JourneyVia,
 } from './journeyModel'
 import { localizeJourneyPlaces } from '../placeNames'
+import { BookedWhereSelect } from './BookedWhereSelect'
 import { CityDocsEditor } from './CityDocsEditor'
 import { CityInfoTip } from './CityInfoTip'
 import { NoteEditButton, NoteField } from './NoteField'
@@ -2114,26 +2115,11 @@ function PlaceStopPanel({
                   {stay.booked && (
                     <label>
                       Hvor er det booket?
-                      <input
+                      <BookedWhereSelect
                         value={stay.bookedWhere || ''}
                         disabled={disabled}
-                        placeholder="f.eks. Booking.com"
-                        onChange={(e) =>
-                          onChange({
-                            ...stop,
-                            stay: {
-                              ...stay,
-                              nights: stay.nights || 1,
-                              bookedWhere: e.target.value,
-                            },
-                          })
-                        }
-                        onBlur={(e) =>
-                          patchStay(
-                            { bookedWhere: e.target.value },
-                            true,
-                            { immediate: true },
-                          )
+                        onChange={(bookedWhere) =>
+                          patchStay({ bookedWhere }, true, { immediate: true })
                         }
                       />
                     </label>
