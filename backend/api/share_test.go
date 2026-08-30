@@ -20,11 +20,11 @@ func TestFormatShareHopTimeOnly(t *testing.T) {
 	if strings.Contains(label, "Tog") || strings.Contains(label, "Fly") {
 		t.Fatalf("should not include mode label: %q", label)
 	}
-	if !strings.Contains(label, "08:30–10:15") {
-		t.Fatalf("expected time span in %q", label)
+	if label != "08:30–10:15" {
+		t.Fatalf("expected only time span, got %q", label)
 	}
-	if !strings.Contains(label, "Bergen") {
-		t.Fatalf("expected place in %q", label)
+	if strings.Contains(label, "Bergen") {
+		t.Fatalf("should not include place: %q", label)
 	}
 }
 
@@ -40,18 +40,28 @@ func TestShareSubsForCruiseStop(t *testing.T) {
 			Days: []JourneyPackageDay{
 				{ID: "d0", Offset: 0, City: "Bergen", LeaveTime: "17:00"},
 				{ID: "d1", Offset: 1, City: "Flam", ArriveTime: "08:00", LeaveTime: "16:00", AllAboardTime: "15:30"},
+				{ID: "d2", Offset: 2, City: "Oslo", AtSea: true},
 			},
 		},
 	}
 	subs := shareSubsForStop(stop)
-	if len(subs) != 2 {
-		t.Fatalf("expected 2 subs, got %d", len(subs))
+	if len(subs) != 3 {
+		t.Fatalf("expected 3 subs (0..nights), got %d: %v", len(subs), subs)
 	}
 	if !strings.Contains(subs[1].Label, "Flam") {
 		t.Fatalf("second day missing port: %q", subs[1].Label)
 	}
-	if !strings.Contains(subs[1].Label, "Ank. 08:00") {
-		t.Fatalf("second day missing arrive: %q", subs[1].Label)
+	if !strings.Contains(subs[1].Label, "08:00–16:00") {
+		t.Fatalf("expected clock span without Ank/Avg: %q", subs[1].Label)
+	}
+	if strings.Contains(subs[1].Label, "Ank.") || strings.Contains(subs[1].Label, "Avg.") {
+		t.Fatalf("should not include departure labels: %q", subs[1].Label)
+	}
+	if !strings.Contains(subs[2].Label, "Oslo") {
+		t.Fatalf("at-sea day should list city: %q", subs[2].Label)
+	}
+	if !strings.Contains(subs[2].Label, "Til sjøs") {
+		t.Fatalf("at-sea day should mention til sjøs: %q", subs[2].Label)
 	}
 }
 
@@ -98,15 +108,12 @@ func TestBuildShareItineraryIncludesSubs(t *testing.T) {
 	if len(out.Places) != 2 {
 		t.Fatalf("places=%d", len(out.Places))
 	}
-	if len(out.Places[0].Subs) == 0 {
-		t.Fatal("cruise place should have subs")
+	if len(out.Places[0].Subs) != 2 {
+		t.Fatalf("expected 2 cruise subs (0..1 nights), got %d", len(out.Places[0].Subs))
 	}
 	hop := out.Places[0].Hops[0].Label
-	if strings.Contains(hop, "Fly") {
+	if hop != "12:00–13:30" {
 		t.Fatalf("hop should be time-only: %q", hop)
-	}
-	if !strings.Contains(hop, "12:00–13:30") {
-		t.Fatalf("hop missing times: %q", hop)
 	}
 
 	raw, err := json.Marshal(out)
