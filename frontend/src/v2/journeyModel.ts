@@ -1820,11 +1820,13 @@ export interface JourneyLiveEntry {
   sortOrder: number
 }
 
-/** Live: user skipped registering sight / excursion / other for a city-day. */
+/** Live: user skipped registering sight / excursion / other for a city-day or one planned activity. */
 export interface JourneyLiveActivitySkip {
   date: string
   stopId: string
   dayOffset: number
+  /** When set, only this planned activity was skipped — not the whole day. */
+  activityId?: string
 }
 
 export interface Journey {
@@ -1928,17 +1930,47 @@ export function normalizeLiveActivitySkips(
   for (const raw of list || []) {
     const date = (raw.date || '').trim()
     const stopId = (raw.stopId || '').trim()
+    const activityId = (raw.activityId || '').trim()
     const dayOffset =
       typeof raw.dayOffset === 'number' && raw.dayOffset >= 0
         ? Math.floor(raw.dayOffset)
         : 0
     if (!date || !stopId) continue
-    const key = `${date}\0${stopId}\0${dayOffset}`
+    const key = `${date}\0${stopId}\0${dayOffset}\0${activityId}`
     if (seen.has(key)) continue
     seen.add(key)
-    out.push({ date, stopId, dayOffset })
+    out.push({
+      date,
+      stopId,
+      dayOffset,
+      ...(activityId ? { activityId } : {}),
+    })
   }
   return out
+}
+
+export function liveSkippedActivityIds(
+  journey: Journey,
+  date: string,
+  stopId: string,
+  dayOffset: number,
+): Set<string> {
+  const d = date.trim()
+  const id = stopId.trim()
+  const offset = Math.max(0, Math.floor(dayOffset))
+  const ids = new Set<string>()
+  if (!d || !id) return ids
+  for (const s of normalizeLiveActivitySkips(journey.liveActivitySkips)) {
+    if (
+      s.date === d &&
+      s.stopId === id &&
+      s.dayOffset === offset &&
+      (s.activityId || '').trim()
+    ) {
+      ids.add((s.activityId || '').trim())
+    }
+  }
+  return ids
 }
 
 export function isLiveActivitySkipped(
@@ -1952,8 +1984,24 @@ export function isLiveActivitySkipped(
   if (!d || !id) return false
   const offset = Math.max(0, Math.floor(dayOffset))
   return normalizeLiveActivitySkips(journey.liveActivitySkips).some(
-    (s) => s.date === d && s.stopId === id && s.dayOffset === offset,
+    (s) =>
+      s.date === d &&
+      s.stopId === id &&
+      s.dayOffset === offset &&
+      !(s.activityId || '').trim(),
   )
+}
+
+export function isLiveActivityItemSkipped(
+  journey: Journey,
+  date: string,
+  stopId: string,
+  dayOffset: number,
+  activityId: string,
+): boolean {
+  const actId = activityId.trim()
+  if (!actId) return false
+  return liveSkippedActivityIds(journey, date, stopId, dayOffset).has(actId)
 }
 
 export function withLiveActivitySkip(
@@ -1967,7 +2015,11 @@ export function withLiveActivitySkip(
   const id = stopId.trim()
   const offset = Math.max(0, Math.floor(dayOffset))
   const rest = normalizeLiveActivitySkips(journey.liveActivitySkips).filter(
-    (s) => s.date !== d || s.stopId !== id || s.dayOffset !== offset,
+    (s) =>
+      s.date !== d ||
+      s.stopId !== id ||
+      s.dayOffset !== offset ||
+      (s.activityId || '').trim(),
   )
   if (!skipped || !d || !id) {
     return { ...journey, liveActivitySkips: rest }
@@ -1975,6 +2027,37 @@ export function withLiveActivitySkip(
   return {
     ...journey,
     liveActivitySkips: [...rest, { date: d, stopId: id, dayOffset: offset }],
+  }
+}
+
+export function withLiveActivityItemSkip(
+  journey: Journey,
+  date: string,
+  stopId: string,
+  dayOffset: number,
+  activityId: string,
+  skipped: boolean,
+): Journey {
+  const d = date.trim()
+  const id = stopId.trim()
+  const actId = activityId.trim()
+  const offset = Math.max(0, Math.floor(dayOffset))
+  const rest = normalizeLiveActivitySkips(journey.liveActivitySkips).filter(
+    (s) =>
+      s.date !== d ||
+      s.stopId !== id ||
+      s.dayOffset !== offset ||
+      (s.activityId || '').trim() !== actId,
+  )
+  if (!skipped || !d || !id || !actId) {
+    return { ...journey, liveActivitySkips: rest }
+  }
+  return {
+    ...journey,
+    liveActivitySkips: [
+      ...rest,
+      { date: d, stopId: id, dayOffset: offset, activityId: actId },
+    ],
   }
 }
 

@@ -7,6 +7,7 @@ import { CountdownCard, HolidayCountdown, osloWallTimeMs } from './HolidayCountd
 import { nextScheduledDeparture } from './transportSchedule'
 import {
   activitiesForDay,
+  activityDisplayName,
   addDaysIso,
   calendarDaysForStop,
   cityStayDays,
@@ -16,6 +17,7 @@ import {
   formatCityStation,
   formatTransportOptionLabel,
   isLiveActivitySkipped,
+  liveSkippedActivityIds,
   isPackageStop,
   journeyActivityCalendarBounds,
   journeyDateSpan,
@@ -43,6 +45,7 @@ import {
   viaTransportOptions,
   sortTransportOptions,
   withLiveActivitySkip,
+  withLiveActivityItemSkip,
   withTakenTransportOption,
   type Journey,
   type JourneyActivity,
@@ -396,6 +399,24 @@ export function JourneyLive({
     skipped: boolean,
   ) {
     patchJourney(withLiveActivitySkip(journey, date, stopId, dayOffset, skipped))
+  }
+
+  function setActivityItemSkip(
+    stopId: string,
+    dayOffset: number,
+    activityId: string,
+    skipped: boolean,
+  ) {
+    patchJourney(
+      withLiveActivityItemSkip(
+        journey,
+        date,
+        stopId,
+        dayOffset,
+        activityId,
+        skipped,
+      ),
+    )
   }
 
   function moveActivityOnStop(
@@ -793,7 +814,15 @@ export function JourneyLive({
               target.stop.sights,
               target.dayOffset,
             )
-            const skipped = isLiveActivitySkipped(
+            const skippedIds = liveSkippedActivityIds(
+              journey,
+              date,
+              target.stop.id,
+              target.dayOffset,
+            )
+            const activeSights = daySights.filter((s) => !skippedIds.has(s.id))
+            const skippedSights = daySights.filter((s) => skippedIds.has(s.id))
+            const daySkipped = isLiveActivitySkipped(
               journey,
               date,
               target.stop.id,
@@ -808,7 +837,7 @@ export function JourneyLive({
                 key={`${target.stop.id}:${target.dayOffset}`}
                 className="v2-live-activity-group"
               >
-                {skipped && daySights.length === 0 ? (
+                {daySkipped && daySights.length === 0 ? (
                   <div className="v2-live-activity-skipped">
                     <p className="v2-live-activity-skipped-label">
                       Hoppet over severdighet, utflukt og annet
@@ -830,7 +859,7 @@ export function JourneyLive({
                     <SightList
                       compact
                       heading={heading}
-                      sights={daySights}
+                      sights={activeSights}
                       dayOffset={target.dayOffset}
                       disabled={disabled}
                       suggestCountry={target.stop.country}
@@ -843,15 +872,53 @@ export function JourneyLive({
                       onMoveToDate={(activityId, targetDate) =>
                         moveActivityToDate(target.stop.id, activityId, targetDate)
                       }
+                      onSkipActivity={(activityId) =>
+                        setActivityItemSkip(
+                          target.stop.id,
+                          target.dayOffset,
+                          activityId,
+                          true,
+                        )
+                      }
                       onChange={(sights) =>
                         updateStopActivities(
                           target.stop.id,
                           target.dayOffset,
-                          sights,
+                          [...sights, ...skippedSights],
                         )
                       }
                     />
-                    {daySights.length === 0 ? (
+                    {skippedSights.length > 0 ? (
+                      <ul className="v2-live-activity-skipped-list">
+                        {skippedSights.map((sight) => (
+                          <li
+                            key={sight.id}
+                            className="v2-live-activity-skipped-item"
+                          >
+                            <span className="v2-live-activity-skipped-item-label">
+                              Hoppet over {activityDisplayName(sight)}
+                            </span>
+                            <button
+                              type="button"
+                              className="v2-chip-btn"
+                              disabled={disabled}
+                              title="Gjør aktiviteten likevel"
+                              onClick={() =>
+                                setActivityItemSkip(
+                                  target.stop.id,
+                                  target.dayOffset,
+                                  sight.id,
+                                  false,
+                                )
+                              }
+                            >
+                              Gjør likevel
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : null}
+                    {activeSights.length === 0 && skippedSights.length === 0 ? (
                       <button
                         type="button"
                         className="v2-chip-btn v2-live-activity-skip"
