@@ -34,6 +34,8 @@ export interface ShareHop {
 
 export interface SharePlace {
   title: string
+  /** Cruise / package day rows under the stop title. */
+  subs?: ShareHop[]
   hops: ShareHop[]
 }
 
@@ -166,22 +168,68 @@ function formatTransportBit(
     .join(' ')
 }
 
+function formatShareTimeBit(
+  opt: NonNullable<ReturnType<typeof firstTransportOption>>,
+): string {
+  if (modeIsWalk(opt.mode)) {
+    const m = (opt.minutes || '').trim()
+    return m ? `${m} min` : ''
+  }
+  const from = (opt.startTime || '').trim()
+  const to = (opt.endTime || '').trim()
+  if (from && to && from !== to) return `${from}–${to}`
+  if (from) return from
+  if (to) return to
+  const m = (opt.minutes || '').trim()
+  return m ? `${m} min` : ''
+}
+
 export function formatShareHop(
   via: JourneyVia,
   pick: 'first' | 'chosen' = 'chosen',
   detailed = false,
+  timeOnly = false,
 ): string {
   const opt = pickTransportOption(via, pick)
   const place = formatCityStation(via.title, via.station)
   const bits: string[] = []
   if (opt) {
-    const bit = formatTransportBit(opt, detailed)
+    const bit = timeOnly
+      ? formatShareTimeBit(opt)
+      : formatTransportBit(opt, detailed)
     if (bit) bits.push(bit)
   }
   if (place) bits.push(place)
   const change = formatChangeTimeLabel(via, opt)
   if (change) bits.push(change)
   return bits.filter(Boolean).join(' · ')
+}
+
+function shareSubsForStop(stop: JourneyStop): ShareHop[] {
+  if (!isPackageStop(stop)) return []
+  const pack = packageOf(stop)
+  if (!pack?.days?.length) return []
+  const type = stop.kind
+  const nights = packageNightsOf(pack) || 1
+  const freeLabel = packageFreeDayLabel(type)
+  const days = [...pack.days].sort((a, b) => a.offset - b.offset)
+  const subs: ShareHop[] = []
+  for (const day of days) {
+    const row = formatPackageDayListLine(day, {
+      type,
+      nights,
+      basePlace: pack.basePlace,
+      freeLabel,
+      placeFallback: type === 'cruise' ? 'Havn' : 'Sted',
+    })
+    if (!row) continue
+    const arrive = (stop.arriveDate || '').trim()
+    const label = arrive
+      ? `${formatDateNO(addDaysIso(arrive, day.offset))} · ${row}`
+      : row
+    subs.push({ label })
+  }
+  return subs
 }
 
 export function buildShareItinerary(
@@ -198,11 +246,15 @@ export function buildShareItinerary(
     if (next) {
       const leg = legForGap(journey, stop.id, next.id)
       for (const via of transportSegments(leg, { sort: pick === 'first' ? false : undefined })) {
-        const label = formatShareHop(via, pick)
+        const label = formatShareHop(via, pick, false, true)
         if (label) hops.push({ label })
       }
     }
-    return { title: shareStopTitle(stop), hops }
+    return {
+      title: shareStopTitle(stop),
+      subs: shareSubsForStop(stop),
+      hops,
+    }
   })
   return {
     name: (trip.name || '').trim(),
