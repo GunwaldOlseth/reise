@@ -1,19 +1,13 @@
+import { useSyncExternalStore, useId } from 'react'
 import {
+  bookingWhereSuggestionTitles,
   loadUsefulLinks,
+  subscribeUsefulLinks,
   usableUsefulLinks,
-  usefulLinkTitle,
 } from '../userSettings'
 
-function bookedWhereOptions(current: string): string[] {
-  const titles = usableUsefulLinks(loadUsefulLinks()).map((link) =>
-    usefulLinkTitle(link),
-  )
-  const unique = [...new Set(titles.filter(Boolean))]
-  const trimmed = current.trim()
-  if (trimmed && !unique.includes(trimmed)) {
-    unique.unshift(trimmed)
-  }
-  return unique
+function readUsefulLinkCount(): number {
+  return usableUsefulLinks(loadUsefulLinks()).length
 }
 
 export function BookedWhereSelect({
@@ -25,26 +19,36 @@ export function BookedWhereSelect({
   disabled?: boolean
   onChange: (next: string) => void
 }) {
-  const options = bookedWhereOptions(value)
-  const hasLinks = usableUsefulLinks(loadUsefulLinks()).length > 0
+  const listId = useId()
+  const customLinkCount = useSyncExternalStore(
+    subscribeUsefulLinks,
+    readUsefulLinkCount,
+    readUsefulLinkCount,
+  )
+  const options = bookingWhereSuggestionTitles(value)
+  const hasCustomLinks = customLinkCount > 0
 
   return (
     <>
-      <select
+      <input
+        type="text"
+        className="v2-booked-where-input"
+        list={listId}
         value={value}
-        disabled={disabled || !hasLinks}
+        disabled={disabled}
+        placeholder="Velg eller skriv nettsted…"
+        autoComplete="off"
         onChange={(e) => onChange(e.target.value)}
-      >
-        <option value="">Velg nettsted…</option>
+      />
+      <datalist id={listId}>
         {options.map((title) => (
-          <option key={title} value={title}>
-            {title}
-          </option>
+          <option key={title} value={title} />
         ))}
-      </select>
-      {!hasLinks ? (
+      </datalist>
+      {!hasCustomLinks ? (
         <p className="v2-meta" style={{ margin: '0.25rem 0 0' }}>
-          Legg til nettsteder under Innstillinger → Nyttige lenker.
+          Vanlige nettsteder er foreslått. Legg til egne under Innstillinger →
+          Nyttige lenker.
         </p>
       ) : null}
     </>

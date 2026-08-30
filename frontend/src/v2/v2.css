@@ -5948,6 +5948,20 @@ html[data-theme='plasma'] .v2-shell {
   grid-column: 1 / -1;
 }
 
+.v2-booked-where-input {
+  width: 100%;
+  appearance: none;
+  border: 1px solid var(--v2-line-strong);
+  background: var(--v2-panel);
+  color: var(--v2-ink);
+  color-scheme: var(--v2-scheme);
+  border-radius: 0.55rem;
+  padding: 0.55rem 0.65rem;
+  font: inherit;
+  font-size: 0.95rem;
+  min-height: 2.5rem;
+}
+
 .v2-hotel-row {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
