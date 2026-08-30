@@ -6885,6 +6885,32 @@ html[data-theme='plasma'] .v2-shell {
   margin: 0;
 }
 
+.v2-live-activity-skip {
+  align-self: flex-start;
+  font-size: 0.78rem;
+  min-height: 1.85rem;
+  padding: 0.25rem 0.55rem;
+  color: var(--v2-muted);
+}
+
+.v2-live-activity-skipped {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.55rem 0.65rem;
+  border-radius: 0.65rem;
+  border: 1px solid var(--v2-line);
+  background: color-mix(in srgb, var(--v2-panel) 92%, var(--v2-bg) 8%);
+}
+
+.v2-live-activity-skipped-label {
+  margin: 0;
+  font-size: 0.82rem;
+  font-weight: 650;
+  color: color-mix(in srgb, #3a9a5c 72%, var(--v2-ink));
+}
+
 .v2-log-head {
   margin-bottom: 0.75rem;
 }

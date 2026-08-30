@@ -274,6 +274,33 @@ func normalizeJourney(j *Journey) {
 	if j.Live == nil {
 		j.Live = []JourneyLiveEntry{}
 	}
+	if j.LiveActivitySkips == nil {
+		j.LiveActivitySkips = []JourneyLiveActivitySkip{}
+	}
+	seenSkips := make(map[string]struct{})
+	normSkips := make([]JourneyLiveActivitySkip, 0, len(j.LiveActivitySkips))
+	for _, s := range j.LiveActivitySkips {
+		date := strings.TrimSpace(s.Date)
+		stopID := strings.TrimSpace(s.StopID)
+		if date == "" || stopID == "" {
+			continue
+		}
+		offset := s.DayOffset
+		if offset < 0 {
+			offset = 0
+		}
+		key := date + "\x00" + stopID + "\x00" + strconv.Itoa(offset)
+		if _, ok := seenSkips[key]; ok {
+			continue
+		}
+		seenSkips[key] = struct{}{}
+		normSkips = append(normSkips, JourneyLiveActivitySkip{
+			Date:      date,
+			StopID:    stopID,
+			DayOffset: offset,
+		})
+	}
+	j.LiveActivitySkips = normSkips
 	for i := range j.Live {
 		j.Live[i].SortOrder = i
 		j.Live[i].Date = strings.TrimSpace(j.Live[i].Date)

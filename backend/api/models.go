@@ -394,13 +394,21 @@ type JourneyLiveEntry struct {
 	SortOrder int            `json:"sortOrder" firestore:"sortOrder"`
 }
 
+// JourneyLiveActivitySkip marks a city-day where nothing was logged in Live.
+type JourneyLiveActivitySkip struct {
+	Date      string `json:"date" firestore:"date"`
+	StopID    string `json:"stopId" firestore:"stopId"`
+	DayOffset int    `json:"dayOffset" firestore:"dayOffset"`
+}
+
 // Journey is the trip thread: ordered stops + legs between them (v2 planner).
 type Journey struct {
-	ID        string             `json:"id" firestore:"-"`
-	TripID    string             `json:"tripId" firestore:"tripId"`
-	Stops     []JourneyStop      `json:"stops" firestore:"stops"`
-	Legs      []JourneyLeg       `json:"legs" firestore:"legs"`
-	Live      []JourneyLiveEntry `json:"live,omitempty" firestore:"live,omitempty"`
-	CreatedAt time.Time          `json:"createdAt" firestore:"createdAt"`
-	UpdatedAt time.Time          `json:"updatedAt" firestore:"updatedAt"`
+	ID                string                    `json:"id" firestore:"-"`
+	TripID            string                    `json:"tripId" firestore:"tripId"`
+	Stops             []JourneyStop             `json:"stops" firestore:"stops"`
+	Legs              []JourneyLeg              `json:"legs" firestore:"legs"`
+	Live              []JourneyLiveEntry        `json:"live,omitempty" firestore:"live,omitempty"`
+	LiveActivitySkips []JourneyLiveActivitySkip `json:"liveActivitySkips,omitempty" firestore:"liveActivitySkips,omitempty"`
+	CreatedAt         time.Time                 `json:"createdAt" firestore:"createdAt"`
+	UpdatedAt         time.Time                 `json:"updatedAt" firestore:"updatedAt"`
 }
