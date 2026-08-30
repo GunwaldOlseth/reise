@@ -1421,6 +1421,13 @@ export function withTakenTransportOption(
   }))
 }
 
+/** Clear kvittert-valg on all alternatives for a via. */
+export function clearTakenTransportOptions(
+  options: JourneyTransportOption[],
+): JourneyTransportOption[] {
+  return options.map((o) => ({ ...o, taken: false }))
+}
+
 export function withViaOptions(
   via: JourneyVia,
   options: JourneyTransportOption[],

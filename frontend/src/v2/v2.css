@@ -6814,6 +6814,21 @@ html[data-theme='plasma'] .v2-shell {
   min-width: 0;
 }
 
+.v2-live-ride-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.35rem;
+  flex-shrink: 0;
+}
+
+.v2-live-reset-taken {
+  font-size: 0.78rem;
+  padding: 0.3rem 0.55rem;
+  min-height: 1.85rem;
+}
+
 .v2-live-ride-opts {
   list-style: none;
   margin: 0;
