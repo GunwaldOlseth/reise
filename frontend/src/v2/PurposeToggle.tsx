@@ -170,7 +170,7 @@ export function PaidToggle({
       title={checked ? 'Betalt' : 'Merk som betalt'}
       onClick={() => onChange(!checked)}
     >
-      Betalt
+      {checked ? 'Betalt' : 'Ikke betalt'}
     </button>
   )
 }
