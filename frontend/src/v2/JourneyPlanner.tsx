@@ -2140,7 +2140,7 @@ function PlaceStopPanel({
                       value={stay.notes || ''}
                       disabled={disabled}
                       placeholder="Notat om hotellet"
-                      previewLines={notePreviewLines}
+                      previewLines={Math.min(notePreviewLines ?? 12, 4)}
                       editing={stayNoteEditing || !noteHasContent(stay.notes)}
                       onEditingChange={setStayNoteEditing}
                       onChange={(html) =>
