@@ -169,6 +169,7 @@ export function SightList({
   calendarMin,
   calendarMax,
   onMoveToDate,
+  previewLines,
   onChange,
 }: {
   sights?: JourneyActivity[] | null
@@ -188,6 +189,7 @@ export function SightList({
   calendarMin?: string
   calendarMax?: string
   onMoveToDate?: (activityId: string, date: string) => void
+  previewLines?: number
   onChange: (sights: JourneyActivity[]) => void
 }) {
   const askDelete = useConfirmDelete()
@@ -649,6 +651,7 @@ export function SightList({
                     heading=""
                     firstTitlePlaceholder="Notat"
                     firstBodyPlaceholder="Møtested, billett, tips…"
+                    previewLines={previewLines}
                     onChange={(next, opts) =>
                       emit(
                         draftRef.current.map((s, i) =>
