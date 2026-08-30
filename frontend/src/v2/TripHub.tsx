@@ -36,7 +36,7 @@ export type TripHubTab =
   | 'weather'
   | 'expenses'
 
-const MAIN_TABS: { id: TripHubTab; label: string; title: string }[] = [
+const HUB_TABS: { id: TripHubTab; label: string; title: string }[] = [
   {
     id: 'plan',
     label: 'Plan',
@@ -61,11 +61,7 @@ const MAIN_TABS: { id: TripHubTab; label: string; title: string }[] = [
   },
 ]
 
-const LOG_TAB: { id: TripHubTab; label: string; title: string } = {
-  id: 'log',
-  label: 'Logg',
-  title: 'Alt logget utenom planen på alle dager',
-}
+const LOG_TAB_TITLE = 'Alt logget utenom planen på alle dager'
 
 export function TripHub({
   tripId,
@@ -345,6 +341,18 @@ export function TripHub({
                 <button
                   type="button"
                   role="menuitem"
+                  title={LOG_TAB_TITLE}
+                  className={tab === 'log' ? 'is-active' : undefined}
+                  onClick={() => {
+                    setMenuOpen(false)
+                    goTab('log')
+                  }}
+                >
+                  Logg
+                </button>
+                <button
+                  type="button"
+                  role="menuitem"
                   onClick={() => {
                     setMenuOpen(false)
                     setEditOpen(true)
@@ -449,29 +457,17 @@ export function TripHub({
       </header>
 
       <nav className="v2-hub-nav" aria-label="Turmeny">
-        <div className="v2-hub-nav-main">
-          {MAIN_TABS.map((t) => (
-            <button
-              key={t.id}
-              type="button"
-              className={`v2-hub-tab${tab === t.id ? ' is-active' : ''}`}
-              title={t.title}
-              onClick={() => goTab(t.id)}
-            >
-              {t.label}
-            </button>
-          ))}
-        </div>
-        <div className="v2-hub-nav-secondary">
+        {HUB_TABS.map((t) => (
           <button
+            key={t.id}
             type="button"
-            className={`v2-hub-tab${tab === LOG_TAB.id ? ' is-active' : ''}`}
-            title={LOG_TAB.title}
-            onClick={() => goTab(LOG_TAB.id)}
+            className={`v2-hub-tab${tab === t.id ? ' is-active' : ''}`}
+            title={t.title}
+            onClick={() => goTab(t.id)}
           >
-            {LOG_TAB.label}
+            {t.label}
           </button>
-        </div>
+        ))}
       </nav>
 
       <div className="v2-hub-body">
