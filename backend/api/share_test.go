@@ -20,8 +20,8 @@ func TestFormatShareHopTimeOnly(t *testing.T) {
 	if strings.Contains(label, "Tog") || strings.Contains(label, "Fly") {
 		t.Fatalf("should not include mode label: %q", label)
 	}
-	if label != "08:30–10:15" {
-		t.Fatalf("expected only time span, got %q", label)
+	if label != "1 timer 45 min" {
+		t.Fatalf("expected duration with hours and minutes, got %q", label)
 	}
 	if strings.Contains(label, "Bergen") {
 		t.Fatalf("should not include place: %q", label)
@@ -51,17 +51,29 @@ func TestShareSubsForCruiseStop(t *testing.T) {
 	if !strings.Contains(subs[1].Label, "Flam") {
 		t.Fatalf("second day missing port: %q", subs[1].Label)
 	}
-	if !strings.Contains(subs[1].Label, "08:00–16:00") {
-		t.Fatalf("expected clock span without Ank/Avg: %q", subs[1].Label)
+	if !strings.Contains(subs[1].Label, "8 timer") {
+		t.Fatalf("expected sailing duration in hours: %q", subs[1].Label)
 	}
-	if strings.Contains(subs[1].Label, "Ank.") || strings.Contains(subs[1].Label, "Avg.") {
-		t.Fatalf("should not include departure labels: %q", subs[1].Label)
+	if strings.Contains(subs[1].Label, "08:00") || strings.Contains(subs[1].Label, "Ank.") {
+		t.Fatalf("should not include clock times: %q", subs[1].Label)
+	}
+	// city · date · duration order
+	flamParts := strings.Split(subs[1].Label, " · ")
+	if len(flamParts) < 3 || flamParts[0] != "Flam" {
+		t.Fatalf("expected city first: %q", subs[1].Label)
 	}
 	if !strings.Contains(subs[2].Label, "Oslo") {
 		t.Fatalf("at-sea day should list city: %q", subs[2].Label)
 	}
-	if !strings.Contains(subs[2].Label, "Til sjøs") {
-		t.Fatalf("at-sea day should mention til sjøs: %q", subs[2].Label)
+	if !strings.Contains(subs[2].Label, "Cruise") {
+		t.Fatalf("at-sea day should say Cruise: %q", subs[2].Label)
+	}
+	osloParts := strings.Split(subs[2].Label, " · ")
+	if len(osloParts) < 3 || osloParts[0] != "Oslo" || osloParts[len(osloParts)-1] != "Cruise" {
+		t.Fatalf("expected Oslo · date · Cruise order: %q", subs[2].Label)
+	}
+	if strings.Contains(subs[2].Label, "Til sjøs") {
+		t.Fatalf("should not use Til sjøs: %q", subs[2].Label)
 	}
 }
 
@@ -112,8 +124,8 @@ func TestBuildShareItineraryIncludesSubs(t *testing.T) {
 		t.Fatalf("expected 2 cruise subs (0..1 nights), got %d", len(out.Places[0].Subs))
 	}
 	hop := out.Places[0].Hops[0].Label
-	if hop != "12:00–13:30" {
-		t.Fatalf("hop should be time-only: %q", hop)
+	if hop != "1 timer 30 min" {
+		t.Fatalf("hop should be duration only: %q", hop)
 	}
 
 	raw, err := json.Marshal(out)
