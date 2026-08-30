@@ -95,7 +95,7 @@ func normalizeCityDocHolder(notes *string, docs *[]JourneyCityDoc) {
 	for _, d := range *docs {
 		d.Title = strings.TrimSpace(d.Title)
 		d.Body = strings.TrimSpace(d.Body)
-		if d.Title == "" && d.Body == "" {
+		if d.Body == "" {
 			continue
 		}
 		if d.ID == "" || d.ID == "notes" {
