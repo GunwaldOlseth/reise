@@ -16,7 +16,9 @@ import {
   packageFreeDayLabel,
   packageNightsOf,
   packageOf,
+  packagePortMinutes,
   packageTypeLabel,
+  optionDurationMinutes,
   effectiveHotelName,
   stayNights,
   stopDepartDate,
@@ -110,6 +112,7 @@ export function formatShareDateRange(start: string, end: string): string {
 }
 
 export function shareStopTitle(stop: JourneyStop): string {
+  let base: string
   if (isPackageStop(stop)) {
     const pack = packageOf(stop)
     return (
@@ -117,9 +120,30 @@ export function shareStopTitle(stop: JourneyStop): string {
     )
   }
   if (stop.kind === 'home') {
-    return (stop.city || stop.address || 'Hjem').trim()
+    base = (stop.city || stop.address || 'Hjem').trim()
+  } else {
+    base =
+      formatCityStation(stop.city, stop.station) ||
+      (stop.address || '').trim() ||
+      'Sted'
   }
-  return formatCityStation(stop.city, stop.station) || (stop.address || '').trim() || 'Sted'
+  const arrive = (stop.arriveDate || '').trim()
+  if (arrive) {
+    const d = formatDateNO(arrive)
+    if (d) return `${base} · ${d}`
+  }
+  return base
+}
+
+const SHARE_CRUISE_AT_SEA = 'Cruise'
+
+export function formatShareDurationHM(minutes: number): string {
+  const total = Math.max(0, Math.round(minutes))
+  const hours = Math.floor(total / 60)
+  const mins = total % 60
+  if (hours > 0 && mins > 0) return `${hours} timer ${mins} min`
+  if (hours > 0) return `${hours} timer`
+  return `${mins} min`
 }
 
 /** First row on the hop after current sort — not the kvitterte. */
@@ -168,20 +192,11 @@ function formatTransportBit(
     .join(' ')
 }
 
-function formatShareTimeBit(
+function formatShareDurationBit(
   opt: NonNullable<ReturnType<typeof firstTransportOption>>,
 ): string {
-  if (modeIsWalk(opt.mode)) {
-    const m = (opt.minutes || '').trim()
-    return m ? `${m} min` : ''
-  }
-  const from = (opt.startTime || '').trim()
-  const to = (opt.endTime || '').trim()
-  if (from && to && from !== to) return `${from}–${to}`
-  if (from) return from
-  if (to) return to
-  const m = (opt.minutes || '').trim()
-  return m ? `${m} min` : ''
+  const mins = optionDurationMinutes(opt)
+  return mins != null ? formatShareDurationHM(mins) : ''
 }
 
 export function formatShareHop(
@@ -192,7 +207,7 @@ export function formatShareHop(
 ): string {
   if (timeOnly) {
     const opt = pickTransportOption(via, pick)
-    return opt ? formatShareTimeBit(opt) : ''
+    return opt ? formatShareDurationBit(opt) : ''
   }
   const opt = pickTransportOption(via, pick)
   const place = formatCityStation(via.title, via.station)
@@ -207,17 +222,18 @@ export function formatShareHop(
   return bits.filter(Boolean).join(' · ')
 }
 
-function formatSharePackageDayLine(
+function formatSharePackageDayParts(
   stop: JourneyStop,
   day: import('./journeyModel').JourneyPackageDay,
   pack: NonNullable<ReturnType<typeof packageOf>>,
-  freeLabel: string,
+  atSeaLabel: string,
   placeFallback: string,
   nights: number,
-): string {
+): { head: string; duration: string } {
   const city = (day.city || '').trim()
   if (day.atSea) {
-    return city ? `${city} · ${freeLabel}` : freeLabel
+    if (city) return { head: city, duration: atSeaLabel }
+    return { head: atSeaLabel, duration: '' }
   }
   let place = city
   if (!place) {
@@ -234,13 +250,13 @@ function formatSharePackageDayLine(
   let leave = (day.leaveTime || '').trim()
   if (stop.kind === 'cruise' && isStart) arrive = ''
   if (stop.kind === 'cruise' && isLast) leave = ''
-  const parts = [place]
-  const from = arrive
-  const to = leave
-  if (from && to && from !== to) parts.push(`${from}–${to}`)
-  else if (from) parts.push(from)
-  else if (to) parts.push(to)
-  return parts.join(' · ')
+  const mins = packagePortMinutes(arrive, leave, {
+    allowOvernight: stop.kind !== 'cruise',
+  })
+  return {
+    head: place,
+    duration: mins != null ? formatShareDurationHM(mins) : '',
+  }
 }
 
 function shareSubsForStop(stop: JourneyStop): ShareHop[] {
@@ -249,7 +265,7 @@ function shareSubsForStop(stop: JourneyStop): ShareHop[] {
   if (!pack) return []
   const type = stop.kind
   const nights = packageNightsOf(pack) || 1
-  const freeLabel = packageFreeDayLabel(type)
+  const atSeaLabel = type === 'cruise' ? SHARE_CRUISE_AT_SEA : packageFreeDayLabel(type)
   const placeFallback = type === 'cruise' ? 'Havn' : 'Sted'
   const byOffset = new Map<number, import('./journeyModel').JourneyPackageDay>()
   for (const day of pack.days || []) {
@@ -260,29 +276,27 @@ function shareSubsForStop(stop: JourneyStop): ShareHop[] {
     let day = byOffset.get(offset)
     if (!day) {
       if (type === 'cruise') {
-        day = {
-          id: '',
-          offset,
-          atSea: true,
-        }
+        day = { id: '', offset, atSea: true }
       } else {
         continue
       }
     }
-    const row = formatSharePackageDayLine(
+    const { head, duration } = formatSharePackageDayParts(
       stop,
       day,
       pack,
-      freeLabel,
+      atSeaLabel,
       placeFallback,
       nights,
     )
-    if (!row) continue
+    if (!head) continue
+    const parts = [head]
     const arrive = (stop.arriveDate || '').trim()
-    const label = arrive
-      ? `${formatDateNO(addDaysIso(arrive, offset))} · ${row}`
-      : row
-    subs.push({ label })
+    if (arrive) {
+      parts.push(formatDateNO(addDaysIso(arrive, offset)))
+    }
+    if (duration) parts.push(duration)
+    subs.push({ label: parts.join(' · ') })
   }
   return subs
 }
@@ -361,6 +375,9 @@ export function buildItineraryPdfLines(
   } else {
     for (const place of short.places) {
       lines.push({ style: 'place', text: place.title })
+      for (const sub of place.subs || []) {
+        lines.push({ style: 'sub', text: sub.label })
+      }
       for (const hop of place.hops) {
         lines.push({ style: 'hop', text: hop.label })
       }
