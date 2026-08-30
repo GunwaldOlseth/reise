@@ -5294,6 +5294,12 @@ html[data-theme='plasma'] .v2-shell {
   cursor: pointer;
 }
 
+.v2-note-preview-empty {
+  color: var(--v2-muted);
+  min-height: 2.5rem;
+  cursor: text;
+}
+
 .v2-city-doc-title-row .v2-note-edit-btn {
   margin-left: 0.15rem;
 }
