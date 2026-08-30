@@ -7,26 +7,29 @@ import { CountdownCard, HolidayCountdown, osloWallTimeMs } from './HolidayCountd
 import { nextScheduledDeparture } from './transportSchedule'
 import {
   activitiesForDay,
-  activityDisplayName,
-  activityKindLabel,
   addDaysIso,
+  calendarDaysForStop,
   cityStayDays,
-  clockMinutesFromMidnight,
   effectiveHotelName,
   formatDateNO,
   formatChangeTimeLabel,
   formatCityStation,
   formatTransportOptionLabel,
   isPackageStop,
+  journeyActivityCalendarBounds,
   journeyDateSpan,
   liveHotelAlertText,
   liveKindLabel,
   liveMissingHotelAlerts,
+  moveActivityToCalendarDate,
+  moveActivityToDay,
   newLiveEntry,
   normalizeLive,
   optionIsTaken,
+  chosenFromOptions,
   packageFreeDayLabel,
   packageOf,
+  replaceDayActivities,
   stopDepartDate,
   stopGoalLabel,
   optionHasTicket,
@@ -50,6 +53,7 @@ import {
 import { TrashIcon, TransportModeIcon } from '../TransportModeIcon'
 import { useConfirmDelete } from './ConfirmDelete'
 import { TicketToggle } from './PurposeToggle'
+import { SightList } from './SightList'
 
 function firstStopOnDate(journey: Journey, date: string): JourneyStop | undefined {
   return [...(journey.stops || [])]
@@ -96,44 +100,6 @@ function dayOffsetOn(stop: JourneyStop, date: string): number {
   const b = new Date(`${date}T12:00:00`).getTime()
   if (Number.isNaN(a) || Number.isNaN(b)) return 0
   return Math.round((b - a) / 86_400_000)
-}
-
-function osloMinutesNow(): number {
-  const stamp = new Date().toLocaleTimeString('en-GB', {
-    timeZone: 'Europe/Oslo',
-    hour: '2-digit',
-    minute: '2-digit',
-    hourCycle: 'h23',
-  })
-  return clockMinutesFromMidnight(stamp) ?? 0
-}
-
-function optionClockMinutes(option: JourneyTransportOption): number | null {
-  return (
-    clockMinutesFromMidnight(option.startTime) ??
-    clockMinutesFromMidnight(option.endTime)
-  )
-}
-
-/**
- * Kvittert ride stays. Otherwise the next departure that has not passed yet;
- * if all times have passed, the last one.
- */
-function pickLiveOption(
-  options: JourneyTransportOption[],
-  isToday: boolean,
-  nowMins: number,
-): JourneyTransportOption | undefined {
-  if (!options.length) return undefined
-  const taken = options.find(optionIsTaken)
-  if (taken) return taken
-  if (!isToday) return options[0]
-  const next = options.find((option) => {
-    const at = optionClockMinutes(option)
-    if (at == null) return true
-    return at >= nowMins
-  })
-  return next ?? options[options.length - 1]
 }
 
 function NextRideCountdowns({
@@ -305,15 +271,46 @@ function placesOnDate(journey: Journey, date: string): DayPlace[] {
   return out
 }
 
-function sightsOnDate(places: DayPlace[], date: string): JourneyActivity[] {
-  const seen = new Set<string>()
-  const out: JourneyActivity[] = []
-  for (const place of places) {
-    const offset = dayOffsetOn(place.stop, date)
-    for (const sight of activitiesForDay(place.stop.sights, offset)) {
-      if (seen.has(sight.id)) continue
-      seen.add(sight.id)
-      out.push(sight)
+type DayActivityTarget = {
+  stop: JourneyStop
+  city: string
+  dayOffset: number
+}
+
+function activityTargetsOnDate(journey: Journey, date: string): DayActivityTarget[] {
+  const fromPlaces = placesOnDate(journey, date).map((p) => ({
+    stop: p.stop,
+    city: p.city,
+    dayOffset: dayOffsetOn(p.stop, date),
+  }))
+  if (fromPlaces.length > 0) return fromPlaces
+
+  const stops = [...(journey.stops || [])].sort(
+    (a, b) => a.sortOrder - b.sortOrder,
+  )
+  const out: DayActivityTarget[] = []
+  for (let i = 0; i < stops.length; i++) {
+    const stop = stops[i]
+    if (stop.kind === 'home') continue
+    const arrive = (stop.arriveDate || '').trim()
+    if (arrive === date) {
+      out.push({
+        stop,
+        city: stopGoalLabel(stop, 'By'),
+        dayOffset: 0,
+      })
+      continue
+    }
+    if (i > 0) {
+      const prev = stops[i - 1]
+      const depart = (stopDepartDate(prev) || '').trim()
+      if (depart === date) {
+        out.push({
+          stop: prev,
+          city: stopGoalLabel(prev, 'By'),
+          dayOffset: dayOffsetOn(prev, date),
+        })
+      }
     }
   }
   return out
@@ -338,10 +335,16 @@ export function JourneyLive({
     return span.end
   })
 
-  const [nowMins, setNowMins] = useState(osloMinutesNow)
   const places = useMemo(() => placesOnDate(journey, date), [journey, date])
   const rides = useMemo(() => ridesOnDate(journey, date), [journey, date])
-  const sights = useMemo(() => sightsOnDate(places, date), [places, date])
+  const activityTargets = useMemo(
+    () => activityTargetsOnDate(journey, date),
+    [journey, date],
+  )
+  const activityCalendar = useMemo(
+    () => journeyActivityCalendarBounds(journey),
+    [journey],
+  )
   const entries = useMemo(
     () =>
       normalizeLive(journey.live)
@@ -349,28 +352,56 @@ export function JourneyLive({
         .sort((a, b) => a.sortOrder - b.sortOrder),
     [journey.live, date],
   )
-  const history = useMemo(() => {
-    const byDate = new Map<string, JourneyLiveEntry[]>()
-    for (const e of normalizeLive(journey.live)) {
-      if (e.date === date) continue
-      if (!e.title.trim() && !(e.price || '').trim() && !(e.notes || '').trim()) continue
-      const list = byDate.get(e.date) || []
-      list.push(e)
-      byDate.set(e.date, list)
-    }
-    return [...byDate.entries()].sort(([a], [b]) => b.localeCompare(a))
-  }, [journey.live, date])
   const isToday = date === today
-
-  useEffect(() => {
-    if (!isToday) return
-    setNowMins(osloMinutesNow())
-    const timer = window.setInterval(() => setNowMins(osloMinutesNow()), 30_000)
-    return () => window.clearInterval(timer)
-  }, [isToday])
 
   function patchJourney(next: Journey) {
     onChange({ ...next, live: normalizeLive(next.live) })
+  }
+
+  function updateStopActivities(
+    stopId: string,
+    dayOffset: number,
+    daySights: JourneyActivity[],
+  ) {
+    patchJourney({
+      ...journey,
+      stops: (journey.stops || []).map((stop) =>
+        stop.id !== stopId
+          ? stop
+          : {
+              ...stop,
+              sights: replaceDayActivities(stop.sights, dayOffset, daySights),
+            },
+      ),
+    })
+  }
+
+  function moveActivityOnStop(
+    stopId: string,
+    activityId: string,
+    targetOffset: number,
+  ) {
+    patchJourney({
+      ...journey,
+      stops: (journey.stops || []).map((stop) =>
+        stop.id !== stopId
+          ? stop
+          : {
+              ...stop,
+              sights: moveActivityToDay(stop.sights, activityId, targetOffset),
+            },
+      ),
+    })
+  }
+
+  function moveActivityToDate(stopId: string, activityId: string, targetDate: string) {
+    const next = moveActivityToCalendarDate(
+      journey,
+      stopId,
+      activityId,
+      targetDate,
+    )
+    if (next) patchJourney(next)
   }
 
   function setLive(list: JourneyLiveEntry[]) {
@@ -582,7 +613,7 @@ export function JourneyLive({
           <NextRideCountdowns rides={rides} date={date} />
           <ul className="v2-live-rides">
             {rides.map((ride) => {
-              const focus = pickLiveOption(ride.options, isToday, nowMins)
+              const focus = chosenFromOptions(ride.options)
               return (
                 <li key={ride.via.id}>
                   <div className="v2-live-ride-main">
@@ -698,32 +729,47 @@ export function JourneyLive({
         </section>
       )}
 
-      {sights.length > 0 && (
-        <section className="v2-live-block">
-          <h3>På programmet</h3>
-          <ul className="v2-live-sights">
-            {sights.map((sight) => {
-              const times = [sight.startTime, sight.endTime]
-                .filter(Boolean)
-                .join('–')
-              return (
-                <li key={sight.id} className="v2-live-sight-row">
-                  <div className="v2-live-sight-place">
-                    <strong>{activityDisplayName(sight)}</strong>
-                    {times ? <span className="v2-meta">{times}</span> : null}
-                  </div>
-                  <span
-                    className={`v2-activity-kind is-${sight.kind || 'sight'}`}
-                  >
-                    {activityKindLabel(sight.kind)}
-                  </span>
-                  <div className="v2-live-sight-info">
-                    <CityInfoTip text={sight.notes} docs={sight.docs} />
-                  </div>
-                </li>
-              )
-            })}
-          </ul>
+      {activityTargets.length > 0 && (
+        <section className="v2-live-block v2-live-activities">
+          {activityTargets.map((target) => (
+            <div
+              key={`${target.stop.id}:${target.dayOffset}`}
+              className="v2-live-activity-group"
+            >
+              <SightList
+                compact
+                heading={
+                  activityTargets.length > 1
+                    ? localizeCity(target.city) || target.city
+                    : 'På programmet'
+                }
+                sights={activitiesForDay(target.stop.sights, target.dayOffset)}
+                dayOffset={target.dayOffset}
+                disabled={disabled}
+                suggestCountry={target.stop.country}
+                cityDays={calendarDaysForStop(target.stop)}
+                calendarMin={activityCalendar.min}
+                calendarMax={activityCalendar.max}
+                onMoveToDay={(activityId, offset) =>
+                  moveActivityOnStop(target.stop.id, activityId, offset)
+                }
+                onMoveToDate={(activityId, targetDate) =>
+                  moveActivityToDate(target.stop.id, activityId, targetDate)
+                }
+                onChange={(sights) =>
+                  updateStopActivities(
+                    target.stop.id,
+                    target.dayOffset,
+                    sights,
+                  )
+                }
+              />
+            </div>
+          ))}
+          <p className="v2-meta v2-live-activity-hint">
+            Legg til severdighet, utflukt eller annet spontant — uten å gå til
+            Plan.
+          </p>
         </section>
       )}
 
@@ -771,38 +817,11 @@ export function JourneyLive({
         )}
       </section>
 
-      {history.length > 0 && (
-        <section className="v2-live-block">
-          <h3>Andre dager utenom planen</h3>
-          <ul className="v2-live-history">
-            {history.map(([day, rows]) => (
-              <li key={day}>
-                <button
-                  type="button"
-                  className="v2-text-link"
-                  onClick={() => setDate(day)}
-                >
-                  {formatDateNO(day)}
-                </button>
-                <span className="v2-meta">
-                  {rows
-                    .map((e) =>
-                      [e.title || liveKindLabel(e.kind), e.price]
-                        .filter(Boolean)
-                        .join(' '),
-                    )
-                    .join(' · ')}
-                </span>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
     </div>
   )
 }
 
-function LiveEntryRow({
+export function LiveEntryRow({
   entry,
   disabled,
   onChange,
