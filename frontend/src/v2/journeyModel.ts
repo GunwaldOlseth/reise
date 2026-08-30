@@ -1176,6 +1176,45 @@ export function journeyOverviewRides(journey: Journey): OverviewRide[] {
   return rides
 }
 
+export type OverviewBookedHotel = {
+  id: string
+  hotelName: string
+  city: string
+  country: string
+  arriveDate: string
+  departDate: string
+  nights: number
+  stay: JourneyStay
+  lodgingKind: StayKind
+}
+
+/** Booked lodging stops in journey order for the overview tab. */
+export function journeyOverviewBookedHotels(journey: Journey): OverviewBookedHotel[] {
+  const stops = [...(journey.stops || [])].sort(
+    (a, b) => a.sortOrder - b.sortOrder,
+  )
+  const out: OverviewBookedHotel[] = []
+  for (const stop of stops) {
+    if (stop.kind === 'home' || isPackageStop(stop)) continue
+    const stay = stop.stay
+    if (!stay?.booked) continue
+    const nights = stayNights(stop)
+    const name = effectiveHotelName(stay)
+    out.push({
+      id: stop.id,
+      hotelName: name || stayUnsetLabel(stayKind(stay)),
+      city: (stop.city || '').trim(),
+      country: (stop.country || '').trim(),
+      arriveDate: (stop.arriveDate || '').trim(),
+      departDate: stopDepartDate(stop),
+      nights,
+      stay,
+      lodgingKind: stayKind(stay),
+    })
+  }
+  return out
+}
+
 export type JourneyScheduledDeparture = {
   date: string
   time: string

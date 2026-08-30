@@ -385,3 +385,214 @@ export function HotelLinkedChip({
     </li>
   )
 }
+
+function InfoIcon({ size = 16 }: { size?: number }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 11v6" />
+      <circle cx="12" cy="8" r="1" fill="currentColor" stroke="none" />
+    </svg>
+  )
+}
+
+/** Info (i) button that opens hotel stay details — same popover as HotelLinkedChip. */
+export function HotelInfoTip({
+  stay,
+  nights,
+  arriveDate,
+  departDate,
+  disabled,
+}: {
+  stay?: JourneyStay | null
+  nights?: number
+  arriveDate?: string
+  departDate?: string
+  disabled?: boolean
+}) {
+  const info = buildHotelInfoRows({ stay, nights, arriveDate, departDate })
+  const stamp = [
+    info.title,
+    info.rows.map((r) => r.value).join('|'),
+    info.notesHtml,
+  ].join('::')
+  const mobile = useMobileSheet()
+  const [open, setOpen] = useState(false)
+  const surfaceColor = useThemeSurfaceColor(open)
+  const surfaceStyle = surfaceColor
+    ? { backgroundColor: surfaceColor }
+    : undefined
+  const [pos, setPos] = useState<PopPos | null>(null)
+  const root = useRef<HTMLDivElement>(null)
+  const btn = useRef<HTMLButtonElement>(null)
+  const pop = useRef<HTMLDivElement>(null)
+  const closeBtn = useRef<HTMLButtonElement>(null)
+
+  useLayoutEffect(() => {
+    if (!open || mobile || !btn.current) return
+
+    function place() {
+      const el = btn.current
+      if (!el) return
+      const r = el.getBoundingClientRect()
+      const width = Math.min(380, Math.max(260, window.innerWidth - 32))
+      const margin = 12
+      let left = r.right - width
+      if (left < margin) left = margin
+      if (left + width > window.innerWidth - margin) {
+        left = Math.max(margin, window.innerWidth - width - margin)
+      }
+      const gap = 8
+      const popH = pop.current?.offsetHeight || 180
+      const below = r.bottom + gap
+      const above = r.top - gap - popH
+      const top =
+        below + popH <= window.innerHeight - margin
+          ? below
+          : above >= margin
+            ? above
+            : Math.max(margin, window.innerHeight - popH - margin)
+      setPos({ top, left, width })
+    }
+
+    place()
+    const id = requestAnimationFrame(place)
+    window.addEventListener('resize', place)
+    window.addEventListener('scroll', place, true)
+    return () => {
+      cancelAnimationFrame(id)
+      window.removeEventListener('resize', place)
+      window.removeEventListener('scroll', place, true)
+    }
+  }, [open, mobile, stamp])
+
+  useEffect(() => {
+    if (!open) return
+    function onDoc(e: MouseEvent) {
+      const t = e.target as Node
+      if (root.current?.contains(t) || pop.current?.contains(t)) return
+      setOpen(false)
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') setOpen(false)
+    }
+    document.addEventListener('mousedown', onDoc)
+    document.addEventListener('keydown', onKey)
+    const prev = document.body.style.overflow
+    if (mobile) {
+      document.body.style.overflow = 'hidden'
+      closeBtn.current?.focus()
+    }
+    return () => {
+      document.body.style.overflow = prev
+      document.removeEventListener('mousedown', onDoc)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [open, mobile])
+
+  const popover = mobile ? (
+    <div className="v2-city-info-layer" onClick={() => setOpen(false)}>
+      <div
+        ref={pop}
+        className="v2-city-info-pop is-sheet v2-hotel-info-pop"
+        role="dialog"
+        aria-modal="true"
+        aria-label={info.title}
+        style={surfaceStyle}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="v2-city-info-pop-head">
+          <h3>{info.title}</h3>
+          <button
+            ref={closeBtn}
+            type="button"
+            className="v2-city-info-close"
+            aria-label="Lukk"
+            title="Lukk"
+            onClick={() => setOpen(false)}
+          >
+            <CloseIcon />
+          </button>
+        </div>
+        <div className="v2-city-info-pop-body" style={surfaceStyle}>
+          <HotelInfoBody
+            kindLabel={info.kindLabel}
+            rows={info.rows}
+            notesHtml={info.notesHtml}
+          />
+        </div>
+      </div>
+    </div>
+  ) : (
+    <>
+      <button
+        type="button"
+        className="v2-city-info-backdrop"
+        aria-label="Lukk"
+        onClick={() => setOpen(false)}
+      />
+      <div
+        ref={pop}
+        className="v2-city-info-pop v2-hotel-info-pop"
+        role="dialog"
+        aria-modal="true"
+        aria-label={info.title}
+        style={
+          pos
+            ? {
+                top: pos.top,
+                left: pos.left,
+                width: pos.width,
+                ...surfaceStyle,
+              }
+            : surfaceStyle
+        }
+      >
+        <div
+          className="v2-city-info-pop-inner v2-hotel-info-pop-inner"
+          style={surfaceStyle}
+        >
+          <h3 className="v2-hotel-info-title">{info.title}</h3>
+          <HotelInfoBody
+            kindLabel={info.kindLabel}
+            rows={info.rows}
+            notesHtml={info.notesHtml}
+          />
+        </div>
+      </div>
+    </>
+  )
+
+  return (
+    <div className={`v2-city-info${open ? ' is-open' : ''}`} ref={root}>
+      <button
+        ref={btn}
+        type="button"
+        className={`v2-city-info-btn${open ? ' is-on' : ''}`}
+        disabled={disabled}
+        aria-expanded={open}
+        aria-haspopup="dialog"
+        aria-label="Informasjon om overnatting"
+        title={info.title || 'Informasjon om overnatting'}
+        onClick={(e) => {
+          e.preventDefault()
+          e.stopPropagation()
+          setOpen((v) => !v)
+        }}
+      >
+        <InfoIcon />
+      </button>
+      {open && createPortal(popover, document.body)}
+    </div>
+  )
+}
