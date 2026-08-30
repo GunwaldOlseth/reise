@@ -130,20 +130,20 @@ export function NoteField({
 
   if (expanded) {
     return (
-      <div
-        className="v2-note-preview v2-note-html is-expanded"
-        role="button"
-        tabIndex={0}
-        title="Klikk for å vise mindre"
-        onClick={() => setExpanded(false)}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter' || e.key === ' ') {
-            e.preventDefault()
-            setExpanded(false)
-          }
-        }}
-        dangerouslySetInnerHTML={{ __html: html }}
-      />
+      <div className="v2-note-preview-wrap">
+        <div
+          className="v2-note-preview v2-note-html is-expanded"
+          dangerouslySetInnerHTML={{ __html: html }}
+        />
+        <button
+          type="button"
+          className="v2-note-less-btn"
+          disabled={disabled}
+          onClick={() => setExpanded(false)}
+        >
+          Vis mindre
+        </button>
+      </div>
     )
   }
 
@@ -156,10 +156,13 @@ export function NoteField({
         } as CSSProperties
       }
       role="button"
-      tabIndex={0}
+      tabIndex={disabled ? -1 : 0}
       title="Klikk for å lese hele teksten"
-      onClick={() => setExpanded(true)}
+      onClick={() => {
+        if (!disabled) setExpanded(true)
+      }}
       onKeyDown={(e) => {
+        if (disabled) return
         if (e.key === 'Enter' || e.key === ' ') {
           e.preventDefault()
           setExpanded(true)

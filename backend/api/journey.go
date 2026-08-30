@@ -375,6 +375,7 @@ func normalizeJourney(j *Journey) {
 			if j.Stops[i].Stay.Nights > 60 {
 				j.Stops[i].Stay.Nights = 60
 			}
+			j.Stops[i].Stay.BookedWhere = strings.TrimSpace(j.Stops[i].Stay.BookedWhere)
 		}
 		normalizePackageStop(&j.Stops[i])
 		normalizeSights(j.Stops[i].Sights)
