@@ -28,6 +28,41 @@ func TestFormatShareHopTimeOnly(t *testing.T) {
 	}
 }
 
+func TestShareHopsSumMultipleVias(t *testing.T) {
+	leg := &JourneyLeg{
+		Vias: []JourneyVia{
+			{
+				Title: "Bergen",
+				Options: []JourneyTransportOption{{
+					Mode:      "train",
+					StartTime: "08:00",
+					EndTime:   "09:00",
+					Taken:     true,
+				}},
+			},
+			{
+				Title: "Oslo",
+				Options: []JourneyTransportOption{{
+					Mode:      "flight",
+					StartTime: "10:00",
+					EndTime:   "11:30",
+					Taken:     true,
+				}},
+			},
+		},
+	}
+	hops := shareHopsForLeg(leg, "Oslo")
+	if len(hops) != 1 {
+		t.Fatalf("expected one summed hop, got %d: %v", len(hops), hops)
+	}
+	if hops[0].Label != "2 timer 30 min" {
+		t.Fatalf("expected summed duration, got %q", hops[0].Label)
+	}
+	if strings.Contains(hops[0].Label, "Tog") || strings.Contains(hops[0].Label, "Fly") {
+		t.Fatalf("should not include mode: %q", hops[0].Label)
+	}
+}
+
 func TestShareSubsForCruiseStop(t *testing.T) {
 	stop := JourneyStop{
 		ID:         "cruise1",

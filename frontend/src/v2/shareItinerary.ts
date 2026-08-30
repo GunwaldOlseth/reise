@@ -314,10 +314,17 @@ export function buildShareItinerary(
     const hops: ShareHop[] = []
     if (next) {
       const leg = legForGap(journey, stop.id, next.id)
+      let totalMins = 0
+      let any = false
       for (const via of transportSegments(leg, { sort: pick === 'first' ? false : undefined })) {
-        const label = formatShareHop(via, pick, false, true)
-        if (label) hops.push({ label })
+        const opt = pick === 'first' ? firstTransportOption(via) : chosenTransportOption(via)
+        if (!opt) continue
+        const mins = optionDurationMinutes(opt)
+        if (mins == null) continue
+        totalMins += mins
+        any = true
       }
+      if (any) hops.push({ label: formatShareDurationHM(totalMins) })
     }
     return {
       title: shareStopTitle(stop),
