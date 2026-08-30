@@ -444,61 +444,66 @@ export function SightList({
           if (compact) {
             return (
               <div key={sight.id} className="v2-sight-row">
-                <span
-                  className={`v2-activity-kind is-${kind}`}
-                  title={activityKindLabel(kind)}
-                >
-                  {kind === 'excursion' ? 'U' : kind === 'other' ? 'A' : 'S'}
-                </span>
-                {cityField(sight, idx, true)}
-                {placeField(sight, idx, kind, true)}
-                <input
-                  className="v2-hop-price"
-                  inputMode="decimal"
-                  placeholder="Pris"
-                  value={sight.price || ''}
-                  disabled={disabled}
-                  title="Pris"
-                  onChange={(e) => update(idx, { price: e.target.value })}
-                  onBlur={() => emit(draftRef.current, true)}
-                />
-                <PaidToggle
-                  checked={sight.paid || false}
-                  disabled={disabled}
-                  onChange={(paid) =>
-                    emit(
-                      draftRef.current.map((s, i) =>
-                        i === idx ? { ...s, paid } : s,
-                      ),
-                      true,
-                    )
-                  }
-                />
-                {reorderButtons(idx)}
-                <MoveDaySelect
-                  activityId={sight.id}
-                  dayOffset={dayOffset}
-                  cityDays={cityDays}
-                  disabled={disabled}
-                  onMoveToDay={onMoveToDay}
-                />
-                <MoveDatePicker
-                  activityId={sight.id}
-                  disabled={disabled}
-                  calendarMin={calendarMin}
-                  calendarMax={calendarMax}
-                  onMoveToDate={onMoveToDate}
-                />
-                <button
-                  type="button"
-                  className="v2-via-remove"
-                  disabled={disabled}
-                  aria-label="Slett"
-                  title="Slett"
-                  onClick={() => remove(idx)}
-                >
-                  <TrashIcon size={14} />
-                </button>
+                <div className="v2-sight-row-main">
+                  <span
+                    className={`v2-activity-kind is-${kind}`}
+                    title={activityKindLabel(kind)}
+                  >
+                    {kind === 'excursion' ? 'U' : kind === 'other' ? 'A' : 'S'}
+                  </span>
+                  {cityField(sight, idx, true)}
+                  {placeField(sight, idx, kind, true)}
+                  <input
+                    className="v2-hop-price"
+                    inputMode="decimal"
+                    placeholder="Pris"
+                    value={sight.price || ''}
+                    disabled={disabled}
+                    title="Pris"
+                    onChange={(e) => update(idx, { price: e.target.value })}
+                    onBlur={() => emit(draftRef.current, true)}
+                  />
+                  <PaidToggle
+                    compact
+                    checked={sight.paid || false}
+                    disabled={disabled}
+                    onChange={(paid) =>
+                      emit(
+                        draftRef.current.map((s, i) =>
+                          i === idx ? { ...s, paid } : s,
+                        ),
+                        true,
+                      )
+                    }
+                  />
+                  <div className="v2-sight-row-actions">
+                    {reorderButtons(idx)}
+                    <MoveDaySelect
+                      activityId={sight.id}
+                      dayOffset={dayOffset}
+                      cityDays={cityDays}
+                      disabled={disabled}
+                      onMoveToDay={onMoveToDay}
+                    />
+                    <MoveDatePicker
+                      activityId={sight.id}
+                      disabled={disabled}
+                      calendarMin={calendarMin}
+                      calendarMax={calendarMax}
+                      onMoveToDate={onMoveToDate}
+                    />
+                    <button
+                      type="button"
+                      className="v2-via-remove"
+                      disabled={disabled}
+                      aria-label="Slett"
+                      title="Slett"
+                      onClick={() => remove(idx)}
+                    >
+                      <TrashIcon size={14} />
+                    </button>
+                  </div>
+                </div>
                 <div className="v2-sight-row-purpose">
                   <PurposeToggle
                     compact
