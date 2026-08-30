@@ -27,6 +27,7 @@ import {
   normalizeLive,
   optionIsTaken,
   chosenFromOptions,
+  clearTakenTransportOptions,
   packageFreeDayLabel,
   packageOf,
   replaceDayActivities,
@@ -469,6 +470,23 @@ export function JourneyLive({
     })
   }
 
+  function resetTaken(viaId: string) {
+    patchJourney({
+      ...journey,
+      legs: (journey.legs || []).map((leg) => ({
+        ...leg,
+        vias: (leg.vias || []).map((via) =>
+          via.id !== viaId
+            ? via
+            : {
+                ...via,
+                options: clearTakenTransportOptions(viaTransportOptions(via)),
+              },
+        ),
+      })),
+    })
+  }
+
   function shiftDate(delta: number) {
     const next = addDaysIso(date, delta)
     if (span) {
@@ -613,7 +631,11 @@ export function JourneyLive({
           <NextRideCountdowns rides={rides} date={date} />
           <ul className="v2-live-rides">
             {rides.map((ride) => {
-              const focus = chosenFromOptions(ride.options)
+              const takenOption = ride.options.find(optionIsTaken)
+              const visibleOptions = takenOption
+                ? [takenOption]
+                : ride.options
+              const focus = takenOption || chosenFromOptions(ride.options)
               return (
                 <li key={ride.via.id}>
                   <div className="v2-live-ride-main">
@@ -629,19 +651,33 @@ export function JourneyLive({
                             : '')}
                       </span>
                     </div>
-                    <CityInfoTip text={ride.via.notes} />
+                    <div className="v2-live-ride-actions">
+                      {takenOption ? (
+                        <button
+                          type="button"
+                          className="v2-chip-btn v2-live-reset-taken"
+                          disabled={disabled}
+                          title="Vis alle avganger igjen"
+                          onClick={() => resetTaken(ride.via.id)}
+                        >
+                          Nullstill valg
+                        </button>
+                      ) : null}
+                      <CityInfoTip text={ride.via.notes} />
+                    </div>
                   </div>
                   <ul className="v2-live-ride-opts">
-                    {ride.options.map((option) => {
+                    {visibleOptions.map((option) => {
                       const mode = option.mode || 'other'
-                      const selected = option.id === focus?.id
                       const taken = optionIsTaken(option)
+                      const highlight =
+                        taken || (!takenOption && option.id === focus?.id)
                       const ticket = optionHasTicket(option)
                       return (
                         <li
                           key={option.id}
                           className={`v2-live-ride-opt${
-                            selected ? ' is-taken' : ''
+                            highlight ? ' is-taken' : ''
                           }`}
                         >
                           <div className="v2-live-ride-opt-main">
@@ -675,7 +711,7 @@ export function JourneyLive({
                               disabled={disabled}
                               title={
                                 taken
-                                  ? 'Kvittert — denne telles i utgifter'
+                                  ? 'Fjern kvittering og vis alle avganger'
                                   : 'Kvitter ut denne avgangen'
                               }
                               onClick={() =>
@@ -685,7 +721,7 @@ export function JourneyLive({
                               {taken ? 'Kvittert' : 'Kvitter ut'}
                             </button>
                           </div>
-                          {selected ? (
+                          {highlight ? (
                             <div className="v2-live-prices">
                               <label>
                                 Forventet
