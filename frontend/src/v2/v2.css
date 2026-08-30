@@ -6681,6 +6681,20 @@ html[data-theme='plasma'] .v2-shell {
   color: var(--v2-label);
 }
 
+.v2-live-activities {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.v2-live-activity-group .v2-sights {
+  margin: 0;
+}
+
+.v2-live-activity-hint {
+  margin: 0;
+}
+
 .v2-live-places,
 .v2-live-rides,
 .v2-live-sights,
