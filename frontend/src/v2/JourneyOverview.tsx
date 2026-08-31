@@ -7,6 +7,7 @@ import {
   formatDateNO,
   journeyOverviewBookedHotels,
   journeyOverviewRides,
+  journeyVisitCountryGroups,
   journeyVisitPlaces,
   type Journey,
 } from './journeyModel'
@@ -16,6 +17,7 @@ type OverviewPage = 'cities' | 'countries' | 'rides' | 'hotels'
 export function JourneyOverview({ journey }: { journey: Journey }) {
   const [page, setPage] = useState<OverviewPage>('cities')
   const { cities, countries } = journeyVisitPlaces(journey)
+  const countryGroups = journeyVisitCountryGroups(journey)
   const rides = journeyOverviewRides(journey)
   const bookedHotels = journeyOverviewBookedHotels(journey)
 
@@ -186,15 +188,33 @@ export function JourneyOverview({ journey }: { journey: Journey }) {
           <p className="v2-meta">
             {countries.length === 0
               ? 'Ingen land ennå. Legg til byer under Plan.'
-              : `${countries.length} land i rekkefølge.`}
+              : `${countries.length} land · ${cities.length} ${
+                  cities.length === 1 ? 'by' : 'byer'
+                } i rekkefølge.`}
           </p>
-          {countries.length > 0 && (
-            <ol className="v2-overview-list">
-              {countries.map((country, i) => (
-                <li key={`${country}|${i}`}>
+          {countryGroups.length > 0 && (
+            <ol className="v2-overview-list is-countries">
+              {countryGroups.map((group, i) => (
+                <li key={`${group.country}|${i}`}>
                   <span className="v2-overview-num">{i + 1}</span>
                   <span className="v2-overview-main">
-                    <strong>{localizeCountry(country)}</strong>
+                    <strong>
+                      {group.country
+                        ? localizeCountry(group.country)
+                        : 'Uten land'}
+                    </strong>
+                    {group.cities.length > 0 ? (
+                      <ul className="v2-overview-country-cities">
+                        {group.cities.map((place) => (
+                          <li key={place.city}>
+                            {localizeCity(place.city)}
+                            <CityInfoTip text={place.info} docs={place.docs} />
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <span className="v2-meta">Ingen byer registrert</span>
+                    )}
                   </span>
                 </li>
               ))}

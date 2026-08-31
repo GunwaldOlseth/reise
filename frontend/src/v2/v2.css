@@ -1104,6 +1104,33 @@ html[data-theme='plasma'] .v2-shell {
   align-items: start;
 }
 
+.v2-overview-list.is-countries li {
+  align-items: start;
+}
+
+.v2-overview-country-cities {
+  list-style: none;
+  margin: 0.4rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.v2-overview-country-cities > li {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  border-radius: 0;
+  font-size: 0.88rem;
+  font-weight: 550;
+  color: var(--v2-ink);
+}
+
 .v2-overview-list.is-rides li.is-clickable {
   cursor: pointer;
 }

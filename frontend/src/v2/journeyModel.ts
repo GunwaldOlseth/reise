@@ -1076,6 +1076,30 @@ export function journeyVisitPlaces(journey: Journey): {
   return { cities, countries }
 }
 
+export type VisitCountryGroup = {
+  country: string
+  cities: VisitCity[]
+}
+
+/** Visit countries in journey order with their cities grouped underneath. */
+export function journeyVisitCountryGroups(journey: Journey): VisitCountryGroup[] {
+  const { cities, countries } = journeyVisitPlaces(journey)
+  const groups: VisitCountryGroup[] = countries.map((country) => {
+    const key = country.trim().toLowerCase()
+    return {
+      country,
+      cities: cities.filter(
+        (c) => (c.country || '').trim().toLowerCase() === key,
+      ),
+    }
+  })
+  const unassigned = cities.filter((c) => !(c.country || '').trim())
+  if (unassigned.length) {
+    groups.push({ country: '', cities: unassigned })
+  }
+  return groups
+}
+
 export function journeyVisitStats(journey: Journey): {
   cityCount: number
   countryCount: number
