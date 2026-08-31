@@ -129,3 +129,26 @@ Scriptet lager bucket, setter `BACKUP_BUCKET`, `BACKUP_CRON_SECRET` og `ADMIN_PA
 Lokalt (uten bucket): sett `ADMIN_PASSWORD` og ta backup til mappen `backend/api/backups`.
 
 I appen: **Innstillinger → Admin · sikkerhetskopi** — logg inn med admin-passordet og hent en kopi tilbake.
+
+## Google Health (backend)
+
+Backend kan hente daglig aktivitetsdata fra **Google Health API** (sky — Fitbit/Pixel m.m.) og ta imot **Health Connect**-data fra en Android-app.
+
+| Endepunkt | Beskrivelse |
+| --- | --- |
+| `GET /api/google-health/info` | Scopes, datatyper og integrasjonsnotater |
+| `POST /api/google-health/daily` | Hent daglig oppsummering (krever `Authorization: Bearer <google_token>`) |
+| `POST /api/google-health/ingest` | Valider og ta imot Health Connect-poster fra klient |
+
+Eksempel — hent skritt og distanse for én dag:
+
+```bash
+curl -sS -X POST http://localhost:8082/api/google-health/daily \
+  -H 'Authorization: Bearer GOOGLE_ACCESS_TOKEN' \
+  -H 'Content-Type: application/json' \
+  -d '{"startDate":"2026-08-31","endDate":"2026-08-31","types":["steps","distance"]}'
+```
+
+**Oppsett i Google Cloud:** aktiver Google Health API, legg til OAuth-scopes (f.eks. `googlehealth.activity_and_fitness.readonly`), og fullfør app verification for produksjon (>100 brukere).
+
+**Health Connect** har ingen server-API — en Android-app må lese lokalt og POSTe normaliserte poster til `/api/google-health/ingest`.
