@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   api,
+  emptyTripFeatures,
   formatExpenseAmount,
   formatTravelers,
   normalizeTravelers,
@@ -173,6 +174,19 @@ export function TripHub({
   )
   const liveSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const livePending = useRef<Journey | null>(null)
+
+  async function removeTraveler(name: string) {
+    if (!trip) return
+    const saved = await api.updateTrip(tripId, {
+      name: trip.name,
+      startDate: trip.startDate || '',
+      endDate: trip.endDate || trip.startDate || '',
+      colorByCountry: trip.colorByCountry || {},
+      features: { ...emptyTripFeatures(), ...trip.features },
+      travelers: tripTravelers.filter((n) => n !== name),
+    })
+    onTripUpdated(saved)
+  }
 
   function persistJourneyQuiet(next: Journey) {
     livePending.current = null
@@ -502,6 +516,7 @@ export function TripHub({
                 disabled={!journeyReady}
                 tripName={tripName}
                 onChange={handleLiveChange}
+                onRemoveTraveler={(name) => void removeTraveler(name)}
               />
             )}
           </div>

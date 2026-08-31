@@ -533,12 +533,14 @@ export function JourneyLive({
   disabled,
   tripName,
   onChange,
+  onRemoveTraveler,
 }: {
   journey: Journey
   tripTravelers?: string[]
   disabled?: boolean
   tripName?: string
   onChange: (next: Journey) => void
+  onRemoveTraveler?: (name: string) => void
 }) {
   const askDelete = useConfirmDelete()
   const span = useMemo(() => journeyDateSpan(journey), [journey])
@@ -889,20 +891,40 @@ export function JourneyLive({
             {travelers.map((name) => {
               const count = travelerDayCounts.get(name) || 0
               return (
-                <button
-                  key={name}
-                  type="button"
-                  className={`v2-chip-btn${
-                    travelerFilter === name ? ' is-on' : ''
-                  }`}
-                  title={`Vis registrering for ${name}`}
-                  onClick={() =>
-                    setTravelerFilter((cur) => (cur === name ? '' : name))
-                  }
-                >
-                  {name}
-                  <span className="v2-live-traveler-count">{count}</span>
-                </button>
+                <span key={name} className="v2-live-traveler-chip">
+                  <button
+                    type="button"
+                    className={`v2-chip-btn${
+                      travelerFilter === name ? ' is-on' : ''
+                    }`}
+                    title={`Vis registrering for ${name}`}
+                    onClick={() =>
+                      setTravelerFilter((cur) => (cur === name ? '' : name))
+                    }
+                  >
+                    {name}
+                    <span className="v2-live-traveler-count">{count}</span>
+                  </button>
+                  {onRemoveTraveler && !disabled ? (
+                    <button
+                      type="button"
+                      className="v2-live-traveler-remove"
+                      title={`Fjern ${name}`}
+                      aria-label={`Fjern ${name}`}
+                      onClick={() => {
+                        void askDelete({
+                          title: `Fjerne ${name} fra reisen?`,
+                          confirmLabel: 'Fjern',
+                          checkLabel: 'Ja, fjern',
+                        }).then((ok) => {
+                          if (ok) onRemoveTraveler(name)
+                        })
+                      }}
+                    >
+                      ×
+                    </button>
+                  ) : null}
+                </span>
               )
             })}
           </div>

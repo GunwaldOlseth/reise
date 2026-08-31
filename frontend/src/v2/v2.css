@@ -7510,6 +7510,31 @@ html[data-theme='plasma'] .v2-shell {
   gap: 0.35rem;
 }
 
+.v2-live-traveler-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.1rem;
+}
+
+.v2-live-traveler-remove {
+  flex: 0 0 auto;
+  width: 1.65rem;
+  height: 1.65rem;
+  padding: 0;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--v2-muted);
+  font-size: 1.1rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.v2-live-traveler-remove:hover:not(:disabled) {
+  color: var(--v2-warn);
+  background: color-mix(in srgb, var(--v2-warn) 12%, transparent);
+}
+
 .v2-live-traveler-count {
   display: inline-flex;
   align-items: center;
