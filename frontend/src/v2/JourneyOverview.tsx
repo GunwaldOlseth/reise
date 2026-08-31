@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { localizeCity, localizeCountry } from '../placeNames'
 import { CityInfoTip } from './CityInfoTip'
 import { HotelInfoTip } from './HotelInfoTip'
+import { TransportRideTip } from './TransportRideTip'
 import {
   formatDateNO,
   journeyOverviewBookedHotels,
@@ -155,7 +156,7 @@ export function JourneyOverview({ journey }: { journey: Journey }) {
           {rides.length > 0 && (
             <ol className="v2-overview-list is-rides">
               {rides.map((ride, i) => (
-                <li key={`${ride.id}|${i}`}>
+                <TransportRideTip key={`${ride.id}|${i}`} ride={ride}>
                   <span className="v2-overview-num">{i + 1}</span>
                   <span className="v2-overview-main">
                     {ride.date ? (
@@ -172,7 +173,7 @@ export function JourneyOverview({ journey }: { journey: Journey }) {
                       <span className="v2-meta">{ride.detail}</span>
                     ) : null}
                   </span>
-                </li>
+                </TransportRideTip>
               ))}
             </ol>
           )}
