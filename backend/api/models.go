@@ -393,7 +393,9 @@ type JourneyLiveEntry struct {
 	Time      string         `json:"time,omitempty" firestore:"time,omitempty"`
 	Rating    int            `json:"rating,omitempty" firestore:"rating,omitempty"` // 0 = unset, else 1..5
 	Photos    []JourneyPhoto `json:"photos,omitempty" firestore:"photos,omitempty"`
-	SortOrder int            `json:"sortOrder" firestore:"sortOrder"`
+	// Travelers on the trip this entry applies to; empty = all travelers.
+	Travelers []string `json:"travelers,omitempty" firestore:"travelers,omitempty"`
+	SortOrder int      `json:"sortOrder" firestore:"sortOrder"`
 }
 
 // JourneyLiveActivitySkip marks a city-day or single planned activity skipped in Live.

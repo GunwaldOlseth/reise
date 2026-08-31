@@ -364,6 +364,7 @@ func normalizeJourney(j *Journey) {
 			photos = append(photos, p)
 		}
 		j.Live[i].Photos = photos
+		j.Live[i].Travelers = normalizeTravelers(j.Live[i].Travelers)
 	}
 	kept := make([]JourneyLiveEntry, 0, len(j.Live))
 	for _, e := range j.Live {
