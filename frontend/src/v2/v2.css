@@ -1100,8 +1100,9 @@ html[data-theme='plasma'] .v2-shell {
   color: var(--v2-accent);
 }
 
-.v2-overview-list.is-rides li {
-  align-items: start;
+.v2-overview-list.is-rides > li {
+  display: block;
+  padding: 0;
 }
 
 .v2-overview-list.is-countries li {
@@ -1143,12 +1144,12 @@ html[data-theme='plasma'] .v2-shell {
 .v2-overview-ride-btn {
   appearance: none;
   display: grid;
-  grid-template-columns: 2rem minmax(0, 1fr) auto;
-  gap: 0.65rem;
+  grid-template-columns: 1.65rem minmax(0, 1fr) auto;
+  gap: 0.5rem;
   align-items: center;
   width: 100%;
   margin: 0;
-  padding: 0.7rem 0.85rem;
+  padding: 0.5rem 0.65rem;
   border: 0;
   border-radius: inherit;
   background: transparent;
@@ -1156,6 +1157,40 @@ html[data-theme='plasma'] .v2-shell {
   font: inherit;
   text-align: left;
   cursor: inherit;
+}
+
+.v2-overview-ride-main {
+  gap: 0.2rem;
+}
+
+.v2-overview-ride-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.25rem 0.45rem;
+  min-width: 0;
+}
+
+.v2-overview-ride-route {
+  font-size: 0.94rem;
+  font-weight: 650;
+  line-height: 1.25;
+}
+
+.v2-overview-list.is-rides .v2-overview-date {
+  font-size: 0.78rem;
+}
+
+.v2-overview-ride-detail {
+  display: block;
+  font-size: 0.8rem;
+  line-height: 1.35;
+  color: var(--v2-muted);
+  min-width: 0;
+}
+
+.v2-overview-list.is-rides .v2-overview-num {
+  font-size: 0.92rem;
 }
 
 .v2-overview-ride-btn:disabled {
@@ -1171,11 +1206,12 @@ html[data-theme='plasma'] .v2-shell {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 1.65rem;
-  height: 1.65rem;
+  width: 1.45rem;
+  height: 1.45rem;
   border-radius: 999px;
   color: var(--v2-accent);
   background: color-mix(in srgb, var(--v2-accent) 14%, transparent);
+  flex-shrink: 0;
 }
 
 .v2-transport-timetable-title {

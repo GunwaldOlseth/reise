@@ -160,19 +160,24 @@ export function JourneyOverview({ journey }: { journey: Journey }) {
               {rides.map((ride, i) => (
                 <TransportRideTip key={`${ride.id}|${i}`} ride={ride}>
                   <span className="v2-overview-num">{i + 1}</span>
-                  <span className="v2-overview-main">
-                    {ride.date ? (
-                      <span className="v2-overview-date">
-                        {formatDateNO(ride.date)}
-                      </span>
-                    ) : (
-                      <span className="v2-meta">Uten dato</span>
-                    )}
-                    <strong>
-                      {localizeCity(ride.fromLabel)} → {localizeCity(ride.toLabel)}
-                    </strong>
+                  <span className="v2-overview-main v2-overview-ride-main">
+                    <span className="v2-overview-ride-head">
+                      {ride.date ? (
+                        <span className="v2-overview-date">
+                          {formatDateNO(ride.date)}
+                        </span>
+                      ) : (
+                        <span className="v2-meta">Uten dato</span>
+                      )}
+                      <strong className="v2-overview-ride-route">
+                        {localizeCity(ride.fromLabel)} →{' '}
+                        {localizeCity(ride.toLabel)}
+                      </strong>
+                    </span>
                     {ride.detail ? (
-                      <span className="v2-meta">{ride.detail}</span>
+                      <span className="v2-overview-ride-detail">
+                        {ride.detail}
+                      </span>
                     ) : null}
                   </span>
                 </TransportRideTip>
