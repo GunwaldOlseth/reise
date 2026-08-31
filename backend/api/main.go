@@ -44,6 +44,10 @@ func main() {
 	mux.HandleFunc("GET /api/weather/history", getWeatherHistory)
 	mux.HandleFunc("GET /api/places", getPlaces)
 
+	mux.HandleFunc("GET /api/google-health/info", googleHealthInfoHandler)
+	mux.HandleFunc("POST /api/google-health/daily", googleHealthDailyHandler)
+	mux.HandleFunc("POST /api/google-health/ingest", googleHealthIngestHandler)
+
 	mux.HandleFunc("POST /api/uploads", uploadImage)
 	mux.HandleFunc("GET /api/uploads/{name}", serveUpload)
 
