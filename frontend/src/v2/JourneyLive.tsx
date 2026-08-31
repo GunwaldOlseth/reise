@@ -532,21 +532,19 @@ export function JourneyLive({
   tripTravelers = [],
   disabled,
   tripName,
-  travelers,
   onChange,
 }: {
   journey: Journey
   tripTravelers?: string[]
   disabled?: boolean
   tripName?: string
-  travelers?: string[]
   onChange: (next: Journey) => void
 }) {
   const askDelete = useConfirmDelete()
   const span = useMemo(() => journeyDateSpan(journey), [journey])
   const today = todayIsoOslo()
   const travelers = useMemo(
-    () => [...new Set(tripTravelers.map((n) => n.trim()).filter(Boolean))],
+    () => normalizeTravelers(tripTravelers),
     [tripTravelers],
   )
   const [date, setDate] = useState(() => {
