@@ -277,6 +277,9 @@ func normalizeJourney(j *Journey) {
 	if j.LiveActivitySkips == nil {
 		j.LiveActivitySkips = []JourneyLiveActivitySkip{}
 	}
+	if j.LiveDailySteps == nil {
+		j.LiveDailySteps = []JourneyLiveDailySteps{}
+	}
 	seenSkips := make(map[string]struct{})
 	normSkips := make([]JourneyLiveActivitySkip, 0, len(j.LiveActivitySkips))
 	for _, s := range j.LiveActivitySkips {
@@ -303,6 +306,30 @@ func normalizeJourney(j *Journey) {
 		})
 	}
 	j.LiveActivitySkips = normSkips
+	seenSteps := make(map[string]struct{})
+	normSteps := make([]JourneyLiveDailySteps, 0, len(j.LiveDailySteps))
+	for _, s := range j.LiveDailySteps {
+		date := strings.TrimSpace(s.Date)
+		if date == "" {
+			continue
+		}
+		steps := s.Steps
+		if steps < 0 {
+			steps = 0
+		}
+		if _, ok := seenSteps[date]; ok {
+			continue
+		}
+		seenSteps[date] = struct{}{}
+		normSteps = append(normSteps, JourneyLiveDailySteps{
+			Date:  date,
+			Steps: steps,
+		})
+	}
+	sort.Slice(normSteps, func(i, k int) bool {
+		return normSteps[i].Date < normSteps[k].Date
+	})
+	j.LiveDailySteps = normSteps
 	for i := range j.Live {
 		j.Live[i].SortOrder = i
 		j.Live[i].Date = strings.TrimSpace(j.Live[i].Date)

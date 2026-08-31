@@ -18,6 +18,7 @@ import {
   compactActivity,
   compactCityDocs,
   compactLive,
+  compactLiveDailySteps,
   confirmShiftAfterNights,
   defaultJourneyStay,
   effectiveHotelName,
@@ -462,6 +463,7 @@ export function JourneyPlanner({
       const withSights: Journey = {
         ...next,
         live: compactLive(next.live),
+        liveDailySteps: compactLiveDailySteps(next.liveDailySteps),
         stops: next.stops.map((s) => {
           const docs = compactCityDocs(cityDocsOf(s))
           let stop: JourneyStop = {

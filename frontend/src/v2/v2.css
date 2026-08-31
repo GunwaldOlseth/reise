@@ -7226,6 +7226,93 @@ html[data-theme='plasma'] .v2-shell {
   color: var(--v2-label);
 }
 
+.v2-live-steps-hint {
+  margin: 0 0 0.55rem;
+}
+
+.v2-live-steps-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.65rem 1rem;
+}
+
+.v2-live-steps-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-width: 8.5rem;
+}
+
+.v2-live-steps-label {
+  font-size: 0.78rem;
+  color: var(--v2-muted);
+}
+
+.v2-live-steps-input {
+  width: 100%;
+  max-width: 11rem;
+  padding: 0.4rem 0.55rem;
+  border-radius: 0.55rem;
+  border: 1px solid var(--v2-line);
+  background: rgba(8, 18, 22, 0.35);
+  color: inherit;
+  font: inherit;
+  font-size: 1rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.v2-live-steps-saved {
+  margin: 0;
+  font-size: 0.92rem;
+  color: var(--v2-muted);
+}
+
+.v2-live-steps-saved strong {
+  color: color-mix(in srgb, #3a9a5c 78%, var(--v2-ink));
+  font-size: 1.05rem;
+}
+
+.v2-live-steps-total {
+  margin: 0.55rem 0 0;
+}
+
+.v2-live-steps-history {
+  list-style: none;
+  margin: 0.55rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.28rem;
+}
+
+.v2-live-steps-history li {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  font-size: 0.82rem;
+  color: var(--v2-muted);
+}
+
+.v2-live-day-map {
+  margin-top: 0.75rem;
+}
+
+.v2-live-day-map-label {
+  margin: 0 0 0.35rem;
+}
+
+.v2-live-day-map .trip-map-toolbar,
+.v2-live-day-map .trip-map-gps-hint,
+.v2-live-day-map .trip-map-legend {
+  display: none;
+}
+
+.v2-live-day-map .trip-map {
+  height: min(32vh, 240px);
+  min-height: 160px;
+}
+
 .v2-live-activities {
   display: flex;
   flex-direction: column;

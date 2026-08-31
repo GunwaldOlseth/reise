@@ -240,11 +240,31 @@ function pushPackageMapStops(
   }
 }
 
+export function journeyMapStopsForDate(
+  journey: Journey,
+  date: string,
+): TripMapStop[] {
+  const d = (date || '').trim()
+  if (!d) return []
+  return journeyMapStopsInOrder(journey).filter(
+    (stop) => (stop.date || '').trim() === d,
+  )
+}
+
 export function journeyMapRouteKey(journey: Journey): string {
   return journeyMapStopsInOrder(journey)
     .map(
       (s) =>
         `${s.key}:${s.date}:${s.city}:${s.inboundMinutes ?? ''}:${s.latitude ?? ''}:${s.longitude ?? ''}`,
+    )
+    .join('|')
+}
+
+export function journeyMapRouteKeyForDate(journey: Journey, date: string): string {
+  return journeyMapStopsForDate(journey, date)
+    .map(
+      (s) =>
+        `${s.key}:${s.city}:${s.latitude ?? ''}:${s.longitude ?? ''}`,
     )
     .join('|')
 }
