@@ -142,19 +142,19 @@ function LiveStepsTravelerRow({
 function LiveStepsSection({
   journey,
   date,
-  travelers,
+  tripTravelers,
   disabled,
   tripName,
   onChange,
 }: {
   journey: Journey
   date: string
-  travelers: string[]
+  tripTravelers: string[]
   disabled?: boolean
   tripName?: string
   onChange: (next: Journey) => void
 }) {
-  const people = normalizeTravelers(travelers)
+  const people = normalizeTravelers(tripTravelers)
   const dayTotal = liveStepsOnDate(journey, date)
   const tripTotal = useMemo(() => {
     return people.reduce((sum, name) => {
@@ -528,13 +528,13 @@ export function JourneyLive({
   journey,
   disabled,
   tripName,
-  travelers,
+  tripTravelers,
   onChange,
 }: {
   journey: Journey
   disabled?: boolean
   tripName?: string
-  travelers?: string[]
+  tripTravelers?: string[]
   onChange: (next: Journey) => void
 }) {
   const askDelete = useConfirmDelete()
@@ -1197,7 +1197,7 @@ export function JourneyLive({
       <LiveStepsSection
         journey={journey}
         date={date}
-        travelers={travelers || []}
+        tripTravelers={tripTravelers || []}
         disabled={disabled}
         tripName={tripName}
         onChange={patchJourney}

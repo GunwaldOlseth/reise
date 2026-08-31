@@ -495,7 +495,7 @@ export function TripHub({
                 journey={journey}
                 disabled={!journeyReady}
                 tripName={tripName}
-                travelers={trip?.travelers}
+                tripTravelers={trip?.travelers}
                 onChange={handleLiveChange}
               />
             )}
