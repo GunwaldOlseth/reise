@@ -501,7 +501,6 @@ export function TripHub({
                 tripTravelers={tripTravelers}
                 disabled={!journeyReady}
                 tripName={tripName}
-                travelers={trip?.travelers}
                 onChange={handleLiveChange}
               />
             )}
