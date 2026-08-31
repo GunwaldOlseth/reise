@@ -156,11 +156,6 @@ function LiveStepsSection({
 }) {
   const people = normalizeTravelers(travelers)
   const dayTotal = liveStepsOnDate(journey, date)
-  const tripTotal = useMemo(() => {
-    return people.reduce((sum, name) => {
-      return sum + liveStepsTotalForTraveler(journey, name)
-    }, 0)
-  }, [journey.liveDailySteps, people])
   const history = useMemo(() => {
     const rows = normalizeLiveDailySteps(journey.liveDailySteps).filter(
       (e) => e.date !== date && e.steps > 0,

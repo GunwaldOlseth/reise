@@ -405,8 +405,9 @@ type JourneyLiveActivitySkip struct {
 }
 
 type JourneyLiveDailySteps struct {
-	Date  string `json:"date" firestore:"date"`
-	Steps int    `json:"steps" firestore:"steps"`
+	Date     string `json:"date" firestore:"date"`
+	Traveler string `json:"traveler,omitempty" firestore:"traveler,omitempty"`
+	Steps    int    `json:"steps" firestore:"steps"`
 }
 
 // Journey is the trip thread: ordered stops + legs between them (v2 planner).

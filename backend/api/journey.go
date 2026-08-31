@@ -313,21 +313,27 @@ func normalizeJourney(j *Journey) {
 		if date == "" {
 			continue
 		}
+		traveler := strings.TrimSpace(s.Traveler)
 		steps := s.Steps
 		if steps < 0 {
 			steps = 0
 		}
-		if _, ok := seenSteps[date]; ok {
+		key := date + "\x00" + traveler
+		if _, ok := seenSteps[key]; ok {
 			continue
 		}
-		seenSteps[date] = struct{}{}
+		seenSteps[key] = struct{}{}
 		normSteps = append(normSteps, JourneyLiveDailySteps{
-			Date:  date,
-			Steps: steps,
+			Date:     date,
+			Traveler: traveler,
+			Steps:    steps,
 		})
 	}
 	sort.Slice(normSteps, func(i, k int) bool {
-		return normSteps[i].Date < normSteps[k].Date
+		if normSteps[i].Date != normSteps[k].Date {
+			return normSteps[i].Date < normSteps[k].Date
+		}
+		return normSteps[i].Traveler < normSteps[k].Traveler
 	})
 	j.LiveDailySteps = normSteps
 	for i := range j.Live {
