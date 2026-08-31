@@ -21,6 +21,8 @@ import {
   isPackageStop,
   journeyActivityCalendarBounds,
   journeyDateSpan,
+  liveEntryAppliesToTraveler,
+  liveEntryTravelers,
   liveHotelAlertText,
   liveKindLabel,
   liveMissingHotelAlerts,
@@ -39,6 +41,7 @@ import {
   stopGoalLabel,
   optionHasTicket,
   todayIsoOslo,
+  toggleLiveEntryTraveler,
   transportSegments,
   viaPurpose,
   viaPurposeLabel,
@@ -327,22 +330,35 @@ function activityTargetsOnDate(journey: Journey, date: string): DayActivityTarge
 
 export function JourneyLive({
   journey,
+  tripTravelers = [],
   disabled,
   onChange,
 }: {
   journey: Journey
+  tripTravelers?: string[]
   disabled?: boolean
   onChange: (next: Journey) => void
 }) {
   const askDelete = useConfirmDelete()
   const span = useMemo(() => journeyDateSpan(journey), [journey])
   const today = todayIsoOslo()
+  const travelers = useMemo(
+    () => [...new Set(tripTravelers.map((n) => n.trim()).filter(Boolean))],
+    [tripTravelers],
+  )
   const [date, setDate] = useState(() => {
     if (!span) return today
     if (today >= span.start && today <= span.end) return today
     if (today < span.start) return span.start
     return span.end
   })
+  const [travelerFilter, setTravelerFilter] = useState('')
+
+  useEffect(() => {
+    if (travelerFilter && !travelers.includes(travelerFilter)) {
+      setTravelerFilter('')
+    }
+  }, [travelerFilter, travelers])
 
   const places = useMemo(() => placesOnDate(journey, date), [journey, date])
   const rides = useMemo(() => ridesOnDate(journey, date), [journey, date])
@@ -358,9 +374,31 @@ export function JourneyLive({
     () =>
       normalizeLive(journey.live)
         .filter((e) => e.date === date)
+        .filter((e) =>
+          travelerFilter
+            ? liveEntryAppliesToTraveler(e, travelerFilter, travelers)
+            : true,
+        )
+        .sort((a, b) => a.sortOrder - b.sortOrder),
+    [journey.live, date, travelerFilter, travelers],
+  )
+  const dayEntriesAll = useMemo(
+    () =>
+      normalizeLive(journey.live)
+        .filter((e) => e.date === date)
         .sort((a, b) => a.sortOrder - b.sortOrder),
     [journey.live, date],
   )
+  const travelerDayCounts = useMemo(() => {
+    const counts = new Map<string, number>()
+    for (const name of travelers) counts.set(name, 0)
+    for (const entry of dayEntriesAll) {
+      for (const name of liveEntryTravelers(entry, travelers)) {
+        counts.set(name, (counts.get(name) || 0) + 1)
+      }
+    }
+    return counts
+  }, [dayEntriesAll, travelers])
   const isToday = date === today
 
   function patchJourney(next: Journey) {
@@ -454,6 +492,9 @@ export function JourneyLive({
   function addEntry(kind: JourneyLiveKind) {
     const all = normalizeLive(journey.live)
     const row = newLiveEntry(date, kind, all.length)
+    if (travelerFilter && travelers.length > 1) {
+      row.travelers = [travelerFilter]
+    }
     setLive([...all, row])
   }
 
@@ -626,6 +667,46 @@ export function JourneyLive({
           </button>
         )}
       </header>
+
+      {travelers.length > 0 && (
+        <section className="v2-live-travelers" aria-label="Deltakere denne dagen">
+          <div className="v2-live-travelers-head">
+            <h3>Deltakere</h3>
+            <p className="v2-meta">
+              Registrering dag for dag — velg hvem du ser og logger for.
+            </p>
+          </div>
+          <div className="v2-live-traveler-filter">
+            <button
+              type="button"
+              className={`v2-chip-btn${travelerFilter === '' ? ' is-on' : ''}`}
+              title="Vis alle deltakere"
+              onClick={() => setTravelerFilter('')}
+            >
+              Alle
+            </button>
+            {travelers.map((name) => {
+              const count = travelerDayCounts.get(name) || 0
+              return (
+                <button
+                  key={name}
+                  type="button"
+                  className={`v2-chip-btn${
+                    travelerFilter === name ? ' is-on' : ''
+                  }`}
+                  title={`Vis registrering for ${name}`}
+                  onClick={() =>
+                    setTravelerFilter((cur) => (cur === name ? '' : name))
+                  }
+                >
+                  {name}
+                  <span className="v2-live-traveler-count">{count}</span>
+                </button>
+              )
+            })}
+          </div>
+        </section>
+      )}
 
       {hotelAlerts.length > 0 && (
         <aside className="v2-live-alert" role="status">
@@ -976,6 +1057,7 @@ export function JourneyLive({
               <LiveEntryRow
                 key={entry.id}
                 entry={entry}
+                tripTravelers={travelers}
                 disabled={disabled}
                 onChange={(partial) => updateEntry(entry.id, partial)}
                 onRemove={() => {
@@ -997,11 +1079,13 @@ export function JourneyLive({
 
 export function LiveEntryRow({
   entry,
+  tripTravelers = [],
   disabled,
   onChange,
   onRemove,
 }: {
   entry: JourneyLiveEntry
+  tripTravelers?: string[]
   disabled?: boolean
   onChange: (partial: Partial<JourneyLiveEntry>) => void
   onRemove: () => void
@@ -1022,6 +1106,15 @@ export function LiveEntryRow({
 
   const photos = entry.photos || []
   const rating = entry.rating || 0
+  const tagged = liveEntryTravelers(entry, tripTravelers)
+  const showTravelerPick = tripTravelers.length > 1
+
+  function setTravelerOn(name: string, on: boolean) {
+    if (disabled) return
+    onChange({
+      travelers: toggleLiveEntryTraveler(entry, name, tripTravelers, on),
+    })
+  }
 
   function setRating(n: number) {
     if (disabled) return
@@ -1101,6 +1194,36 @@ export function LiveEntryRow({
       </button>
 
       <div className="v2-live-log-extra">
+        {showTravelerPick ? (
+          <div
+            className="v2-live-entry-travelers"
+            role="group"
+            aria-label="Hvem gjelder dette"
+          >
+            {tripTravelers.map((name) => {
+              const on = tagged.includes(name)
+              return (
+                <button
+                  key={name}
+                  type="button"
+                  className={`v2-chip-btn v2-live-entry-traveler${
+                    on ? ' is-on' : ''
+                  }`}
+                  disabled={disabled}
+                  aria-pressed={on}
+                  title={
+                    on
+                      ? `Fjern ${name} fra registreringen`
+                      : `Legg til ${name}`
+                  }
+                  onClick={() => setTravelerOn(name, !on)}
+                >
+                  {name}
+                </button>
+              )
+            })}
+          </div>
+        ) : null}
         <div className="v2-live-stars" role="group" aria-label="Vurdering">
           {[1, 2, 3, 4, 5].map((n) => (
             <button

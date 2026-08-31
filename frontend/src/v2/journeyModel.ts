@@ -9,6 +9,7 @@ import {
   normalizeClockTime,
   normalizeEditableClockTime,
   normalizeDepartures,
+  normalizeTravelers,
   parsePriceAmount,
 } from '../api'
 import { localizeJourneyPlaces } from '../placeNames'
@@ -1856,6 +1857,8 @@ export interface JourneyLiveEntry {
   /** 0 = unset, otherwise 1..5. */
   rating?: number
   photos?: JourneyPhoto[]
+  /** Trip travelers this entry applies to; empty = all. */
+  travelers?: string[]
   sortOrder: number
 }
 
@@ -1941,24 +1944,92 @@ export function normalizeLive(
         time: e.time || '',
         rating,
         photos,
+        travelers: normalizeLiveEntryTravelers(e.travelers),
         sortOrder: i,
       }
     })
 }
 
+/** Normalize traveler tags on a live entry; empty = all travelers. */
+export function normalizeLiveEntryTravelers(
+  list?: string[] | null,
+): string[] {
+  return normalizeTravelers(list)
+}
+
+/** Effective travelers for an entry when trip has a traveler list. */
+export function liveEntryTravelers(
+  entry: Pick<JourneyLiveEntry, 'travelers'>,
+  tripTravelers: string[],
+): string[] {
+  const all = normalizeTravelers(tripTravelers)
+  if (!all.length) return []
+  const tagged = normalizeLiveEntryTravelers(entry.travelers)
+  if (!tagged.length) return all
+  const allowed = new Set(all)
+  return tagged.filter((name) => allowed.has(name))
+}
+
+export function liveEntryAppliesToTraveler(
+  entry: Pick<JourneyLiveEntry, 'travelers'>,
+  traveler: string,
+  tripTravelers: string[],
+): boolean {
+  const who = liveEntryTravelers(entry, tripTravelers)
+  if (!who.length) return true
+  return who.includes(traveler)
+}
+
+/** Persist empty when all trip travelers are tagged. */
+export function compactLiveEntryTravelers(
+  tagged: string[] | undefined,
+  tripTravelers: string[],
+): string[] {
+  const all = normalizeTravelers(tripTravelers)
+  const names = normalizeLiveEntryTravelers(tagged).filter((n) =>
+    all.includes(n),
+  )
+  if (!all.length || names.length === 0 || names.length === all.length) {
+    return []
+  }
+  return names
+}
+
+export function toggleLiveEntryTraveler(
+  entry: Pick<JourneyLiveEntry, 'travelers'>,
+  traveler: string,
+  tripTravelers: string[],
+  on: boolean,
+): string[] {
+  const all = normalizeTravelers(tripTravelers)
+  if (!all.length) return []
+  const current = liveEntryTravelers(entry, all)
+  const next = on
+    ? [...new Set([...current, traveler])]
+    : current.filter((n) => n !== traveler)
+  return compactLiveEntryTravelers(next, all)
+}
+
 /** Drop blank draft rows before persist. */
 export function compactLive(
   list?: JourneyLiveEntry[] | null,
+  tripTravelers?: string[] | null,
 ): JourneyLiveEntry[] {
-  return normalizeLive(list).filter(
-    (e) =>
-      e.date &&
-      (e.title.trim() ||
-        (e.price || '').trim() ||
-        (e.notes || '').trim() ||
-        (e.rating || 0) > 0 ||
-        (e.photos || []).length > 0),
-  )
+  const all = normalizeTravelers(tripTravelers)
+  return normalizeLive(list)
+    .filter(
+      (e) =>
+        e.date &&
+        (e.title.trim() ||
+          (e.price || '').trim() ||
+          (e.notes || '').trim() ||
+          (e.rating || 0) > 0 ||
+          (e.photos || []).length > 0),
+    )
+    .map((e) => ({
+      ...e,
+      travelers: compactLiveEntryTravelers(e.travelers, all),
+    }))
 }
 
 export function normalizeLiveActivitySkips(

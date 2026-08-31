@@ -3,6 +3,7 @@ import {
   api,
   formatExpenseAmount,
   formatTravelers,
+  normalizeTravelers,
   type Trip,
   type TripExpenseSummary,
 } from '../api'
@@ -166,6 +167,10 @@ export function TripHub({
     () => journeyExpenseSummary(journey),
     [journey],
   )
+  const tripTravelers = useMemo(
+    () => normalizeTravelers(trip?.travelers),
+    [trip?.travelers],
+  )
   const liveSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const livePending = useRef<Journey | null>(null)
 
@@ -173,7 +178,7 @@ export function TripHub({
     livePending.current = null
     const payload: Journey = {
       ...next,
-      live: compactLive(next.live),
+      live: compactLive(next.live, trip?.travelers),
       liveActivitySkips: normalizeLiveActivitySkips(next.liveActivitySkips),
       stops: (next.stops || []).map((s) => ({
         ...s,
@@ -492,6 +497,7 @@ export function TripHub({
             ) : (
               <JourneyLive
                 journey={journey}
+                tripTravelers={tripTravelers}
                 disabled={!journeyReady}
                 onChange={handleLiveChange}
               />
@@ -505,6 +511,7 @@ export function TripHub({
             ) : (
               <JourneyLog
                 journey={journey}
+                tripTravelers={tripTravelers}
                 disabled={!journeyReady}
                 onChange={handleLiveChange}
               />

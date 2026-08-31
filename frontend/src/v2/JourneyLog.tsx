@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import {
   formatDateNO,
+  liveEntryAppliesToTraveler,
   liveKindLabel,
   normalizeLive,
   type Journey,
@@ -19,16 +20,28 @@ function hasLiveContent(entry: JourneyLiveEntry): boolean {
   )
 }
 
+function entrySummary(entry: JourneyLiveEntry): string {
+  const title = entry.title.trim() || liveKindLabel(entry.kind)
+  const price = (entry.price || '').trim()
+  return price ? `${title} · ${price}` : title
+}
+
 export function JourneyLog({
   journey,
+  tripTravelers = [],
   disabled,
   onChange,
 }: {
   journey: Journey
+  tripTravelers?: string[]
   disabled?: boolean
   onChange: (next: Journey) => void
 }) {
   const askDelete = useConfirmDelete()
+  const travelers = useMemo(
+    () => [...new Set(tripTravelers.map((n) => n.trim()).filter(Boolean))],
+    [tripTravelers],
+  )
 
   const groups = useMemo(() => {
     const byDate = new Map<string, JourneyLiveEntry[]>()
@@ -74,6 +87,9 @@ export function JourneyLog({
         <h2>Logg</h2>
         <p className="v2-meta">
           Alt som er logget utenom planen — mat, drikke, kjøp og annet.
+          {travelers.length > 0
+            ? ' Oversikt dag for dag per deltaker.'
+            : ' Legg til hvem som er med under rediger tur for deltaker-visning.'}
         </p>
       </header>
 
@@ -86,11 +102,40 @@ export function JourneyLog({
         groups.map(([day, rows]) => (
           <section key={day} className="v2-live-block">
             <h3>{formatDateNO(day)}</h3>
+            {travelers.length > 0 ? (
+              <div className="v2-log-traveler-groups">
+                {travelers.map((name) => {
+                  const personRows = rows.filter((entry) =>
+                    liveEntryAppliesToTraveler(entry, name, travelers),
+                  )
+                  return (
+                    <div
+                      key={name}
+                      className={`v2-log-traveler-group${
+                        personRows.length === 0 ? ' is-empty' : ''
+                      }`}
+                    >
+                      <h4>{name}</h4>
+                      {personRows.length === 0 ? (
+                        <p className="v2-meta">Ingen registrering denne dagen.</p>
+                      ) : (
+                        <ul className="v2-log-traveler-summary">
+                          {personRows.map((entry) => (
+                            <li key={entry.id}>{entrySummary(entry)}</li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            ) : null}
             <ul className="v2-live-log">
               {rows.map((entry) => (
                 <LiveEntryRow
                   key={entry.id}
                   entry={entry}
+                  tripTravelers={travelers}
                   disabled={disabled}
                   onChange={(partial) => updateEntry(entry.id, partial)}
                   onRemove={() => {

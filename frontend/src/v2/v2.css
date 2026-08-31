@@ -7142,6 +7142,91 @@ html[data-theme='plasma'] .v2-shell {
   margin: 0;
 }
 
+.v2-live-travelers {
+  margin: 0 0 0.85rem;
+  padding: 0.65rem 0.7rem;
+  border: 1px solid var(--v2-line);
+  border-radius: 0.75rem;
+  background: var(--v2-panel);
+}
+
+.v2-live-travelers-head h3 {
+  margin: 0 0 0.15rem;
+  font-size: 0.95rem;
+}
+
+.v2-live-travelers-head .v2-meta {
+  margin: 0 0 0.45rem;
+}
+
+.v2-live-traveler-filter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.v2-live-traveler-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.15rem;
+  padding: 0 0.25rem;
+  margin-left: 0.2rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--v2-accent) 18%, transparent);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.v2-live-entry-travelers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin-bottom: 0.35rem;
+}
+
+.v2-live-entry-traveler {
+  font-size: 0.78rem;
+  padding: 0.15rem 0.45rem;
+}
+
+.v2-log-traveler-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  margin-bottom: 0.75rem;
+}
+
+.v2-log-traveler-group {
+  padding: 0.55rem 0.65rem;
+  border: 1px solid var(--v2-line);
+  border-radius: 0.65rem;
+  background: color-mix(in srgb, var(--v2-panel) 88%, var(--v2-accent) 12%);
+}
+
+.v2-log-traveler-group.is-empty {
+  opacity: 0.85;
+}
+
+.v2-log-traveler-group h4 {
+  margin: 0 0 0.25rem;
+  font-size: 0.88rem;
+}
+
+.v2-log-traveler-summary {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.v2-log-traveler-summary li {
+  font-size: 0.85rem;
+  color: var(--v2-ink);
+}
+
 .v2-live-places,
 .v2-live-rides,
 .v2-live-sights,
