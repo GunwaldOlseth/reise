@@ -7230,28 +7230,40 @@ html[data-theme='plasma'] .v2-shell {
   margin: 0 0 0.55rem;
 }
 
-.v2-live-steps-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
-  gap: 0.65rem 1rem;
-}
-
-.v2-live-steps-field {
+.v2-live-steps-people {
+  list-style: none;
+  margin: 0;
+  padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.2rem;
-  min-width: 8.5rem;
+  gap: 0.45rem;
 }
 
-.v2-live-steps-label {
-  font-size: 0.78rem;
+.v2-live-steps-person {
+  display: grid;
+  grid-template-columns: minmax(5rem, 1fr) minmax(6.5rem, 8.5rem) auto;
+  align-items: center;
+  gap: 0.45rem 0.65rem;
+}
+
+.v2-live-steps-person-name {
+  font-size: 0.88rem;
+  font-weight: 650;
+  color: var(--v2-ink);
+}
+
+.v2-live-steps-person-saved {
+  font-size: 0.82rem;
   color: var(--v2-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.v2-live-steps-person-saved strong {
+  color: color-mix(in srgb, #3a9a5c 78%, var(--v2-ink));
 }
 
 .v2-live-steps-input {
   width: 100%;
-  max-width: 11rem;
   padding: 0.4rem 0.55rem;
   border-radius: 0.55rem;
   border: 1px solid var(--v2-line);
@@ -7262,19 +7274,25 @@ html[data-theme='plasma'] .v2-shell {
   font-variant-numeric: tabular-nums;
 }
 
-.v2-live-steps-saved {
-  margin: 0;
-  font-size: 0.92rem;
-  color: var(--v2-muted);
-}
-
-.v2-live-steps-saved strong {
-  color: color-mix(in srgb, #3a9a5c 78%, var(--v2-ink));
-  font-size: 1.05rem;
-}
-
-.v2-live-steps-total {
+.v2-live-steps-day-total {
   margin: 0.55rem 0 0;
+}
+
+.v2-live-steps-trip-totals {
+  list-style: none;
+  margin: 0.45rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.22rem;
+}
+
+.v2-live-steps-trip-totals li {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  font-size: 0.82rem;
+  color: var(--v2-muted);
 }
 
 .v2-live-steps-history {
@@ -7288,10 +7306,16 @@ html[data-theme='plasma'] .v2-shell {
 
 .v2-live-steps-history li {
   display: flex;
-  justify-content: space-between;
-  gap: 0.75rem;
+  flex-direction: column;
+  gap: 0.18rem;
   font-size: 0.82rem;
   color: var(--v2-muted);
+}
+
+.v2-live-steps-history-people {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 0.55rem;
 }
 
 .v2-live-day-map {

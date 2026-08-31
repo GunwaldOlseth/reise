@@ -1899,6 +1899,8 @@ export interface JourneyLiveActivitySkip {
 
 export interface JourneyLiveDailySteps {
   date: string
+  /** Display name — matches trip.travelers entries. */
+  traveler?: string
   steps: number
 }
 
@@ -2095,16 +2097,19 @@ export function normalizeLiveActivitySkips(
 export function normalizeLiveDailySteps(
   list?: JourneyLiveDailySteps[] | null,
 ): JourneyLiveDailySteps[] {
-  const byDate = new Map<string, number>()
+  const byKey = new Map<string, JourneyLiveDailySteps>()
   for (const raw of list || []) {
     const date = (raw.date || '').trim()
     if (!date) continue
+    const traveler = (raw.traveler || '').trim()
     const steps = Math.max(0, Math.floor(Number(raw.steps) || 0))
-    byDate.set(date, steps)
+    const key = `${date}\x00${traveler}`
+    byKey.set(key, { date, traveler, steps })
   }
-  return [...byDate.entries()]
-    .sort((a, b) => a[0].localeCompare(b[0]))
-    .map(([date, steps]) => ({ date, steps }))
+  return [...byKey.values()].sort((a, b) => {
+    if (a.date !== b.date) return a.date.localeCompare(b.date)
+    return (a.traveler || '').localeCompare(b.traveler || '', 'nb')
+  })
 }
 
 /** Drop zero rows before persist. */
@@ -2114,13 +2119,26 @@ export function compactLiveDailySteps(
   return normalizeLiveDailySteps(list).filter((e) => e.steps > 0)
 }
 
+export function liveStepsOnDateForTraveler(
+  journey: Journey,
+  date: string,
+  traveler: string,
+): number {
+  const d = date.trim()
+  const who = traveler.trim()
+  if (!d) return 0
+  const row = normalizeLiveDailySteps(journey.liveDailySteps).find(
+    (e) => e.date === d && (e.traveler || '').trim() === who,
+  )
+  return row?.steps ?? 0
+}
+
 export function liveStepsOnDate(journey: Journey, date: string): number {
   const d = date.trim()
   if (!d) return 0
-  const row = normalizeLiveDailySteps(journey.liveDailySteps).find(
-    (e) => e.date === d,
-  )
-  return row?.steps ?? 0
+  return normalizeLiveDailySteps(journey.liveDailySteps)
+    .filter((e) => e.date === d)
+    .reduce((sum, e) => sum + e.steps, 0)
 }
 
 export function liveStepsTotal(journey: Journey): number {
@@ -2130,18 +2148,42 @@ export function liveStepsTotal(journey: Journey): number {
   )
 }
 
+export function liveStepsTotalForTraveler(
+  journey: Journey,
+  traveler: string,
+): number {
+  const who = traveler.trim()
+  return normalizeLiveDailySteps(journey.liveDailySteps)
+    .filter((e) => (e.traveler || '').trim() === who)
+    .reduce((sum, e) => sum + e.steps, 0)
+}
+
+export function withLiveDailyStepsForTraveler(
+  journey: Journey,
+  date: string,
+  traveler: string,
+  steps: number,
+): Journey {
+  const d = date.trim()
+  const who = traveler.trim()
+  const n = Math.max(0, Math.floor(steps))
+  const rest = normalizeLiveDailySteps(journey.liveDailySteps).filter(
+    (e) => e.date !== d || (e.traveler || '').trim() !== who,
+  )
+  if (n === 0) return { ...journey, liveDailySteps: rest }
+  return {
+    ...journey,
+    liveDailySteps: [...rest, { date: d, traveler: who, steps: n }],
+  }
+}
+
+/** Legacy rows without traveler name. */
 export function withLiveDailySteps(
   journey: Journey,
   date: string,
   steps: number,
 ): Journey {
-  const d = date.trim()
-  const n = Math.max(0, Math.floor(steps))
-  const rest = normalizeLiveDailySteps(journey.liveDailySteps).filter(
-    (e) => e.date !== d,
-  )
-  if (n === 0) return { ...journey, liveDailySteps: rest }
-  return { ...journey, liveDailySteps: [...rest, { date: d, steps: n }] }
+  return withLiveDailyStepsForTraveler(journey, date, '', steps)
 }
 
 export function liveSkippedActivityIds(
