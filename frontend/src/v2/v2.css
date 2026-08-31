@@ -1189,6 +1189,56 @@ html[data-theme='plasma'] .v2-shell {
   min-width: 0;
 }
 
+.v2-overview-steps-wrap {
+  margin-top: 0.65rem;
+  overflow-x: auto;
+}
+
+.v2-overview-steps-table {
+  width: 100%;
+  min-width: min(100%, 18rem);
+  border-collapse: collapse;
+  font-size: 0.88rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.v2-overview-steps-table th,
+.v2-overview-steps-table td {
+  padding: 0.45rem 0.55rem;
+  border-bottom: 1px solid var(--v2-line);
+  text-align: right;
+  vertical-align: middle;
+}
+
+.v2-overview-steps-table th:first-child,
+.v2-overview-steps-table td:first-child {
+  text-align: left;
+  font-weight: 650;
+}
+
+.v2-overview-steps-table thead th {
+  font-size: 0.78rem;
+  color: var(--v2-label);
+  font-weight: 650;
+  border-bottom-width: 2px;
+}
+
+.v2-overview-steps-table tbody th {
+  color: var(--v2-ink);
+  font-weight: 550;
+}
+
+.v2-overview-steps-table tfoot th,
+.v2-overview-steps-table tfoot td {
+  border-bottom: none;
+  border-top: 2px solid var(--v2-line-strong);
+  font-weight: 650;
+}
+
+.v2-overview-steps-table .is-total {
+  color: color-mix(in srgb, #3a9a5c 78%, var(--v2-ink));
+}
+
 .v2-overview-list.is-rides .v2-overview-num {
   font-size: 0.92rem;
 }

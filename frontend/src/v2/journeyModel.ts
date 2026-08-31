@@ -2158,6 +2158,50 @@ export function liveStepsTotalForTraveler(
     .reduce((sum, e) => sum + e.steps, 0)
 }
 
+export interface JourneyOverviewStepsDayRow {
+  date: string
+  byTraveler: Record<string, number>
+  total: number
+}
+
+export function journeyOverviewStepsSummary(
+  journey: Journey,
+  travelers?: string[] | null,
+): {
+  travelers: string[]
+  days: JourneyOverviewStepsDayRow[]
+  totalsByTraveler: Record<string, number>
+  tripTotal: number
+} {
+  const people = normalizeTravelers(travelers)
+  const dates = [...new Set(
+    normalizeLiveDailySteps(journey.liveDailySteps)
+      .filter((e) => e.steps > 0)
+      .map((e) => e.date),
+  )].sort()
+  const days = dates.map((date) => {
+    const byTraveler: Record<string, number> = {}
+    for (const name of people) {
+      byTraveler[name] = liveStepsOnDateForTraveler(journey, date, name)
+    }
+    return {
+      date,
+      byTraveler,
+      total: liveStepsOnDate(journey, date),
+    }
+  })
+  const totalsByTraveler: Record<string, number> = {}
+  for (const name of people) {
+    totalsByTraveler[name] = liveStepsTotalForTraveler(journey, name)
+  }
+  return {
+    travelers: people,
+    days,
+    totalsByTraveler,
+    tripTotal: liveStepsTotal(journey),
+  }
+}
+
 export function withLiveDailyStepsForTraveler(
   journey: Journey,
   date: string,
