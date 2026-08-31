@@ -525,7 +525,7 @@ export function TripHub({
             {!journeyReady ? (
               <p className="v2-meta">Henter oversikt…</p>
             ) : (
-              <JourneyOverview journey={journey} />
+              <JourneyOverview journey={journey} tripTravelers={tripTravelers} />
             )}
           </div>
         )}

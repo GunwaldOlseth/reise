@@ -7,19 +7,31 @@ import {
   formatDateNO,
   journeyOverviewBookedHotels,
   journeyOverviewRides,
+  journeyOverviewStepsSummary,
   journeyVisitCountryGroups,
   journeyVisitPlaces,
   type Journey,
 } from './journeyModel'
 
-type OverviewPage = 'cities' | 'countries' | 'rides' | 'hotels'
+type OverviewPage = 'cities' | 'countries' | 'rides' | 'hotels' | 'steps'
 
-export function JourneyOverview({ journey }: { journey: Journey }) {
+function formatStepCount(n: number): string {
+  return n.toLocaleString('nb-NO')
+}
+
+export function JourneyOverview({
+  journey,
+  tripTravelers = [],
+}: {
+  journey: Journey
+  tripTravelers?: string[]
+}) {
   const [page, setPage] = useState<OverviewPage>('cities')
   const { cities, countries } = journeyVisitPlaces(journey)
   const countryGroups = journeyVisitCountryGroups(journey)
   const rides = journeyOverviewRides(journey)
   const bookedHotels = journeyOverviewBookedHotels(journey)
+  const stepsSummary = journeyOverviewStepsSummary(journey, tripTravelers)
 
   return (
     <div className="v2-overview">
@@ -55,6 +67,14 @@ export function JourneyOverview({ journey }: { journey: Journey }) {
           onClick={() => setPage('rides')}
         >
           Transport
+        </button>
+        <button
+          type="button"
+          className={`v2-overview-tab${page === 'steps' ? ' is-on' : ''}`}
+          title="Skritt per dag og totalt"
+          onClick={() => setPage('steps')}
+        >
+          Skritt
         </button>
       </nav>
 
@@ -183,6 +203,77 @@ export function JourneyOverview({ journey }: { journey: Journey }) {
                 </TransportRideTip>
               ))}
             </ol>
+          )}
+        </section>
+      )}
+
+      {page === 'steps' && (
+        <section>
+          <h2>Skritt</h2>
+          {stepsSummary.travelers.length === 0 ? (
+            <p className="v2-meta">
+              Legg til hvem er med på reisen for å se skritt per person.
+            </p>
+          ) : stepsSummary.days.length === 0 ? (
+            <p className="v2-meta">
+              Ingen skritt registrert ennå. Logg under{' '}
+              <strong>Live</strong> nederst på dagen.
+            </p>
+          ) : (
+            <>
+              <p className="v2-meta">
+                {stepsSummary.days.length}{' '}
+                {stepsSummary.days.length === 1 ? 'dag' : 'dager'} med
+                registrerte skritt.
+              </p>
+              <div className="v2-overview-steps-wrap">
+                <table className="v2-overview-steps-table">
+                  <thead>
+                    <tr>
+                      <th scope="col">Dag</th>
+                      {stepsSummary.travelers.map((name) => (
+                        <th key={name} scope="col">{name}</th>
+                      ))}
+                      <th scope="col" className="is-total">Sum</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {stepsSummary.days.map((row) => (
+                      <tr key={row.date}>
+                        <th scope="row">{formatDateNO(row.date)}</th>
+                        {stepsSummary.travelers.map((name) => (
+                          <td key={name}>
+                            {row.byTraveler[name] > 0
+                              ? formatStepCount(row.byTraveler[name])
+                              : '–'}
+                          </td>
+                        ))}
+                        <td className="is-total">
+                          <strong>{formatStepCount(row.total)}</strong>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr>
+                      <th scope="row">Totalt ferie</th>
+                      {stepsSummary.travelers.map((name) => (
+                        <td key={name}>
+                          <strong>
+                            {formatStepCount(
+                              stepsSummary.totalsByTraveler[name] || 0,
+                            )}
+                          </strong>
+                        </td>
+                      ))}
+                      <td className="is-total">
+                        <strong>{formatStepCount(stepsSummary.tripTotal)}</strong>
+                      </td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            </>
           )}
         </section>
       )}
