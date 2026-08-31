@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { api, mediaUrl } from '../api'
+import { TripMap } from '../TripMap'
 import { downscaleImage } from './imageResize'
 import { localizeCity } from '../placeNames'
 import { CityInfoTip } from './CityInfoTip'
@@ -46,6 +47,10 @@ import {
   sortTransportOptions,
   withLiveActivitySkip,
   withLiveActivityItemSkip,
+  liveStepsOnDate,
+  liveStepsTotal,
+  normalizeLiveDailySteps,
+  withLiveDailySteps,
   withTakenTransportOption,
   type Journey,
   type JourneyActivity,
@@ -61,6 +66,128 @@ import { TrashIcon, TransportModeIcon } from '../TransportModeIcon'
 import { useConfirmDelete } from './ConfirmDelete'
 import { TicketToggle } from './PurposeToggle'
 import { SightList } from './SightList'
+import {
+  journeyMapRouteKeyForDate,
+  journeyMapStopsForDate,
+} from './journeyMap'
+
+function formatStepCount(n: number): string {
+  return n.toLocaleString('nb-NO')
+}
+
+function LiveStepsSection({
+  journey,
+  date,
+  disabled,
+  tripName,
+  onChange,
+}: {
+  journey: Journey
+  date: string
+  disabled?: boolean
+  tripName?: string
+  onChange: (next: Journey) => void
+}) {
+  const savedSteps = liveStepsOnDate(journey, date)
+  const [input, setInput] = useState(() =>
+    savedSteps > 0 ? String(savedSteps) : '',
+  )
+
+  useEffect(() => {
+    const steps = liveStepsOnDate(journey, date)
+    setInput(steps > 0 ? String(steps) : '')
+  }, [journey.liveDailySteps, date])
+
+  const total = liveStepsTotal(journey)
+  const history = useMemo(
+    () =>
+      normalizeLiveDailySteps(journey.liveDailySteps).filter(
+        (e) => e.date !== date && e.steps > 0,
+      ),
+    [journey.liveDailySteps, date],
+  )
+  const dayMapStops = useMemo(
+    () => journeyMapStopsForDate(journey, date),
+    [journey, date],
+  )
+  const dayMapKey = useMemo(
+    () => journeyMapRouteKeyForDate(journey, date),
+    [journey, date],
+  )
+
+  function commit(raw: string) {
+    const digits = raw.replace(/\D/g, '')
+    const n = digits
+      ? Math.min(999999, Math.floor(Number(digits)))
+      : 0
+    const display = n > 0 ? String(n) : ''
+    setInput(display)
+    if (n === savedSteps) return
+    onChange(withLiveDailySteps(journey, date, n))
+  }
+
+  return (
+    <section className="v2-live-block v2-live-steps">
+      <h3>Skritt</h3>
+      <p className="v2-meta v2-live-steps-hint">
+        Registrer hvor mange skritt dere har gått denne dagen.
+      </p>
+      <div className="v2-live-steps-row">
+        <label className="v2-live-steps-field">
+          <span className="v2-live-steps-label">Denne dagen</span>
+          <input
+            type="text"
+            inputMode="numeric"
+            pattern="[0-9]*"
+            className="v2-live-steps-input"
+            value={input}
+            disabled={disabled}
+            placeholder="0"
+            aria-label="Antall skritt"
+            onChange={(e) => setInput(e.target.value.replace(/\D/g, ''))}
+            onBlur={() => commit(input)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault()
+                commit(input)
+              }
+            }}
+          />
+        </label>
+        {savedSteps > 0 ? (
+          <p className="v2-live-steps-saved">
+            <strong>{formatStepCount(savedSteps)}</strong> skritt
+          </p>
+        ) : null}
+      </div>
+      {total > 0 ? (
+        <p className="v2-meta v2-live-steps-total">
+          Totalt på reisen: <strong>{formatStepCount(total)}</strong> skritt
+        </p>
+      ) : null}
+      {history.length > 0 ? (
+        <ul className="v2-live-steps-history" aria-label="Skritt andre dager">
+          {history.map((row) => (
+            <li key={row.date}>
+              <span>{formatDateNO(row.date)}</span>
+              <span>{formatStepCount(row.steps)} skritt</span>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+      {dayMapStops.length > 0 ? (
+        <div className="v2-live-day-map">
+          <p className="v2-meta v2-live-day-map-label">Steder denne dagen</p>
+          <TripMap
+            stops={dayMapStops}
+            routeKey={dayMapKey}
+            tripName={tripName || 'Reise'}
+          />
+        </div>
+      ) : null}
+    </section>
+  )
+}
 
 function firstStopOnDate(journey: Journey, date: string): JourneyStop | undefined {
   return [...(journey.stops || [])]
@@ -328,10 +455,12 @@ function activityTargetsOnDate(journey: Journey, date: string): DayActivityTarge
 export function JourneyLive({
   journey,
   disabled,
+  tripName,
   onChange,
 }: {
   journey: Journey
   disabled?: boolean
+  tripName?: string
   onChange: (next: Journey) => void
 }) {
   const askDelete = useConfirmDelete()
@@ -636,6 +765,14 @@ export function JourneyLive({
           ))}
         </aside>
       )}
+
+      <LiveStepsSection
+        journey={journey}
+        date={date}
+        disabled={disabled}
+        tripName={tripName}
+        onChange={patchJourney}
+      />
 
       {places.length === 0 && rides.length === 0 && (
         <p className="v2-empty">

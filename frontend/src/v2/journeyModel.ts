@@ -1894,6 +1894,11 @@ export interface JourneyLiveActivitySkip {
   activityId?: string
 }
 
+export interface JourneyLiveDailySteps {
+  date: string
+  steps: number
+}
+
 export interface Journey {
   id?: string
   tripId: string
@@ -1903,6 +1908,8 @@ export interface Journey {
   live?: JourneyLiveEntry[]
   /** Days where planned activities were intentionally not logged in Live. */
   liveActivitySkips?: JourneyLiveActivitySkip[]
+  /** Daily step counts logged while travelling (Live). */
+  liveDailySteps?: JourneyLiveDailySteps[]
   createdAt?: string
   updatedAt?: string
 }
@@ -2012,6 +2019,58 @@ export function normalizeLiveActivitySkips(
     })
   }
   return out
+}
+
+export function normalizeLiveDailySteps(
+  list?: JourneyLiveDailySteps[] | null,
+): JourneyLiveDailySteps[] {
+  const byDate = new Map<string, number>()
+  for (const raw of list || []) {
+    const date = (raw.date || '').trim()
+    if (!date) continue
+    const steps = Math.max(0, Math.floor(Number(raw.steps) || 0))
+    byDate.set(date, steps)
+  }
+  return [...byDate.entries()]
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([date, steps]) => ({ date, steps }))
+}
+
+/** Drop zero rows before persist. */
+export function compactLiveDailySteps(
+  list?: JourneyLiveDailySteps[] | null,
+): JourneyLiveDailySteps[] {
+  return normalizeLiveDailySteps(list).filter((e) => e.steps > 0)
+}
+
+export function liveStepsOnDate(journey: Journey, date: string): number {
+  const d = date.trim()
+  if (!d) return 0
+  const row = normalizeLiveDailySteps(journey.liveDailySteps).find(
+    (e) => e.date === d,
+  )
+  return row?.steps ?? 0
+}
+
+export function liveStepsTotal(journey: Journey): number {
+  return normalizeLiveDailySteps(journey.liveDailySteps).reduce(
+    (sum, e) => sum + e.steps,
+    0,
+  )
+}
+
+export function withLiveDailySteps(
+  journey: Journey,
+  date: string,
+  steps: number,
+): Journey {
+  const d = date.trim()
+  const n = Math.max(0, Math.floor(steps))
+  const rest = normalizeLiveDailySteps(journey.liveDailySteps).filter(
+    (e) => e.date !== d,
+  )
+  if (n === 0) return { ...journey, liveDailySteps: rest }
+  return { ...journey, liveDailySteps: [...rest, { date: d, steps: n }] }
 }
 
 export function liveSkippedActivityIds(
