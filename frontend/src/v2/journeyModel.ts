@@ -1090,6 +1090,7 @@ export type OverviewRide = {
   fromLabel: string
   toLabel: string
   detail: string
+  via: JourneyVia
 }
 
 export function formatCityStation(city?: string, station?: string): string {
@@ -1169,6 +1170,7 @@ export function journeyOverviewRides(journey: Journey): OverviewRide[] {
         fromLabel: prev,
         toLabel,
         detail,
+        via,
       })
       prev = toLabel
     })
