@@ -202,7 +202,11 @@ export function NoteEditor({
   toolbarExtra?: ReactNode
 }) {
   const box = useRef<HTMLDivElement>(null)
+  const rootRef = useRef<HTMLDivElement>(null)
   const fileRef = useRef<HTMLInputElement>(null)
+  const savedRangeRef = useRef<Range | null>(null)
+  const uploadingRef = useRef(false)
+  const deferBlurRef = useRef(false)
   const last = useRef(sanitizeNoteHtml(value || ''))
   const [highlightActive, setHighlightActive] = useState(false)
   const [uploading, setUploading] = useState(false)
@@ -233,6 +237,64 @@ export function NoteEditor({
     document.addEventListener('selectionchange', onSelectionChange)
     return () => document.removeEventListener('selectionchange', onSelectionChange)
   }, [])
+
+  function saveSelection() {
+    const root = box.current
+    const sel = window.getSelection()
+    if (!root || !sel || sel.rangeCount === 0) return
+    if (!sel.anchorNode || !root.contains(sel.anchorNode)) return
+    savedRangeRef.current = sel.getRangeAt(0).cloneRange()
+  }
+
+  function restoreSelection(): boolean {
+    const root = box.current
+    const range = savedRangeRef.current
+    if (!root || !range) return false
+    root.focus()
+    const sel = window.getSelection()
+    if (!sel) return false
+    sel.removeAllRanges()
+    sel.addRange(range)
+    return true
+  }
+
+  function insertHtmlAtCursor(html: string) {
+    const root = box.current
+    if (!root) return
+    root.focus()
+    if (restoreSelection()) {
+      document.execCommand('insertHTML', false, html)
+      return
+    }
+    root.insertAdjacentHTML('beforeend', html)
+  }
+
+  function focusInsideEditor(): boolean {
+    const root = rootRef.current
+    const active = document.activeElement
+    if (!root || !active) return false
+    return root.contains(active)
+  }
+
+  function handleAreaBlur() {
+    window.setTimeout(() => {
+      if (uploadingRef.current || deferBlurRef.current || focusInsideEditor()) return
+      onBlur?.(emit())
+    }, 0)
+  }
+
+  function openImagePicker() {
+    if (disabled || uploadingRef.current) return
+    saveSelection()
+    deferBlurRef.current = true
+    fileRef.current?.click()
+    const onWinFocus = () => {
+      window.setTimeout(() => {
+        if (!uploadingRef.current) deferBlurRef.current = false
+      }, 200)
+    }
+    window.addEventListener('focus', onWinFocus, { once: true })
+  }
 
   function emit() {
     const el = box.current
@@ -270,23 +332,32 @@ export function NoteEditor({
   }
 
   async function onPickImage(files: FileList | null) {
-    if (!files?.length || disabled) return
+    if (!files?.length || disabled) {
+      deferBlurRef.current = false
+      return
+    }
     setUploadError('')
+    uploadingRef.current = true
+    deferBlurRef.current = true
     setUploading(true)
     try {
       const prepared = await downscaleImage(files[0])
       const res = await api.uploadImage(prepared)
-      run(
-        'insertHTML',
-        `<img src="${res.url}" alt="" class="v2-note-img" />`,
+      const safeUrl = res.url.replace(/"/g, '&quot;')
+      insertHtmlAtCursor(
+        `<img src="${safeUrl}" alt="" class="v2-note-img" />`,
       )
       emit()
+      box.current?.focus()
     } catch (err) {
       setUploadError(
         err instanceof Error ? err.message : 'Kunne ikke laste opp bildet',
       )
     } finally {
+      uploadingRef.current = false
+      deferBlurRef.current = false
       setUploading(false)
+      savedRangeRef.current = null
       if (fileRef.current) fileRef.current.value = ''
     }
   }
@@ -294,7 +365,10 @@ export function NoteEditor({
   const empty = !noteHasContent(value)
 
   return (
-    <div className={`v2-note-editor${disabled ? ' is-disabled' : ''}`}>
+    <div
+      ref={rootRef}
+      className={`v2-note-editor${disabled ? ' is-disabled' : ''}`}
+    >
       <div className="v2-note-tools" role="toolbar" aria-label="Tekst">
         <button
           type="button"
@@ -374,7 +448,7 @@ export function NoteEditor({
           title="Sett inn bilde"
           aria-label="Bilde"
           onMouseDown={(e) => e.preventDefault()}
-          onClick={() => fileRef.current?.click()}
+          onClick={() => openImagePicker()}
         >
           {uploading ? '…' : '+'}
         </button>
@@ -479,7 +553,7 @@ export function NoteEditor({
         data-placeholder={placeholder || ''}
         suppressContentEditableWarning
         onInput={() => emit()}
-        onBlur={() => onBlur?.(emit())}
+        onBlur={handleAreaBlur}
         onMouseUp={syncToolbarState}
         onKeyUp={syncToolbarState}
         onClick={(e) => {
