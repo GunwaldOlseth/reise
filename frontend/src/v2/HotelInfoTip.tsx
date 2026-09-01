@@ -12,7 +12,8 @@ import {
   stayUnsetLabel,
   type JourneyStay,
 } from './journeyModel'
-import { noteHasContent, sanitizeNoteHtml } from './noteHtml'
+import { mediaUrl } from '../api'
+import { noteHasContent, noteHtmlForDisplay } from './noteHtml'
 
 const MOBILE_MQ = '(max-width: 720px)'
 
@@ -137,7 +138,7 @@ function buildHotelInfoRows(opts: {
   if (url) rows.push({ label: 'Lenke', value: url })
 
   const notesHtml = noteHasContent(stay?.notes)
-    ? sanitizeNoteHtml(stay!.notes || '')
+    ? noteHtmlForDisplay(stay!.notes || '', mediaUrl)
     : ''
 
   return { title, kindLabel, rows, notesHtml }

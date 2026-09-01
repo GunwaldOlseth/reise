@@ -6,6 +6,7 @@ import {
   type ReactNode,
 } from 'react'
 import { createPortal } from 'react-dom'
+import { mediaUrl } from '../api'
 import {
   formatTransportOptionLabel,
   isTransportOptionFilled,
@@ -13,7 +14,7 @@ import {
   type OverviewRide,
   viaTransportOptions,
 } from './journeyModel'
-import { noteHasContent, sanitizeNoteHtml } from './noteHtml'
+import { noteHasContent, noteHtmlForDisplay } from './noteHtml'
 
 const MOBILE_MQ = '(max-width: 720px)'
 
@@ -104,7 +105,7 @@ export function TransportRideTip({
 }) {
   const options = timetableOptions(ride)
   const notesHtml = noteHasContent(ride.via.notes)
-    ? sanitizeNoteHtml(ride.via.notes || '')
+    ? noteHtmlForDisplay(ride.via.notes || '', mediaUrl)
     : ''
   const canOpen = options.length > 0 || notesHtml.length > 0
   const stamp = [

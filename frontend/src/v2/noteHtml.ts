@@ -21,6 +21,19 @@ const ALLOWED = new Set([
 ])
 
 const SAFE_IMG_SRC = /^(https?:\/\/|\/api\/uploads\/)/i
+const STORED_UPLOAD_SRC = /^\/api\/uploads\/[A-Za-z0-9._-]+$/i
+const ABS_UPLOAD_SRC =
+  /^https?:\/\/[^/]+\/api\/uploads\/([A-Za-z0-9._-]+)$/i
+
+/** Stored note HTML always uses relative `/api/uploads/…` paths. */
+export function normalizeStoredNoteImgSrc(src: string): string {
+  const v = (src || '').trim()
+  if (!v) return ''
+  if (STORED_UPLOAD_SRC.test(v)) return v
+  const m = v.match(ABS_UPLOAD_SRC)
+  if (m) return `/api/uploads/${m[1]}`
+  return v
+}
 
 export function escapeHtml(text: string): string {
   return text
@@ -110,7 +123,7 @@ function serialize(node: Node): string {
     return `<a href="${escapeHtml(href)}"${serializeAttrs(el, ['target', 'rel'])}>${inner}</a>`
   }
   if (tag === 'IMG') {
-    const src = (el.getAttribute('src') || '').trim()
+    const src = normalizeStoredNoteImgSrc(el.getAttribute('src') || '')
     if (!isSafeNoteImgSrc(src)) return ''
     const alt = escapeHtml(el.getAttribute('alt') || '')
     return `<img src="${escapeHtml(src)}" alt="${alt}" class="v2-note-img" />`
@@ -235,7 +248,7 @@ function convertPastedNode(node: Node): string {
     return `<a href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer">${label}</a>`
   }
   if (tag === 'IMG') {
-    const src = (el.getAttribute('src') || '').trim()
+    const src = normalizeStoredNoteImgSrc(el.getAttribute('src') || '')
     if (!isSafeNoteImgSrc(src)) return ''
     return `<img src="${escapeHtml(src)}" alt="" class="v2-note-img" />`
   }
@@ -314,4 +327,25 @@ export function noteHasContent(raw?: string | null): boolean {
 export function compactNoteHtml(html: string): string {
   const clean = sanitizeNoteHtml(html)
   return noteHasContent(clean) ? clean : ''
+}
+
+/** Resolve upload paths for display (editor + preview). */
+export function noteHtmlForDisplay(
+  raw: string,
+  resolveMediaUrl: (pathOrUrl: string) => string,
+): string {
+  const html = sanitizeNoteHtml(raw || '')
+  if (!html || !/<img\b/i.test(html)) return html
+  const doc = new DOMParser().parseFromString(`<div>${html}</div>`, 'text/html')
+  const root = doc.body.firstElementChild
+  if (!root) return html
+  root.querySelectorAll('img').forEach((img) => {
+    const src = normalizeStoredNoteImgSrc(img.getAttribute('src') || '')
+    if (!isSafeNoteImgSrc(src)) {
+      img.remove()
+      return
+    }
+    img.setAttribute('src', resolveMediaUrl(src))
+  })
+  return root.innerHTML
 }
