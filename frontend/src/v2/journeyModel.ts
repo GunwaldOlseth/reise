@@ -1242,6 +1242,51 @@ export function journeyOverviewBookedHotels(journey: Journey): OverviewBookedHot
   return out
 }
 
+export type LiveDayLodging = {
+  stopId: string
+  city: string
+  stay: JourneyStay
+  nights: number
+  arriveDate: string
+  departDate: string
+  lodgingKind: StayKind
+  hotelName: string
+  arriving: boolean
+  missing: boolean
+}
+
+/** Lodging for each city stop on a calendar day (arrive through last overnight). */
+export function lodgingOnDate(journey: Journey, date: string): LiveDayLodging[] {
+  const stops = [...(journey.stops || [])].sort(
+    (a, b) => a.sortOrder - b.sortOrder,
+  )
+  const out: LiveDayLodging[] = []
+  for (const stop of stops) {
+    if (stop.kind === 'home' || isPackageStop(stop)) continue
+    if (stopPurpose(stop) !== 'visit') continue
+    const stay = stop.stay
+    if (!stay || isStayWithoutOvernight(stay)) continue
+    const nights = stayNights(stop)
+    if (nights < 1) continue
+    if (!cityStayDays(stop).some((d) => d.date === date)) continue
+    const kind = stayKind(stay)
+    const name = effectiveHotelName(stay)
+    out.push({
+      stopId: stop.id,
+      city: (stop.city || '').trim() || 'By',
+      stay,
+      nights,
+      arriveDate: (stop.arriveDate || '').trim(),
+      departDate: stopDepartDate(stop),
+      lodgingKind: kind,
+      hotelName: name || stayUnsetLabel(kind),
+      arriving: (stop.arriveDate || '').trim() === date,
+      missing: cityMissingHotel(stop),
+    })
+  }
+  return out
+}
+
 export type JourneyScheduledDeparture = {
   date: string
   time: string
