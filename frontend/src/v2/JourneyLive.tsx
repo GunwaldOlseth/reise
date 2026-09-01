@@ -100,6 +100,8 @@ function LiveDayJournalSection({
 }) {
   const comments = liveCommentsOnDate(journey, date)
   const photos = livePhotosOnDate(journey, date)
+  const journeyRef = useRef(journey)
+  journeyRef.current = journey
   const fileRef = useRef<HTMLInputElement | null>(null)
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState('')
@@ -119,7 +121,7 @@ function LiveDayJournalSection({
 
   function addComment() {
     if (disabled) return
-    onChange(addLiveDailyComment(journey, date, ''))
+    onChange(addLiveDailyComment(journeyRef.current, date, ''))
   }
 
   function commitComment(id: string, raw: string) {
@@ -128,15 +130,15 @@ function LiveDayJournalSection({
     const existing = comments.find((c) => c.id === id)
     if (existing && existing.text === text) return
     if (!text) {
-      onChange(removeLiveDailyComment(journey, id))
+      onChange(removeLiveDailyComment(journeyRef.current, id))
       return
     }
-    onChange(updateLiveDailyComment(journey, id, text))
+    onChange(updateLiveDailyComment(journeyRef.current, id, text))
   }
 
   function removeComment(id: string) {
     if (disabled) return
-    onChange(removeLiveDailyComment(journey, id))
+    onChange(removeLiveDailyComment(journeyRef.current, id))
   }
 
   async function onPickFiles(files: FileList | null) {
@@ -150,7 +152,9 @@ function LiveDayJournalSection({
         const res = await api.uploadImage(prepared)
         added.push({ id: crypto.randomUUID(), url: res.url })
       }
-      if (added.length) onChange(addLiveDailyPhotos(journey, date, added))
+      if (added.length) {
+        onChange(addLiveDailyPhotos(journeyRef.current, date, added))
+      }
     } catch (err) {
       setUploadError(
         err instanceof Error ? err.message : 'Kunne ikke laste opp bildet',
@@ -163,7 +167,7 @@ function LiveDayJournalSection({
 
   function removePhoto(id: string) {
     if (disabled) return
-    onChange(removeLiveDailyPhoto(journey, id))
+    onChange(removeLiveDailyPhoto(journeyRef.current, id))
   }
 
   return (
@@ -798,6 +802,8 @@ export function JourneyLive({
     return counts
   }, [dayEntriesAll, travelers])
   const isToday = date === today
+  const journeyRef = useRef(journey)
+  journeyRef.current = journey
 
   function patchJourney(next: Journey) {
     onChange({ ...next, live: normalizeLive(next.live) })
@@ -884,7 +890,7 @@ export function JourneyLive({
   }
 
   function setLive(list: JourneyLiveEntry[]) {
-    patchJourney({ ...journey, live: normalizeLive(list) })
+    patchJourney({ ...journeyRef.current, live: normalizeLive(list) })
   }
 
   function addEntry(kind: JourneyLiveKind) {
