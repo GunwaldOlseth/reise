@@ -173,21 +173,21 @@ export function TripHub({
   )
   const liveSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const livePending = useRef<Journey | null>(null)
+  const liveSaveChain = useRef(Promise.resolve())
 
-  function persistJourneyQuiet(next: Journey) {
-    livePending.current = null
-    const payload: Journey = {
-      ...next,
-      live: compactLive(next.live, trip?.travelers),
-      liveActivitySkips: normalizeLiveActivitySkips(next.liveActivitySkips),
-      liveDailySteps: compactLiveDailySteps(next.liveDailySteps),
-      liveDailyComments: compactLiveDailyComments(next.liveDailyComments),
-      liveDailyPhotos: compactLiveDailyPhotos(next.liveDailyPhotos),
-      stops: (next.stops || []).map((s) => ({
+  function buildLivePersistPayload(source: Journey): Journey {
+    return {
+      ...source,
+      live: compactLive(source.live, trip?.travelers),
+      liveActivitySkips: normalizeLiveActivitySkips(source.liveActivitySkips),
+      liveDailySteps: compactLiveDailySteps(source.liveDailySteps),
+      liveDailyComments: compactLiveDailyComments(source.liveDailyComments),
+      liveDailyPhotos: compactLiveDailyPhotos(source.liveDailyPhotos),
+      stops: (source.stops || []).map((s) => ({
         ...s,
         sights: normalizeSights(s.sights).map(compactActivity),
       })),
-      legs: (next.legs || []).map((l) => ({
+      legs: (source.legs || []).map((l) => ({
         ...l,
         vias: (l.vias || []).map((v) => ({
           ...v,
@@ -195,19 +195,28 @@ export function TripHub({
         })),
       })),
     }
-    void api
-      .getJourney(tripId)
-      .then((latest) =>
-        api.saveJourney(
+  }
+
+  function persistJourneyQuiet(next: Journey) {
+    liveSaveChain.current = liveSaveChain.current
+      .catch(() => {})
+      .then(async () => {
+        const latest = await api.getJourney(tripId)
+        // Newest pending wins if the user kept editing during fetch/prior save.
+        const source = livePending.current ?? next
+        if (livePending.current === source) {
+          livePending.current = null
+        }
+        const payload = buildLivePersistPayload(source)
+        await api.saveJourney(
           tripId,
           localizeJourneyPlaces({
             ...latest,
             ...payload,
             tripId,
           }),
-        ),
-      )
-      .catch(() => {})
+        )
+      })
   }
 
   function flushLiveSave() {
