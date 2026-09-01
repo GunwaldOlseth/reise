@@ -1,7 +1,8 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
+import { mediaUrl } from '../api'
 import { cityDocsOf, type JourneyCityDoc } from './journeyModel'
-import { noteHasContent, sanitizeNoteHtml } from './noteHtml'
+import { noteHasContent, noteHtmlForDisplay } from './noteHtml'
 
 const MOBILE_MQ = '(max-width: 720px)'
 
@@ -84,7 +85,7 @@ function visibleDocs(
   return list
     .map((d) => ({
       title: (d.title || '').trim() || 'Notat',
-      html: sanitizeNoteHtml(d.body || ''),
+      html: noteHtmlForDisplay(d.body || '', mediaUrl),
     }))
     .filter((d) => noteHasContent(d.html))
 }

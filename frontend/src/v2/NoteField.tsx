@@ -1,7 +1,8 @@
 import { useEffect, useState, type CSSProperties, type ReactNode } from 'react'
 import { loadPlannerSettings } from '../userSettings'
+import { mediaUrl } from '../api'
 import { NoteEditor } from './NoteEditor'
-import { noteHasContent, sanitizeNoteHtml } from './noteHtml'
+import { noteHasContent, noteHtmlForDisplay } from './noteHtml'
 
 function clampLines(): number {
   const n = loadPlannerSettings().notePreviewLines
@@ -126,7 +127,7 @@ export function NoteField({
     )
   }
 
-  const html = sanitizeNoteHtml(value || '')
+  const html = noteHtmlForDisplay(value || '', mediaUrl)
 
   if (expanded) {
     return (

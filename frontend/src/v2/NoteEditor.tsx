@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { api } from '../api'
+import { api, mediaUrl } from '../api'
 import { downscaleImage } from './imageResize'
 import {
   compactNoteHtml,
   normalizeNoteLinkUrl,
   normalizePastedNoteHtml,
   noteHasContent,
+  noteHtmlForDisplay,
   plainTextToNoteHtml,
   sanitizeNoteHtml,
 } from './noteHtml'
@@ -217,7 +218,7 @@ export function NoteEditor({
     if (!el) return
     const next = sanitizeNoteHtml(value || '')
     if (next === sanitizeNoteHtml(el.innerHTML)) return
-    el.innerHTML = next
+    el.innerHTML = noteHtmlForDisplay(value || '', mediaUrl)
     last.current = next
   }, [value])
 
@@ -343,9 +344,9 @@ export function NoteEditor({
     try {
       const prepared = await downscaleImage(files[0])
       const res = await api.uploadImage(prepared)
-      const safeUrl = res.url.replace(/"/g, '&quot;')
+      const displayUrl = mediaUrl(res.url).replace(/"/g, '&quot;')
       insertHtmlAtCursor(
-        `<img src="${safeUrl}" alt="" class="v2-note-img" />`,
+        `<img src="${displayUrl}" alt="" class="v2-note-img" />`,
       )
       emit()
       box.current?.focus()
