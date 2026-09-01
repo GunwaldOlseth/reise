@@ -105,11 +105,17 @@ function LiveDayJournalSection({
   const [uploadError, setUploadError] = useState('')
   const [draftById, setDraftById] = useState<Record<string, string>>({})
 
+  const commentIds = comments.map((c) => c.id).join('|')
+
   useEffect(() => {
-    const next: Record<string, string> = {}
-    for (const c of comments) next[c.id] = c.text
-    setDraftById(next)
-  }, [journey.liveDailyComments, date])
+    setDraftById((prev) => {
+      const next: Record<string, string> = {}
+      for (const c of comments) {
+        next[c.id] = c.id in prev ? prev[c.id] : c.text
+      }
+      return next
+    })
+  }, [commentIds, date])
 
   function addComment() {
     if (disabled) return
