@@ -7276,6 +7276,49 @@ html[data-theme='plasma'] .v2-shell {
   color: var(--v2-label);
 }
 
+.v2-live-lodging {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.v2-live-lodging-item {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.55rem;
+  padding: 0.7rem 0.75rem;
+  border: 1px solid var(--v2-line);
+  border-radius: 0.75rem;
+  background: var(--v2-panel);
+}
+
+.v2-live-lodging-item.is-missing {
+  border-color: color-mix(in srgb, var(--v2-warn) 45%, var(--v2-line));
+}
+
+.v2-live-lodging-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.v2-live-lodging-name {
+  font-size: 1rem;
+  font-weight: 700;
+  line-height: 1.3;
+  color: var(--v2-ink);
+}
+
+.v2-live-lodging-item.is-missing .v2-live-lodging-name {
+  color: var(--v2-warn);
+}
+
+.v2-live-lodging-text .v2-meta {
+  font-size: 0.85rem;
+}
+
 .v2-live-steps-hint {
   margin: 0 0 0.55rem;
 }

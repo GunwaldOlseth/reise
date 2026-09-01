@@ -4,6 +4,7 @@ import { TripMap } from '../TripMap'
 import { downscaleImage } from './imageResize'
 import { localizeCity } from '../placeNames'
 import { CityInfoTip } from './CityInfoTip'
+import { HotelInfoTip } from './HotelInfoTip'
 import { CountdownCard, HolidayCountdown, osloWallTimeMs } from './HolidayCountdown'
 import { nextScheduledDeparture } from './transportSchedule'
 import {
@@ -27,6 +28,7 @@ import {
   liveHotelAlertText,
   liveKindLabel,
   liveMissingHotelAlerts,
+  lodgingOnDate,
   moveActivityToCalendarDate,
   moveActivityToDay,
   newLiveEntry,
@@ -562,6 +564,7 @@ export function JourneyLive({
   }, [travelerFilter, travelers])
 
   const places = useMemo(() => placesOnDate(journey, date), [journey, date])
+  const lodging = useMemo(() => lodgingOnDate(journey, date), [journey, date])
   const rides = useMemo(() => ridesOnDate(journey, date), [journey, date])
   const activityTargets = useMemo(
     () => activityTargetsOnDate(journey, date),
@@ -919,6 +922,32 @@ export function JourneyLive({
         </aside>
       )}
 
+      {lodging.length > 0 && (
+        <section className="v2-live-block v2-live-lodging" aria-label="Overnatting">
+          {lodging.map((row) => (
+            <div
+              key={row.stopId}
+              className={`v2-live-lodging-item${row.missing ? ' is-missing' : ''}`}
+            >
+              <div className="v2-live-lodging-text">
+                <strong className="v2-live-lodging-name">{row.hotelName}</strong>
+                <span className="v2-meta">
+                  {localizeCity(row.city) || row.city}
+                  {row.arriving ? ' · innsjekk' : ''}
+                </span>
+              </div>
+              <HotelInfoTip
+                stay={row.stay}
+                nights={row.nights}
+                arriveDate={row.arriveDate}
+                departDate={row.departDate}
+                disabled={disabled}
+              />
+            </div>
+          ))}
+        </section>
+      )}
+
       {places.length === 0 && rides.length === 0 && (
         <p className="v2-empty">
           Ingen plan for denne dagen. Byer og reiser ligger under Plan.
@@ -935,11 +964,6 @@ export function JourneyLive({
                   <strong>{localizeCity(place.city) || place.city}</strong>
                   {place.arriving ? (
                     <span className="v2-meta"> · ankomst</span>
-                  ) : null}
-                  {place.hotel ? (
-                    <span className="v2-meta"> · {place.hotel}</span>
-                  ) : hotelAlerts.some((a) => a.stopId === place.stop.id) ? (
-                    <span className="v2-live-hotel-miss"> · uten hotell</span>
                   ) : null}
                 </span>
                 <CityInfoTip text={place.notes} docs={place.docs} />
