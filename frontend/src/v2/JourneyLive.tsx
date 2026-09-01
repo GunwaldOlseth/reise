@@ -3,6 +3,7 @@ import { api, mediaUrl, normalizeTravelers } from '../api'
 import { TripMap } from '../TripMap'
 import { downscaleImage } from './imageResize'
 import { localizeCity } from '../placeNames'
+import { noteHasContent, noteHtmlForDisplay } from './noteHtml'
 import { CityInfoTip } from './CityInfoTip'
 import { HotelInfoTip } from './HotelInfoTip'
 import { CountdownCard, HolidayCountdown, osloWallTimeMs } from './HolidayCountdown'
@@ -924,27 +925,40 @@ export function JourneyLive({
 
       {lodging.length > 0 && (
         <section className="v2-live-block v2-live-lodging" aria-label="Overnatting">
-          {lodging.map((row) => (
+          {lodging.map((row) => {
+            const notesHtml = noteHasContent(row.stay.notes)
+              ? noteHtmlForDisplay(row.stay.notes || '', mediaUrl)
+              : ''
+            return (
             <div
               key={row.stopId}
               className={`v2-live-lodging-item${row.missing ? ' is-missing' : ''}`}
             >
-              <div className="v2-live-lodging-text">
-                <strong className="v2-live-lodging-name">{row.hotelName}</strong>
-                <span className="v2-meta">
-                  {localizeCity(row.city) || row.city}
-                  {row.arriving ? ' · innsjekk' : ''}
-                </span>
+              <div className="v2-live-lodging-head">
+                <div className="v2-live-lodging-text">
+                  <strong className="v2-live-lodging-name">{row.hotelName}</strong>
+                  <span className="v2-meta">
+                    {localizeCity(row.city) || row.city}
+                    {row.arriving ? ' · innsjekk' : ''}
+                  </span>
+                </div>
+                <HotelInfoTip
+                  stay={row.stay}
+                  nights={row.nights}
+                  arriveDate={row.arriveDate}
+                  departDate={row.departDate}
+                  disabled={disabled}
+                />
               </div>
-              <HotelInfoTip
-                stay={row.stay}
-                nights={row.nights}
-                arriveDate={row.arriveDate}
-                departDate={row.departDate}
-                disabled={disabled}
-              />
+              {notesHtml ? (
+                <div
+                  className="v2-note-html v2-live-lodging-notes"
+                  dangerouslySetInnerHTML={{ __html: notesHtml }}
+                />
+              ) : null}
             </div>
-          ))}
+            )
+          })}
         </section>
       )}
 

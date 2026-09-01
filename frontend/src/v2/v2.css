@@ -7284,13 +7284,19 @@ html[data-theme='plasma'] .v2-shell {
 
 .v2-live-lodging-item {
   display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 0.55rem;
+  flex-direction: column;
+  gap: 0;
   padding: 0.7rem 0.75rem;
   border: 1px solid var(--v2-line);
   border-radius: 0.75rem;
   background: var(--v2-panel);
+}
+
+.v2-live-lodging-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.55rem;
 }
 
 .v2-live-lodging-item.is-missing {
@@ -7317,6 +7323,15 @@ html[data-theme='plasma'] .v2-shell {
 
 .v2-live-lodging-text .v2-meta {
   font-size: 0.85rem;
+}
+
+.v2-live-lodging-notes {
+  margin-top: 0.55rem;
+  padding-top: 0.55rem;
+  border-top: 1px solid var(--v2-line);
+  font-size: 0.9rem;
+  line-height: 1.45;
+  color: var(--v2-ink);
 }
 
 .v2-live-steps-hint {
