@@ -7334,6 +7334,66 @@ html[data-theme='plasma'] .v2-shell {
   color: var(--v2-ink);
 }
 
+.v2-live-day-journal-hint {
+  margin: 0 0 0.55rem;
+}
+
+.v2-live-day-comments {
+  list-style: none;
+  margin: 0 0 0.75rem;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.v2-live-day-comment {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.4rem;
+  align-items: start;
+}
+
+.v2-live-day-comment-input {
+  width: 100%;
+  min-width: 0;
+  resize: vertical;
+  min-height: 2.6rem;
+  padding: 0.45rem 0.55rem;
+  border-radius: 0.5rem;
+  border: 1px solid var(--v2-line-strong);
+  background: var(--v2-field);
+  color: var(--v2-ink);
+  font: inherit;
+  font-size: 0.9rem;
+  line-height: 1.4;
+}
+
+.v2-live-day-comment-input:focus {
+  outline: none;
+  border-color: var(--v2-accent);
+}
+
+.v2-live-day-comment-input::placeholder {
+  color: var(--v2-placeholder);
+}
+
+.v2-live-day-photos-head {
+  margin-top: 0.35rem;
+}
+
+.v2-live-day-photos {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin: 0 0 0.25rem;
+}
+
+.v2-live-day-photos .v2-live-photo {
+  width: 72px;
+  height: 72px;
+}
+
 .v2-live-steps-hint {
   margin: 0 0 0.55rem;
 }

@@ -280,6 +280,12 @@ func normalizeJourney(j *Journey) {
 	if j.LiveDailySteps == nil {
 		j.LiveDailySteps = []JourneyLiveDailySteps{}
 	}
+	if j.LiveDailyComments == nil {
+		j.LiveDailyComments = []JourneyLiveDailyComment{}
+	}
+	if j.LiveDailyPhotos == nil {
+		j.LiveDailyPhotos = []JourneyLiveDailyPhoto{}
+	}
 	seenSkips := make(map[string]struct{})
 	normSkips := make([]JourneyLiveActivitySkip, 0, len(j.LiveActivitySkips))
 	for _, s := range j.LiveActivitySkips {
@@ -336,6 +342,69 @@ func normalizeJourney(j *Journey) {
 		return normSteps[i].Traveler < normSteps[k].Traveler
 	})
 	j.LiveDailySteps = normSteps
+	normComments := make([]JourneyLiveDailyComment, 0, len(j.LiveDailyComments))
+	for i, c := range j.LiveDailyComments {
+		date := strings.TrimSpace(c.Date)
+		text := strings.TrimSpace(c.Text)
+		if date == "" {
+			continue
+		}
+		id := strings.TrimSpace(c.ID)
+		if id == "" {
+			id = newJourneyID("cmt")
+		}
+		normComments = append(normComments, JourneyLiveDailyComment{
+			ID:        id,
+			Date:      date,
+			Text:      text,
+			SortOrder: i,
+		})
+	}
+	sort.SliceStable(normComments, func(i, k int) bool {
+		if normComments[i].Date != normComments[k].Date {
+			return normComments[i].Date < normComments[k].Date
+		}
+		if normComments[i].SortOrder != normComments[k].SortOrder {
+			return normComments[i].SortOrder < normComments[k].SortOrder
+		}
+		return normComments[i].ID < normComments[k].ID
+	})
+	for i := range normComments {
+		normComments[i].SortOrder = i
+	}
+	j.LiveDailyComments = normComments
+
+	normPhotos := make([]JourneyLiveDailyPhoto, 0, len(j.LiveDailyPhotos))
+	for i, p := range j.LiveDailyPhotos {
+		date := strings.TrimSpace(p.Date)
+		url := strings.TrimSpace(p.URL)
+		if date == "" || url == "" {
+			continue
+		}
+		id := strings.TrimSpace(p.ID)
+		if id == "" {
+			id = newJourneyID("ph")
+		}
+		normPhotos = append(normPhotos, JourneyLiveDailyPhoto{
+			ID:        id,
+			Date:      date,
+			URL:       url,
+			SortOrder: i,
+		})
+	}
+	sort.SliceStable(normPhotos, func(i, k int) bool {
+		if normPhotos[i].Date != normPhotos[k].Date {
+			return normPhotos[i].Date < normPhotos[k].Date
+		}
+		if normPhotos[i].SortOrder != normPhotos[k].SortOrder {
+			return normPhotos[i].SortOrder < normPhotos[k].SortOrder
+		}
+		return normPhotos[i].ID < normPhotos[k].ID
+	})
+	for i := range normPhotos {
+		normPhotos[i].SortOrder = i
+	}
+	j.LiveDailyPhotos = normPhotos
 	for i := range j.Live {
 		j.Live[i].SortOrder = i
 		j.Live[i].Date = strings.TrimSpace(j.Live[i].Date)
