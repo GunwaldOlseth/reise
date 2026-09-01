@@ -412,6 +412,22 @@ type JourneyLiveDailySteps struct {
 	Steps    int    `json:"steps" firestore:"steps"`
 }
 
+// JourneyLiveDailyComment is a free-text note for one calendar day in Live.
+type JourneyLiveDailyComment struct {
+	ID        string `json:"id" firestore:"id"`
+	Date      string `json:"date" firestore:"date"`
+	Text      string `json:"text" firestore:"text"`
+	SortOrder int    `json:"sortOrder" firestore:"sortOrder"`
+}
+
+// JourneyLiveDailyPhoto is a gallery image for one calendar day in Live.
+type JourneyLiveDailyPhoto struct {
+	ID        string `json:"id" firestore:"id"`
+	Date      string `json:"date" firestore:"date"`
+	URL       string `json:"url" firestore:"url"`
+	SortOrder int    `json:"sortOrder" firestore:"sortOrder"`
+}
+
 // Journey is the trip thread: ordered stops + legs between them (v2 planner).
 type Journey struct {
 	ID                string                    `json:"id" firestore:"-"`
@@ -421,6 +437,8 @@ type Journey struct {
 	Live              []JourneyLiveEntry        `json:"live,omitempty" firestore:"live,omitempty"`
 	LiveActivitySkips []JourneyLiveActivitySkip `json:"liveActivitySkips,omitempty" firestore:"liveActivitySkips,omitempty"`
 	LiveDailySteps    []JourneyLiveDailySteps   `json:"liveDailySteps,omitempty" firestore:"liveDailySteps,omitempty"`
+	LiveDailyComments []JourneyLiveDailyComment `json:"liveDailyComments,omitempty" firestore:"liveDailyComments,omitempty"`
+	LiveDailyPhotos   []JourneyLiveDailyPhoto   `json:"liveDailyPhotos,omitempty" firestore:"liveDailyPhotos,omitempty"`
 	CreatedAt         time.Time                 `json:"createdAt" firestore:"createdAt"`
 	UpdatedAt         time.Time                 `json:"updatedAt" firestore:"updatedAt"`
 }

@@ -1949,6 +1949,22 @@ export interface JourneyLiveDailySteps {
   steps: number
 }
 
+/** Free-text comment logged for a calendar day in Live. */
+export interface JourneyLiveDailyComment {
+  id: string
+  date: string
+  text: string
+  sortOrder: number
+}
+
+/** Photo attached to a calendar day in Live (not tied to a food/shop entry). */
+export interface JourneyLiveDailyPhoto {
+  id: string
+  date: string
+  url: string
+  sortOrder: number
+}
+
 export interface Journey {
   id?: string
   tripId: string
@@ -1960,6 +1976,10 @@ export interface Journey {
   liveActivitySkips?: JourneyLiveActivitySkip[]
   /** Daily step counts logged while travelling (Live). */
   liveDailySteps?: JourneyLiveDailySteps[]
+  /** Free-text day comments logged in Live. */
+  liveDailyComments?: JourneyLiveDailyComment[]
+  /** Day photo gallery logged in Live. */
+  liveDailyPhotos?: JourneyLiveDailyPhoto[]
   createdAt?: string
   updatedAt?: string
 }
@@ -2273,6 +2293,184 @@ export function withLiveDailySteps(
   steps: number,
 ): Journey {
   return withLiveDailyStepsForTraveler(journey, date, '', steps)
+}
+
+export function normalizeLiveDailyComments(
+  list?: JourneyLiveDailyComment[] | null,
+): JourneyLiveDailyComment[] {
+  const out: JourneyLiveDailyComment[] = []
+  for (const raw of list || []) {
+    const id = (raw.id || '').trim() || crypto.randomUUID()
+    const date = (raw.date || '').trim()
+    const text = (raw.text || '').trim()
+    if (!date) continue
+    const sortOrder =
+      typeof raw.sortOrder === 'number' && Number.isFinite(raw.sortOrder)
+        ? Math.floor(raw.sortOrder)
+        : out.length
+    out.push({ id, date, text, sortOrder })
+  }
+  return out.sort((a, b) => {
+    if (a.date !== b.date) return a.date.localeCompare(b.date)
+    if (a.sortOrder !== b.sortOrder) return a.sortOrder - b.sortOrder
+    return a.id.localeCompare(b.id)
+  })
+}
+
+export function compactLiveDailyComments(
+  list?: JourneyLiveDailyComment[] | null,
+): JourneyLiveDailyComment[] {
+  // Keep empty drafts so "+ Kommentar" rows survive autosave until the user
+  // types or deletes them.
+  return normalizeLiveDailyComments(list).map((c, i) => ({
+    ...c,
+    sortOrder: i,
+  }))
+}
+
+export function liveCommentsOnDate(
+  journey: Journey,
+  date: string,
+): JourneyLiveDailyComment[] {
+  const d = date.trim()
+  if (!d) return []
+  return normalizeLiveDailyComments(journey.liveDailyComments).filter(
+    (c) => c.date === d,
+  )
+}
+
+export function addLiveDailyComment(
+  journey: Journey,
+  date: string,
+  text = '',
+): Journey {
+  const d = date.trim()
+  if (!d) return journey
+  const existing = normalizeLiveDailyComments(journey.liveDailyComments)
+  const onDay = existing.filter((c) => c.date === d)
+  const row: JourneyLiveDailyComment = {
+    id: crypto.randomUUID(),
+    date: d,
+    text: text.trim(),
+    sortOrder: onDay.length,
+  }
+  return {
+    ...journey,
+    liveDailyComments: [...existing, row],
+  }
+}
+
+export function updateLiveDailyComment(
+  journey: Journey,
+  id: string,
+  text: string,
+): Journey {
+  const commentId = id.trim()
+  if (!commentId) return journey
+  return {
+    ...journey,
+    liveDailyComments: normalizeLiveDailyComments(journey.liveDailyComments).map(
+      (c) => (c.id === commentId ? { ...c, text: text.trim() } : c),
+    ),
+  }
+}
+
+export function removeLiveDailyComment(
+  journey: Journey,
+  id: string,
+): Journey {
+  const commentId = id.trim()
+  if (!commentId) return journey
+  return {
+    ...journey,
+    liveDailyComments: normalizeLiveDailyComments(
+      journey.liveDailyComments,
+    ).filter((c) => c.id !== commentId),
+  }
+}
+
+export function normalizeLiveDailyPhotos(
+  list?: JourneyLiveDailyPhoto[] | null,
+): JourneyLiveDailyPhoto[] {
+  const out: JourneyLiveDailyPhoto[] = []
+  for (const raw of list || []) {
+    const id = (raw.id || '').trim() || crypto.randomUUID()
+    const date = (raw.date || '').trim()
+    const url = (raw.url || '').trim()
+    if (!date || !url) continue
+    const sortOrder =
+      typeof raw.sortOrder === 'number' && Number.isFinite(raw.sortOrder)
+        ? Math.floor(raw.sortOrder)
+        : out.length
+    out.push({ id, date, url, sortOrder })
+  }
+  return out.sort((a, b) => {
+    if (a.date !== b.date) return a.date.localeCompare(b.date)
+    if (a.sortOrder !== b.sortOrder) return a.sortOrder - b.sortOrder
+    return a.id.localeCompare(b.id)
+  })
+}
+
+export function compactLiveDailyPhotos(
+  list?: JourneyLiveDailyPhoto[] | null,
+): JourneyLiveDailyPhoto[] {
+  return normalizeLiveDailyPhotos(list).map((p, i) => ({
+    ...p,
+    sortOrder: i,
+  }))
+}
+
+export function livePhotosOnDate(
+  journey: Journey,
+  date: string,
+): JourneyLiveDailyPhoto[] {
+  const d = date.trim()
+  if (!d) return []
+  return normalizeLiveDailyPhotos(journey.liveDailyPhotos).filter(
+    (p) => p.date === d,
+  )
+}
+
+export function addLiveDailyPhotos(
+  journey: Journey,
+  date: string,
+  photos: { id?: string; url: string }[],
+): Journey {
+  const d = date.trim()
+  if (!d || !photos.length) return journey
+  const existing = normalizeLiveDailyPhotos(journey.liveDailyPhotos)
+  const onDay = existing.filter((p) => p.date === d)
+  let order = onDay.length
+  const added: JourneyLiveDailyPhoto[] = []
+  for (const photo of photos) {
+    const url = (photo.url || '').trim()
+    if (!url) continue
+    added.push({
+      id: (photo.id || '').trim() || crypto.randomUUID(),
+      date: d,
+      url,
+      sortOrder: order++,
+    })
+  }
+  if (!added.length) return journey
+  return {
+    ...journey,
+    liveDailyPhotos: [...existing, ...added],
+  }
+}
+
+export function removeLiveDailyPhoto(
+  journey: Journey,
+  id: string,
+): Journey {
+  const photoId = id.trim()
+  if (!photoId) return journey
+  return {
+    ...journey,
+    liveDailyPhotos: normalizeLiveDailyPhotos(journey.liveDailyPhotos).filter(
+      (p) => p.id !== photoId,
+    ),
+  }
 }
 
 export function liveSkippedActivityIds(

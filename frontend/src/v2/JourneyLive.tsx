@@ -58,8 +58,16 @@ import {
   liveStepsTotalForTraveler,
   normalizeLiveDailySteps,
   withLiveDailyStepsForTraveler,
+  liveCommentsOnDate,
+  addLiveDailyComment,
+  updateLiveDailyComment,
+  removeLiveDailyComment,
+  livePhotosOnDate,
+  addLiveDailyPhotos,
+  removeLiveDailyPhoto,
   withTakenTransportOption,
   type JourneyLiveDailySteps,
+  type JourneyLiveDailyComment,
   type Journey,
   type JourneyActivity,
   type JourneyCityDoc,
@@ -78,6 +86,191 @@ import {
   journeyMapRouteKeyForDate,
   journeyMapStopsForDate,
 } from './journeyMap'
+
+function LiveDayJournalSection({
+  journey,
+  date,
+  disabled,
+  onChange,
+}: {
+  journey: Journey
+  date: string
+  disabled?: boolean
+  onChange: (next: Journey) => void
+}) {
+  const comments = liveCommentsOnDate(journey, date)
+  const photos = livePhotosOnDate(journey, date)
+  const fileRef = useRef<HTMLInputElement | null>(null)
+  const [uploading, setUploading] = useState(false)
+  const [uploadError, setUploadError] = useState('')
+  const [draftById, setDraftById] = useState<Record<string, string>>({})
+
+  const commentIds = comments.map((c) => c.id).join('|')
+
+  useEffect(() => {
+    setDraftById((prev) => {
+      const next: Record<string, string> = {}
+      for (const c of comments) {
+        next[c.id] = c.id in prev ? prev[c.id] : c.text
+      }
+      return next
+    })
+  }, [commentIds, date])
+
+  function addComment() {
+    if (disabled) return
+    onChange(addLiveDailyComment(journey, date, ''))
+  }
+
+  function commitComment(id: string, raw: string) {
+    if (disabled) return
+    const text = raw.trim()
+    const existing = comments.find((c) => c.id === id)
+    if (existing && existing.text === text) return
+    if (!text) {
+      onChange(removeLiveDailyComment(journey, id))
+      return
+    }
+    onChange(updateLiveDailyComment(journey, id, text))
+  }
+
+  function removeComment(id: string) {
+    if (disabled) return
+    onChange(removeLiveDailyComment(journey, id))
+  }
+
+  async function onPickFiles(files: FileList | null) {
+    if (!files?.length || disabled) return
+    setUploadError('')
+    setUploading(true)
+    const added: { id: string; url: string }[] = []
+    try {
+      for (const file of Array.from(files)) {
+        const prepared = await downscaleImage(file)
+        const res = await api.uploadImage(prepared)
+        added.push({ id: crypto.randomUUID(), url: res.url })
+      }
+      if (added.length) onChange(addLiveDailyPhotos(journey, date, added))
+    } catch (err) {
+      setUploadError(
+        err instanceof Error ? err.message : 'Kunne ikke laste opp bildet',
+      )
+    } finally {
+      setUploading(false)
+      if (fileRef.current) fileRef.current.value = ''
+    }
+  }
+
+  function removePhoto(id: string) {
+    if (disabled) return
+    onChange(removeLiveDailyPhoto(journey, id))
+  }
+
+  return (
+    <section className="v2-live-block v2-live-day-journal" aria-label="Dagens notater">
+      <div className="v2-sights-head">
+        <h3>Kommentarer</h3>
+        <div className="v2-sights-add">
+          <button
+            type="button"
+            className="v2-chip-btn"
+            disabled={disabled}
+            title="Legg til kommentar"
+            onClick={addComment}
+          >
+            + Kommentar
+          </button>
+        </div>
+      </div>
+      {comments.length === 0 ? (
+        <p className="v2-meta v2-live-day-journal-hint">
+          Legg til en eller flere kommentarer for denne dagen.
+        </p>
+      ) : (
+        <ul className="v2-live-day-comments" aria-label="Kommentarer for dagen">
+          {comments.map((c: JourneyLiveDailyComment) => (
+            <li key={c.id} className="v2-live-day-comment">
+              <textarea
+                className="v2-live-day-comment-input"
+                value={draftById[c.id] ?? c.text}
+                disabled={disabled}
+                rows={2}
+                placeholder="Skriv en kommentar…"
+                aria-label="Kommentar"
+                onChange={(e) =>
+                  setDraftById((prev) => ({ ...prev, [c.id]: e.target.value }))
+                }
+                onBlur={() =>
+                  commitComment(c.id, draftById[c.id] ?? c.text)
+                }
+              />
+              <button
+                type="button"
+                className="v2-via-remove"
+                disabled={disabled}
+                aria-label="Slett kommentar"
+                title="Slett kommentar"
+                onClick={() => removeComment(c.id)}
+              >
+                <TrashIcon size={14} />
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <div className="v2-sights-head v2-live-day-photos-head">
+        <h3>Bilder</h3>
+        <div className="v2-sights-add">
+          <button
+            type="button"
+            className="v2-chip-btn"
+            disabled={disabled || uploading}
+            title="Legg til bilde"
+            onClick={() => fileRef.current?.click()}
+          >
+            {uploading ? 'Laster opp…' : '+ Bilde'}
+          </button>
+          <input
+            ref={fileRef}
+            type="file"
+            accept="image/*"
+            multiple
+            hidden
+            onChange={(e) => void onPickFiles(e.target.files)}
+          />
+        </div>
+      </div>
+      {photos.length === 0 ? (
+        <p className="v2-meta v2-live-day-journal-hint">
+          Legg til bilder for denne dagen.
+        </p>
+      ) : (
+        <div className="v2-live-day-photos" aria-label="Bilder for dagen">
+          {photos.map((p) => (
+            <span className="v2-live-photo" key={p.id}>
+              <a href={mediaUrl(p.url)} target="_blank" rel="noreferrer">
+                <img src={mediaUrl(p.url)} alt="Bilde" loading="lazy" />
+              </a>
+              {!disabled && (
+                <button
+                  type="button"
+                  className="v2-live-photo-del"
+                  aria-label="Fjern bilde"
+                  title="Fjern bilde"
+                  onClick={() => removePhoto(p.id)}
+                >
+                  ×
+                </button>
+              )}
+            </span>
+          ))}
+        </div>
+      )}
+      {uploadError ? <p className="v2-live-photo-err">{uploadError}</p> : null}
+    </section>
+  )
+}
 
 function formatStepCount(n: number): string {
   return n.toLocaleString('nb-NO')
@@ -961,6 +1154,13 @@ export function JourneyLive({
           })}
         </section>
       )}
+
+      <LiveDayJournalSection
+        journey={journey}
+        date={date}
+        disabled={disabled}
+        onChange={patchJourney}
+      />
 
       {places.length === 0 && rides.length === 0 && (
         <p className="v2-empty">
