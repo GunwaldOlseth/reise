@@ -193,6 +193,7 @@ export function NoteEditor({
   placeholder,
   onChange,
   onBlur,
+  onBusyChange,
   toolbarExtra,
 }: {
   value: string
@@ -200,6 +201,7 @@ export function NoteEditor({
   placeholder?: string
   onChange: (html: string) => void
   onBlur?: (html: string) => void
+  onBusyChange?: (busy: boolean) => void
   toolbarExtra?: ReactNode
 }) {
   const box = useRef<HTMLDivElement>(null)
@@ -212,6 +214,10 @@ export function NoteEditor({
   const [highlightActive, setHighlightActive] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState('')
+
+  function setEditorBusy(busy: boolean) {
+    onBusyChange?.(busy)
+  }
 
   useEffect(() => {
     const el = box.current
@@ -288,11 +294,15 @@ export function NoteEditor({
     if (disabled || uploadingRef.current) return
     saveSelection()
     deferBlurRef.current = true
+    setEditorBusy(true)
     fileRef.current?.click()
     const onWinFocus = () => {
       window.setTimeout(() => {
-        if (!uploadingRef.current) deferBlurRef.current = false
-      }, 200)
+        if (!uploadingRef.current && !fileRef.current?.value) {
+          deferBlurRef.current = false
+          setEditorBusy(false)
+        }
+      }, 400)
     }
     window.addEventListener('focus', onWinFocus, { once: true })
   }
@@ -335,11 +345,13 @@ export function NoteEditor({
   async function onPickImage(files: FileList | null) {
     if (!files?.length || disabled) {
       deferBlurRef.current = false
+      setEditorBusy(false)
       return
     }
     setUploadError('')
     uploadingRef.current = true
     deferBlurRef.current = true
+    setEditorBusy(true)
     setUploading(true)
     try {
       const prepared = await downscaleImage(files[0])
@@ -356,10 +368,13 @@ export function NoteEditor({
       )
     } finally {
       uploadingRef.current = false
-      deferBlurRef.current = false
       setUploading(false)
-      savedRangeRef.current = null
-      if (fileRef.current) fileRef.current.value = ''
+      window.setTimeout(() => {
+        deferBlurRef.current = false
+        setEditorBusy(false)
+        savedRangeRef.current = null
+        if (fileRef.current) fileRef.current.value = ''
+      }, 300)
     }
   }
 

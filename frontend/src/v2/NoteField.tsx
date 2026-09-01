@@ -71,6 +71,7 @@ export function NoteField({
   const hasContent = noteHasContent(value)
   const [internalEditing, setInternalEditing] = useState(() => !hasContent)
   const [expanded, setExpanded] = useState(false)
+  const [editorBusy, setEditorBusy] = useState(false)
 
   const editing = editingProp ?? internalEditing
 
@@ -88,7 +89,7 @@ export function NoteField({
 
   function handleBlur(html: string) {
     onBlur?.(html)
-    if (noteHasContent(html)) setEditing(false)
+    if (!editorBusy && noteHasContent(html)) setEditing(false)
   }
 
   if (editing || (!hasContent && editingProp == null)) {
@@ -100,6 +101,7 @@ export function NoteField({
         toolbarExtra={toolbarExtra}
         onChange={onChange}
         onBlur={handleBlur}
+        onBusyChange={setEditorBusy}
       />
     )
   }
