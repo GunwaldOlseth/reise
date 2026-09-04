@@ -895,11 +895,20 @@ export function JourneyLive({
 
   function addEntry(kind: JourneyLiveKind) {
     const all = normalizeLive(journey.live)
-    const row = newLiveEntry(date, kind, all.length)
+    const row = newLiveEntry(date, kind, 0)
     if (travelerFilter && travelers.length > 1) {
       row.travelers = [travelerFilter]
     }
-    setLive([...all, row])
+    const firstSameDayIdx = all.findIndex((e) => e.date === date)
+    const next =
+      firstSameDayIdx < 0
+        ? [...all, row]
+        : (() => {
+            const list = [...all]
+            list.splice(firstSameDayIdx, 0, row)
+            return list
+          })()
+    setLive(next)
   }
 
   function updateEntry(id: string, partial: Partial<JourneyLiveEntry>) {
