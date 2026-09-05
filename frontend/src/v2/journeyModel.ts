@@ -1922,6 +1922,8 @@ export interface JourneyLiveEntry {
   date: string
   kind: JourneyLiveKind
   title: string
+  /** Restaurant, café, shop, or other venue name. */
+  place?: string
   price?: string
   notes?: string
   time?: string
@@ -1998,6 +2000,7 @@ export function newLiveEntry(
     date,
     kind,
     title: '',
+    place: '',
     price: '',
     notes: '',
     time: '',
@@ -2005,6 +2008,18 @@ export function newLiveEntry(
     photos: [],
     sortOrder,
   }
+}
+
+/** Whether a live log entry has enough content to show as registered. */
+export function liveEntryHasContent(entry: JourneyLiveEntry): boolean {
+  return !!(
+    entry.title.trim() ||
+    (entry.place || '').trim() ||
+    (entry.price || '').trim() ||
+    (entry.notes || '').trim() ||
+    (entry.rating || 0) > 0 ||
+    (entry.photos || []).length > 0
+  )
 }
 
 export function liveKindLabel(kind?: JourneyLiveKind | string): string {
@@ -2039,6 +2054,7 @@ export function normalizeLive(
         date: (e.date || '').trim(),
         kind,
         title: e.title || '',
+        place: e.place || '',
         price: e.price || '',
         notes: e.notes || '',
         time: e.time || '',

@@ -7848,9 +7848,90 @@ html[data-theme='plasma'] .v2-shell {
 
 .v2-live-log-row {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) 5.2rem minmax(0, 0.9fr) auto;
+  grid-template-columns: auto minmax(0, 1fr) minmax(0, 1fr) 5.2rem minmax(0, 0.9fr) auto;
   gap: 0.35rem;
   align-items: center;
+}
+
+.v2-live-log-row.is-view {
+  display: block;
+}
+
+.v2-live-log-view {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  padding: 0.45rem 0.5rem;
+  border-radius: 0.55rem;
+  border: 1px solid var(--v2-line);
+  background: var(--v2-field);
+}
+
+.v2-live-log-view-main {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 0.45rem 0.65rem;
+}
+
+.v2-live-log-view-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  flex: 1;
+  min-width: 0;
+}
+
+.v2-live-log-view-text strong {
+  font-weight: 650;
+  color: var(--v2-ink);
+}
+
+.v2-live-log-view-place {
+  font-size: 0.88rem;
+  color: var(--v2-muted);
+}
+
+.v2-live-log-view-notes {
+  font-size: 0.85rem;
+  color: var(--v2-muted);
+}
+
+.v2-live-log-view-price {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--v2-ink);
+  white-space: nowrap;
+}
+
+.v2-live-log-view-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem 0.65rem;
+  font-size: 0.85rem;
+  color: var(--v2-muted);
+}
+
+.v2-live-log-view-rating {
+  color: #e8b93d;
+  letter-spacing: 0.02em;
+}
+
+.v2-live-log-view-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.v2-live-edit {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.v2-live-finish {
+  font-weight: 650;
 }
 
 .v2-live-log-extra {
@@ -7962,11 +8043,12 @@ html[data-theme='plasma'] .v2-shell {
 }
 
 @media (max-width: 520px) {
-  .v2-live-log-row {
+  .v2-live-log-row.is-editing {
     grid-template-columns: auto minmax(0, 1fr) 5.2rem auto;
   }
 
-  .v2-live-log-row input:nth-of-type(3) {
+  .v2-live-log-row.is-editing .v2-live-place,
+  .v2-live-log-row.is-editing .v2-live-notes {
     grid-column: 1 / -1;
   }
 }

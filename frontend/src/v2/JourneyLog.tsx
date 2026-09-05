@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import {
   formatDateNO,
   liveEntryAppliesToTraveler,
+  liveEntryHasContent,
   liveKindLabel,
   normalizeLive,
   type Journey,
@@ -10,20 +11,13 @@ import {
 import { useConfirmDelete } from './ConfirmDelete'
 import { LiveEntryRow } from './JourneyLive'
 
-function hasLiveContent(entry: JourneyLiveEntry): boolean {
-  return !!(
-    entry.title.trim() ||
-    (entry.price || '').trim() ||
-    (entry.notes || '').trim() ||
-    (entry.rating || 0) > 0 ||
-    (entry.photos || []).length > 0
-  )
-}
-
 function entrySummary(entry: JourneyLiveEntry): string {
   const title = entry.title.trim() || liveKindLabel(entry.kind)
+  const place = (entry.place || '').trim()
   const price = (entry.price || '').trim()
-  return price ? `${title} · ${price}` : title
+  const parts = [place ? `${title} @ ${place}` : title]
+  if (price) parts.push(price)
+  return parts.join(' · ')
 }
 
 export function JourneyLog({
@@ -46,7 +40,7 @@ export function JourneyLog({
   const groups = useMemo(() => {
     const byDate = new Map<string, JourneyLiveEntry[]>()
     for (const entry of normalizeLive(journey.live)) {
-      if (!hasLiveContent(entry)) continue
+      if (!liveEntryHasContent(entry)) continue
       const list = byDate.get(entry.date) || []
       list.push(entry)
       byDate.set(entry.date, list)

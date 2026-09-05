@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { api, mediaUrl, normalizeTravelers } from '../api'
+import { api, formatExpenseAmount, mediaUrl, normalizeTravelers, parsePriceAmount } from '../api'
 import { TripMap } from '../TripMap'
 import { downscaleImage } from './imageResize'
 import { localizeCity } from '../placeNames'
@@ -27,6 +27,7 @@ import {
   liveEntryAppliesToTraveler,
   liveEntryTravelers,
   liveHotelAlertText,
+  liveEntryHasContent,
   liveKindLabel,
   liveMissingHotelAlerts,
   lodgingOnDate,
@@ -78,7 +79,7 @@ import {
   type JourneyTransportOption,
   type JourneyVia,
 } from './journeyModel'
-import { TrashIcon, TransportModeIcon } from '../TransportModeIcon'
+import { PencilIcon, TrashIcon, TransportModeIcon } from '../TransportModeIcon'
 import { useConfirmDelete } from './ConfirmDelete'
 import { TicketToggle } from './PurposeToggle'
 import { SightList } from './SightList'
@@ -1540,6 +1541,26 @@ export function JourneyLive({
   )
 }
 
+function livePlacePlaceholder(kind: JourneyLiveKind): string {
+  switch (kind) {
+    case 'food':
+      return 'Restaurant / sted'
+    case 'drink':
+      return 'Bar / café'
+    case 'shop':
+      return 'Butikk / sted'
+    default:
+      return 'Sted'
+  }
+}
+
+function liveEntryPriceLabel(raw?: string): string | null {
+  const trimmed = (raw || '').trim()
+  if (!trimmed) return null
+  const parsed = parsePriceAmount(trimmed)
+  return parsed !== null ? formatExpenseAmount(parsed) : trimmed
+}
+
 export function LiveEntryRow({
   entry,
   tripTravelers = [],
@@ -1554,8 +1575,10 @@ export function LiveEntryRow({
   onRemove: () => void
 }) {
   const [title, setTitle] = useState(entry.title)
+  const [place, setPlace] = useState(entry.place || '')
   const [price, setPrice] = useState(entry.price || '')
   const [notes, setNotes] = useState(entry.notes || '')
+  const [editing, setEditing] = useState(() => !liveEntryHasContent(entry))
 
   const fileRef = useRef<HTMLInputElement | null>(null)
   const [uploading, setUploading] = useState(false)
@@ -1563,14 +1586,49 @@ export function LiveEntryRow({
 
   useEffect(() => {
     setTitle(entry.title)
+    setPlace(entry.place || '')
     setPrice(entry.price || '')
     setNotes(entry.notes || '')
-  }, [entry.id, entry.title, entry.price, entry.notes])
+  }, [entry.id, entry.title, entry.place, entry.price, entry.notes])
+
+  useEffect(() => {
+    setEditing(!liveEntryHasContent(entry))
+  }, [entry.id])
 
   const photos = entry.photos || []
   const rating = entry.rating || 0
   const tagged = liveEntryTravelers(entry, tripTravelers)
   const showTravelerPick = tripTravelers.length > 1
+  const registered = liveEntryHasContent(entry)
+  const draftHasContent = liveEntryHasContent({
+    ...entry,
+    title: title.trim(),
+    place: place.trim(),
+    price: price.trim(),
+    notes: notes.trim(),
+  })
+  const showForm = editing || !registered
+
+  function flushFields() {
+    onChange({
+      title: title.trim(),
+      place: place.trim(),
+      price: price.trim(),
+      notes: notes.trim(),
+    })
+  }
+
+  function finishEditing() {
+    flushFields()
+    const next = {
+      ...entry,
+      title: title.trim(),
+      place: place.trim(),
+      price: price.trim(),
+      notes: notes.trim(),
+    }
+    if (liveEntryHasContent(next)) setEditing(false)
+  }
 
   function setTravelerOn(name: string, on: boolean) {
     if (disabled) return
@@ -1611,138 +1669,237 @@ export function LiveEntryRow({
     onChange({ photos: photos.filter((p) => p.id !== id) })
   }
 
+  const priceLabel = liveEntryPriceLabel(entry.price)
+  const displayTitle = entry.title.trim() || liveKindLabel(entry.kind)
+  const displayPlace = (entry.place || '').trim()
+
   return (
-    <li className={`v2-live-log-row is-${entry.kind}`}>
-      <span className="v2-activity-kind">{liveKindLabel(entry.kind)}</span>
-      <input
-        value={title}
-        disabled={disabled}
-        placeholder={
-          entry.kind === 'food'
-            ? 'F.eks. Lunsj'
-            : entry.kind === 'drink'
-              ? 'F.eks. Kaffe'
-              : entry.kind === 'shop'
-                ? 'F.eks. Souvenir'
-                : 'Hva skjedde'
-        }
-        onChange={(e) => setTitle(e.target.value)}
-        onBlur={() => onChange({ title: title.trim() })}
-      />
-      <input
-        className="v2-live-price"
-        value={price}
-        disabled={disabled}
-        placeholder="Pris"
-        inputMode="decimal"
-        onChange={(e) => setPrice(e.target.value)}
-        onBlur={() => onChange({ price: price.trim() })}
-      />
-      <input
-        value={notes}
-        disabled={disabled}
-        placeholder="Notat"
-        onChange={(e) => setNotes(e.target.value)}
-        onBlur={() => onChange({ notes: notes.trim() })}
-      />
-      <button
-        type="button"
-        className="v2-via-remove"
-        disabled={disabled}
-        aria-label="Slett"
-        title="Slett"
-        onClick={onRemove}
-      >
-        <TrashIcon size={14} />
-      </button>
-
-      <div className="v2-live-log-extra">
-        {showTravelerPick ? (
-          <div
-            className="v2-live-entry-travelers"
-            role="group"
-            aria-label="Hvem gjelder dette"
-          >
-            {tripTravelers.map((name) => {
-              const on = tagged.includes(name)
-              return (
-                <button
-                  key={name}
-                  type="button"
-                  className={`v2-chip-btn v2-live-entry-traveler${
-                    on ? ' is-on' : ''
-                  }`}
-                  disabled={disabled}
-                  aria-pressed={on}
-                  title={
-                    on
-                      ? `Fjern ${name} fra registreringen`
-                      : `Legg til ${name}`
-                  }
-                  onClick={() => setTravelerOn(name, !on)}
-                >
-                  {name}
-                </button>
-              )
-            })}
-          </div>
-        ) : null}
-        <div className="v2-live-stars" role="group" aria-label="Vurdering">
-          {[1, 2, 3, 4, 5].map((n) => (
-            <button
-              key={n}
-              type="button"
-              className={`v2-live-star${n <= rating ? ' is-on' : ''}`}
-              disabled={disabled}
-              aria-label={`${n} av 5`}
-              aria-pressed={n <= rating}
-              title={`Gi ${n} av 5`}
-              onClick={() => setRating(n)}
-            >
-              {n <= rating ? '★' : '☆'}
-            </button>
-          ))}
-        </div>
-
-        <div className="v2-live-photos">
-          {photos.map((p) => (
-            <span className="v2-live-photo" key={p.id}>
-              <a href={mediaUrl(p.url)} target="_blank" rel="noreferrer">
-                <img src={mediaUrl(p.url)} alt="Bilde" loading="lazy" />
-              </a>
-              {!disabled && (
-                <button
-                  type="button"
-                  className="v2-live-photo-del"
-                  aria-label="Fjern bilde"
-                  title="Fjern bilde"
-                  onClick={() => removePhoto(p.id)}
-                >
-                  ×
-                </button>
-              )}
-            </span>
-          ))}
+    <li
+      className={`v2-live-log-row is-${entry.kind}${
+        showForm ? ' is-editing' : ' is-view'
+      }`}
+    >
+      {showForm ? (
+        <>
+          <span className="v2-activity-kind">{liveKindLabel(entry.kind)}</span>
+          <input
+            className="v2-live-title"
+            value={title}
+            disabled={disabled}
+            placeholder={
+              entry.kind === 'food'
+                ? 'F.eks. Lunsj'
+                : entry.kind === 'drink'
+                  ? 'F.eks. Kaffe'
+                  : entry.kind === 'shop'
+                    ? 'F.eks. Souvenir'
+                    : 'Hva skjedde'
+            }
+            onChange={(e) => setTitle(e.target.value)}
+            onBlur={() => onChange({ title: title.trim() })}
+          />
+          <input
+            className="v2-live-place"
+            value={place}
+            disabled={disabled}
+            placeholder={livePlacePlaceholder(entry.kind)}
+            onChange={(e) => setPlace(e.target.value)}
+            onBlur={() => onChange({ place: place.trim() })}
+          />
+          <input
+            className="v2-live-price"
+            value={price}
+            disabled={disabled}
+            placeholder="Pris"
+            inputMode="decimal"
+            onChange={(e) => setPrice(e.target.value)}
+            onBlur={() => onChange({ price: price.trim() })}
+          />
+          <input
+            className="v2-live-notes"
+            value={notes}
+            disabled={disabled}
+            placeholder="Notat"
+            onChange={(e) => setNotes(e.target.value)}
+            onBlur={() => onChange({ notes: notes.trim() })}
+          />
           <button
             type="button"
-            className="v2-chip-btn v2-live-add-photo"
-            disabled={disabled || uploading}
-            title="Legg til bilde"
-            onClick={() => fileRef.current?.click()}
+            className="v2-via-remove"
+            disabled={disabled}
+            aria-label="Slett"
+            title="Slett"
+            onClick={onRemove}
           >
-            {uploading ? 'Laster opp…' : '+ Bilde'}
+            <TrashIcon size={14} />
           </button>
-          <input
-            ref={fileRef}
-            type="file"
-            accept="image/*"
-            multiple
-            hidden
-            onChange={(e) => void onPickFiles(e.target.files)}
-          />
+
+          <div className="v2-live-log-extra">
+            {showTravelerPick ? (
+              <div
+                className="v2-live-entry-travelers"
+                role="group"
+                aria-label="Hvem gjelder dette"
+              >
+                {tripTravelers.map((name) => {
+                  const on = tagged.includes(name)
+                  return (
+                    <button
+                      key={name}
+                      type="button"
+                      className={`v2-chip-btn v2-live-entry-traveler${
+                        on ? ' is-on' : ''
+                      }`}
+                      disabled={disabled}
+                      aria-pressed={on}
+                      title={
+                        on
+                          ? `Fjern ${name} fra registreringen`
+                          : `Legg til ${name}`
+                      }
+                      onClick={() => setTravelerOn(name, !on)}
+                    >
+                      {name}
+                    </button>
+                  )
+                })}
+              </div>
+            ) : null}
+            <div className="v2-live-stars" role="group" aria-label="Vurdering">
+              {[1, 2, 3, 4, 5].map((n) => (
+                <button
+                  key={n}
+                  type="button"
+                  className={`v2-live-star${n <= rating ? ' is-on' : ''}`}
+                  disabled={disabled}
+                  aria-label={`${n} av 5`}
+                  aria-pressed={n <= rating}
+                  title={`Gi ${n} av 5`}
+                  onClick={() => setRating(n)}
+                >
+                  {n <= rating ? '★' : '☆'}
+                </button>
+              ))}
+            </div>
+
+            <div className="v2-live-photos">
+              {photos.map((p) => (
+                <span className="v2-live-photo" key={p.id}>
+                  <a href={mediaUrl(p.url)} target="_blank" rel="noreferrer">
+                    <img src={mediaUrl(p.url)} alt="Bilde" loading="lazy" />
+                  </a>
+                  {!disabled && (
+                    <button
+                      type="button"
+                      className="v2-live-photo-del"
+                      aria-label="Fjern bilde"
+                      title="Fjern bilde"
+                      onClick={() => removePhoto(p.id)}
+                    >
+                      ×
+                    </button>
+                  )}
+                </span>
+              ))}
+              <button
+                type="button"
+                className="v2-chip-btn v2-live-add-photo"
+                disabled={disabled || uploading}
+                title="Legg til bilde"
+                onClick={() => fileRef.current?.click()}
+              >
+                {uploading ? 'Laster opp…' : '+ Bilde'}
+              </button>
+              <input
+                ref={fileRef}
+                type="file"
+                accept="image/*"
+                multiple
+                hidden
+                onChange={(e) => void onPickFiles(e.target.files)}
+              />
+            </div>
+            {draftHasContent ? (
+              <button
+                type="button"
+                className="v2-chip-btn v2-live-finish"
+                disabled={disabled}
+                onClick={finishEditing}
+              >
+                Ferdig
+              </button>
+            ) : null}
+            {photoError ? (
+              <p className="v2-live-photo-err">{photoError}</p>
+            ) : null}
+          </div>
+        </>
+      ) : (
+        <div className="v2-live-log-view">
+          <div className="v2-live-log-view-main">
+            <span className="v2-activity-kind">{liveKindLabel(entry.kind)}</span>
+            <div className="v2-live-log-view-text">
+              <strong>{displayTitle}</strong>
+              {displayPlace ? (
+                <span className="v2-live-log-view-place">{displayPlace}</span>
+              ) : null}
+              {(entry.notes || '').trim() ? (
+                <span className="v2-live-log-view-notes">
+                  {(entry.notes || '').trim()}
+                </span>
+              ) : null}
+            </div>
+            {priceLabel ? (
+              <span className="v2-live-log-view-price">{priceLabel}</span>
+            ) : null}
+          </div>
+          <div className="v2-live-log-view-meta">
+            {showTravelerPick && tagged.length ? (
+              <span className="v2-live-log-view-travelers">
+                {tagged.join(', ')}
+              </span>
+            ) : null}
+            {rating > 0 ? (
+              <span className="v2-live-log-view-rating" aria-label={`${rating} av 5`}>
+                {'★'.repeat(rating)}
+                {'☆'.repeat(5 - rating)}
+              </span>
+            ) : null}
+            {photos.length ? (
+              <div className="v2-live-photos v2-live-photos-readonly">
+                {photos.map((p) => (
+                  <span className="v2-live-photo" key={p.id}>
+                    <a href={mediaUrl(p.url)} target="_blank" rel="noreferrer">
+                      <img src={mediaUrl(p.url)} alt="Bilde" loading="lazy" />
+                    </a>
+                  </span>
+                ))}
+              </div>
+            ) : null}
+          </div>
+          {!disabled ? (
+            <div className="v2-live-log-view-actions">
+              <button
+                type="button"
+                className="v2-chip-btn v2-live-edit"
+                onClick={() => setEditing(true)}
+              >
+                <PencilIcon size={14} />
+                Rediger
+              </button>
+              <button
+                type="button"
+                className="v2-via-remove"
+                aria-label="Slett"
+                title="Slett"
+                onClick={onRemove}
+              >
+                <TrashIcon size={14} />
+              </button>
+            </div>
+          ) : null}
         </div>
-        {photoError ? <p className="v2-live-photo-err">{photoError}</p> : null}
-      </div>
+      )}
     </li>
   )
 }

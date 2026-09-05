@@ -388,6 +388,7 @@ type JourneyLiveEntry struct {
 	Date      string         `json:"date" firestore:"date"`
 	Kind      string         `json:"kind" firestore:"kind"` // food | drink | shop | other
 	Title     string         `json:"title" firestore:"title"`
+	Place     string         `json:"place,omitempty" firestore:"place,omitempty"`
 	Price     string         `json:"price,omitempty" firestore:"price,omitempty"`
 	Notes     string         `json:"notes,omitempty" firestore:"notes,omitempty"`
 	Time      string         `json:"time,omitempty" firestore:"time,omitempty"`
