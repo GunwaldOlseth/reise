@@ -636,6 +636,36 @@ function JourneyExpensesView({
 }: {
   summary: TripExpenseSummary
 }) {
+  function ExpenseLineRow({
+    line,
+    showDate = true,
+  }: {
+    line: TripExpenseSummary['cruise']['lines'][number]
+    showDate?: boolean
+  }) {
+    return (
+      <li>
+        <span className="expense-line-title">
+          {line.title}
+          {showDate && line.date ? (
+            <span className="meta"> · {formatDateNO(line.date)}</span>
+          ) : null}
+          {line.isActual && line.expectedRaw ? (
+            <span className="meta"> · (forv. {line.expectedRaw})</span>
+          ) : null}
+        </span>
+        <span className="expense-line-amount">
+          {line.paid && (
+            <span className="expense-paid-mark" title="Betalt">
+              ✓
+            </span>
+          )}
+          {formatExpenseAmount(line.amount)}
+        </span>
+      </li>
+    )
+  }
+
   function CategoryBlock({
     title,
     total,
@@ -658,33 +688,75 @@ function JourneyExpensesView({
         ) : (
           <ul className="expense-lines">
             {lines.map((line) => (
-              <li key={line.id}>
-                <span className="expense-line-title">
-                  {line.title}
-                  {showDate && line.date ? (
-                    <span className="meta"> · {formatDateNO(line.date)}</span>
-                  ) : null}
-                  {line.isActual ? (
-                    <span className="meta">
-                      {' '}
-                      · faktisk
-                      {line.expectedRaw
-                        ? ` (forv. ${line.expectedRaw})`
-                        : ''}
-                    </span>
-                  ) : null}
-                </span>
-                <span className="expense-line-amount">
-                  {line.paid && (
-                    <span className="expense-paid-mark" title="Betalt">
-                      ✓
-                    </span>
-                  )}
-                  {formatExpenseAmount(line.amount)}
-                </span>
-              </li>
+              <ExpenseLineRow
+                key={line.id}
+                line={line}
+                showDate={showDate}
+              />
             ))}
           </ul>
+        )}
+      </div>
+    )
+  }
+
+  function groupLinesByDate(
+    lines: TripExpenseSummary['live']['lines'],
+  ): { date: string; lines: TripExpenseSummary['live']['lines'] }[] {
+    const byDate = new Map<string, TripExpenseSummary['live']['lines']>()
+    for (const line of lines) {
+      const date = (line.date || '').trim()
+      const list = byDate.get(date) || []
+      list.push(line)
+      byDate.set(date, list)
+    }
+    return [...byDate.entries()]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([date, dayLines]) => ({ date, lines: dayLines }))
+  }
+
+  function LiveCategoryBlock({
+    title,
+    total,
+    lines,
+  }: {
+    title: string
+    total: number
+    lines: TripExpenseSummary['live']['lines']
+  }) {
+    const groups = groupLinesByDate(lines)
+    return (
+      <div className="expense-category">
+        <div className="expense-category-head">
+          <h3>{title}</h3>
+          <strong>{formatExpenseAmount(total)}</strong>
+        </div>
+        {groups.length === 0 ? (
+          <p className="meta expense-empty">Ingen priser registrert</p>
+        ) : (
+          <div className="expense-live-by-day">
+            {groups.map((group) => (
+              <section
+                key={group.date || group.lines.map((l) => l.id).join('-')}
+                className="expense-live-day"
+              >
+                {group.date ? (
+                  <h4 className="expense-live-day-head">
+                    {formatDateNO(group.date)}
+                  </h4>
+                ) : null}
+                <ul className="expense-lines">
+                  {group.lines.map((line) => (
+                    <ExpenseLineRow
+                      key={line.id}
+                      line={line}
+                      showDate={false}
+                    />
+                  ))}
+                </ul>
+              </section>
+            ))}
+          </div>
         )}
       </div>
     )
@@ -826,7 +898,7 @@ function JourneyExpensesView({
         total={summary.program.total}
         lines={summary.program.lines}
       />
-      <CategoryBlock
+      <LiveCategoryBlock
         title="Underveis"
         total={summary.live.total}
         lines={summary.live.lines}
