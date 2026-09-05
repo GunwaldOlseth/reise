@@ -7060,6 +7060,14 @@ html[data-theme='plasma'] .v2-shell {
   color: var(--v2-expense-section);
 }
 
+.v2-shell .expense-live-day {
+  border-top-color: var(--v2-line);
+}
+
+.v2-shell .expense-live-day-head {
+  color: var(--v2-expense-section);
+}
+
 .v2-shell .expense-line-title,
 .v2-shell .expense-day-date {
   color: var(--v2-label);
