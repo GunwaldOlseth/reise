@@ -453,9 +453,12 @@ export function journeyExpenseSummary(journey: Journey): TripExpenseSummary {
     }
     pricedCount += 1
     const kind = liveKindLabel(entry.kind)
-    const title = entry.title.trim()
-      ? `${kind} · ${entry.title.trim()}`
-      : kind
+    const bits = [kind]
+    const itemTitle = entry.title.trim()
+    const venue = (entry.place || '').trim()
+    if (itemTitle) bits.push(itemTitle)
+    if (venue) bits.push(venue)
+    const title = bits.join(' · ')
     const place =
       [...byDate.entries()].find(([d]) => d === entry.date)?.[1].place || ''
     const line: ExpenseLine = {
