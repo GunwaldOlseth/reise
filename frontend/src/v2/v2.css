@@ -128,6 +128,16 @@ html[data-theme='stein'] {
   --v2-hover: #e0ded7;
 }
 
+html,
+html[data-theme] {
+  --v2-steps-color-1: var(--v2-accent);
+  --v2-steps-color-2: var(--v2-weather-forecast, #8ecae6);
+  --v2-steps-color-3: var(--v2-warn);
+  --v2-steps-color-4: #e07a5f;
+  --v2-steps-color-5: #b794f4;
+  --v2-steps-color-6: #7bc67e;
+}
+
 html[data-theme='nordlys'] {
   color-scheme: dark;
   --v2-scheme: dark;
@@ -1187,6 +1197,75 @@ html[data-theme='plasma'] .v2-shell {
   line-height: 1.35;
   color: var(--v2-muted);
   min-width: 0;
+}
+
+.v2-steps-chart {
+  margin: 0.65rem 0 0.85rem;
+  padding: 0.7rem 0.75rem 0.55rem;
+  border-radius: 0.75rem;
+  border: 1px solid var(--v2-line);
+  background: var(--v2-panel);
+}
+
+.v2-steps-chart figcaption {
+  margin: 0 0 0.4rem;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.v2-steps-chart-scroll {
+  width: 100%;
+  overflow: hidden;
+}
+
+.v2-steps-chart svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.v2-steps-chart-grid {
+  stroke: var(--v2-line);
+  stroke-width: 1;
+}
+
+.v2-steps-chart-tick,
+.v2-steps-chart-date {
+  fill: var(--v2-muted);
+  font-size: 9px;
+}
+
+.v2-steps-chart-date {
+  fill: var(--v2-ink);
+  font-size: 10px;
+  font-weight: 650;
+}
+
+.v2-steps-chart-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem 1rem;
+  margin: 0.45rem 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.75rem;
+  color: var(--v2-muted);
+}
+
+.v2-steps-chart-legend li {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-weight: 650;
+  color: var(--v2-steps-legend-color, var(--v2-accent));
+}
+
+.v2-steps-chart-legend li::before {
+  content: '';
+  width: 0.72rem;
+  height: 0.72rem;
+  border-radius: 0.18rem;
+  background: var(--v2-steps-legend-color, var(--v2-accent));
 }
 
 .v2-overview-steps-wrap {
