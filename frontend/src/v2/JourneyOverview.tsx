@@ -12,6 +12,7 @@ import {
   journeyVisitPlaces,
   type Journey,
 } from './journeyModel'
+import { StepsDailyChart } from './StepsDailyChart'
 
 type OverviewPage = 'cities' | 'countries' | 'rides' | 'hotels' | 'steps'
 
@@ -226,6 +227,10 @@ export function JourneyOverview({
                 {stepsSummary.days.length === 1 ? 'dag' : 'dager'} med
                 registrerte skritt.
               </p>
+              <StepsDailyChart
+                travelers={stepsSummary.travelers}
+                days={stepsSummary.days}
+              />
               <div className="v2-overview-steps-wrap">
                 <table className="v2-overview-steps-table">
                   <thead>
