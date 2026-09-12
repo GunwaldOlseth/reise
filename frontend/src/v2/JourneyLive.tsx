@@ -75,13 +75,14 @@ import {
   type JourneyLiveEntry,
   type JourneyLiveKind,
   type JourneyPhoto,
+  type JourneyStay,
   type JourneyStop,
   type JourneyTransportOption,
   type JourneyVia,
 } from './journeyModel'
 import { PencilIcon, TrashIcon, TransportModeIcon } from '../TransportModeIcon'
 import { useConfirmDelete } from './ConfirmDelete'
-import { TicketToggle } from './PurposeToggle'
+import { PaidToggle, TicketToggle } from './PurposeToggle'
 import { SightList } from './SightList'
 import {
   journeyMapRouteKeyForDate,
@@ -924,6 +925,21 @@ export function JourneyLive({
     setLive(normalizeLive(journey.live).filter((e) => e.id !== id))
   }
 
+  function patchStopStay(stopId: string, partial: Partial<JourneyStay>) {
+    patchJourney({
+      ...journey,
+      stops: (journey.stops || []).map((stop) =>
+        stop.id !== stopId || !stop.stay
+          ? stop
+          : {
+              ...stop,
+              stay: { ...stop.stay, ...partial },
+              sights: normalizeSights(stop.sights),
+            },
+      ),
+    })
+  }
+
   function patchOption(
     viaId: string,
     optionId: string,
@@ -1151,13 +1167,23 @@ export function JourneyLive({
                     {row.arriving ? ' · innsjekk' : ''}
                   </span>
                 </div>
-                <HotelInfoTip
-                  stay={row.stay}
-                  nights={row.nights}
-                  arriveDate={row.arriveDate}
-                  departDate={row.departDate}
-                  disabled={disabled}
-                />
+                <div className="v2-live-lodging-actions">
+                  <PaidToggle
+                    compact
+                    checked={row.stay.paid || false}
+                    disabled={disabled}
+                    onChange={(paid) =>
+                      patchStopStay(row.stopId, { paid })
+                    }
+                  />
+                  <HotelInfoTip
+                    stay={row.stay}
+                    nights={row.nights}
+                    arriveDate={row.arriveDate}
+                    departDate={row.departDate}
+                    disabled={disabled}
+                  />
+                </div>
               </div>
               {notesHtml ? (
                 <div
