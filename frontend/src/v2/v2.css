@@ -7464,6 +7464,13 @@ html[data-theme='plasma'] .v2-shell {
   gap: 0.55rem;
 }
 
+.v2-live-lodging-actions {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 0.35rem;
+}
+
 .v2-live-lodging-item.is-missing {
   border-color: color-mix(in srgb, var(--v2-warn) 45%, var(--v2-line));
 }
