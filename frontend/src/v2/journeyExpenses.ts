@@ -136,7 +136,7 @@ export function journeyExpenseSummary(journey: Journey): TripExpenseSummary {
       if (ship) acc.ship = ship
     }
     acc[category] += share
-    acc.lines.push(line)
+    acc.lines.push({ ...line, category })
   }
 
   function packageDayPlace(
@@ -540,6 +540,46 @@ export function journeyExpenseSummary(journey: Journey): TripExpenseSummary {
     pricedCount,
     unparsedCount,
   }
+}
+
+/** Plan items marked paid, plus faktiske beløp (live, transport actual). */
+export function isPaidOrActualExpenseLine(line: ExpenseLine): boolean {
+  return !!line.paid || !!line.isActual
+}
+
+export type DayPaidExpenseStacks = {
+  hotel: number
+  transport: number
+  purchase: number
+}
+
+export function paidExpenseStacksByDay(
+  days: DayExpenseSummary[],
+): { date: string; stacks: DayPaidExpenseStacks }[] {
+  const out: { date: string; stacks: DayPaidExpenseStacks }[] = []
+  for (const day of days) {
+    const stacks: DayPaidExpenseStacks = {
+      hotel: 0,
+      transport: 0,
+      purchase: 0,
+    }
+    for (const line of day.lines) {
+      if (!isPaidOrActualExpenseLine(line)) continue
+      const cat = line.category
+      if (cat === 'hotel') stacks.hotel += line.amount
+      else if (cat === 'transport') stacks.transport += line.amount
+      else if (
+        cat === 'live' ||
+        cat === 'program' ||
+        cat === 'cruise'
+      ) {
+        stacks.purchase += line.amount
+      }
+    }
+    const total = stacks.hotel + stacks.transport + stacks.purchase
+    if (total > 0) out.push({ date: day.date, stacks })
+  }
+  return out
 }
 
 export { formatExpenseAmount }

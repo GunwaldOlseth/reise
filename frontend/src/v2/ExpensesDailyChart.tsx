@@ -1,6 +1,10 @@
 import { useLayoutEffect, useRef, useState, type CSSProperties } from 'react'
 import { formatExpenseAmount, type DayExpenseSummary } from '../api'
 import { formatChartDateNO } from './weatherDisplay'
+import {
+  paidExpenseStacksByDay,
+  type DayPaidExpenseStacks,
+} from './journeyExpenses'
 
 const SEGMENTS = [
   {
@@ -20,12 +24,8 @@ const SEGMENTS = [
   },
 ] as const
 
-function purchaseAmount(day: DayExpenseSummary): number {
-  return day.program + day.live + day.cruise
-}
-
-function dayStackTotal(day: DayExpenseSummary): number {
-  return day.hotel + day.transport + purchaseAmount(day)
+function dayStackTotal(stacks: DayPaidExpenseStacks): number {
+  return stacks.hotel + stacks.transport + stacks.purchase
 }
 
 function useChartBox() {
@@ -88,21 +88,37 @@ function labelStep(count: number, innerW: number, minPx: number): number {
 }
 
 function segmentAmount(
-  day: DayExpenseSummary,
+  stacks: DayPaidExpenseStacks,
   key: (typeof SEGMENTS)[number]['key'],
 ): number {
-  if (key === 'hotel') return day.hotel
-  if (key === 'transport') return day.transport
-  return purchaseAmount(day)
+  return stacks[key]
 }
 
-export function ExpensesDailyChart({ days }: { days: DayExpenseSummary[] }) {
+export function ExpensesDailyChart({
+  days,
+}: {
+  days: DayExpenseSummary[]
+}) {
   const { ref, width: boxW, mobile } = useChartBox()
+  const chartDays = paidExpenseStacksByDay(days)
 
-  const chartDays = days.filter((d) => dayStackTotal(d) > 0)
-  if (chartDays.length === 0) return null
+  if (chartDays.length === 0) {
+    return (
+      <figure className="v2-expense-chart">
+        <figcaption>Betalte utgifter per dag</figcaption>
+        <p className="v2-expense-chart-hint meta">
+          Ingen betalte eller faktiske utgifter med dato ennå. Merk planposter
+          som betalt, registrer faktisk transportpris, eller legg inn kjøp
+          under Live.
+        </p>
+      </figure>
+    )
+  }
 
-  const maxTotal = Math.max(1, ...chartDays.map((d) => dayStackTotal(d)))
+  const maxTotal = Math.max(
+    1,
+    ...chartDays.map((d) => dayStackTotal(d.stacks)),
+  )
   const ticks = niceAmountTicks(maxTotal)
   const yMax = ticks[ticks.length - 1]
   const pad = mobile
@@ -120,7 +136,7 @@ export function ExpensesDailyChart({ days }: { days: DayExpenseSummary[] }) {
 
   return (
     <figure className="v2-expense-chart">
-      <figcaption>Utgifter per dag</figcaption>
+      <figcaption>Betalte utgifter per dag</figcaption>
       <div className="v2-expense-chart-scroll" ref={ref}>
         <svg
           viewBox={`0 0 ${width} ${height}`}
@@ -128,7 +144,7 @@ export function ExpensesDailyChart({ days }: { days: DayExpenseSummary[] }) {
           height={height}
           preserveAspectRatio="xMidYMid meet"
           role="img"
-          aria-label="Utgifter per dag fordelt på kjøp, hotell og transport"
+          aria-label="Betalte og faktiske utgifter per dag fordelt på kjøp, hotell og transport"
         >
           {ticks.map((t) => (
             <g key={t}>
@@ -150,6 +166,7 @@ export function ExpensesDailyChart({ days }: { days: DayExpenseSummary[] }) {
             </g>
           ))}
           {chartDays.map((day, dayIndex) => {
+            const stacks = day.stacks
             const groupCenter = pad.left + (dayIndex + 0.5) * groupWidth
             const x = groupCenter - barWidth / 2
             const showLabel =
@@ -167,7 +184,7 @@ export function ExpensesDailyChart({ days }: { days: DayExpenseSummary[] }) {
                 amount: number
               }[] = []
               for (const seg of SEGMENTS) {
-                const amount = segmentAmount(day, seg.key)
+                const amount = segmentAmount(stacks, seg.key)
                 if (amount <= 0) continue
                 const segHeight = (amount / (yMax || 1)) * innerH
                 const y = pad.top + innerH - offsetFromBottom - segHeight
@@ -240,7 +257,8 @@ export function ExpensesDailyChart({ days }: { days: DayExpenseSummary[] }) {
         ))}
       </ul>
       <p className="v2-expense-chart-hint meta">
-        Kjøp inkluderer program, pakker og registreringer underveis.
+        Kun merket betalt i planen, faktisk transportpris og registreringer
+        under Live (kjøp inkl. program og pakker når betalt).
       </p>
     </figure>
   )
