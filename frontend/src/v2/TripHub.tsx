@@ -15,6 +15,7 @@ import {
   type PlannerSettings,
 } from '../userSettings'
 import { journeyExpenseSummary } from './journeyExpenses'
+import { ExpensesDailyChart } from './ExpensesDailyChart'
 import { journeyMapRouteKey, journeyMapStopsInOrder } from './journeyMap'
 import { localizeJourneyPlaces } from '../placeNames'
 import { compactLive, compactLiveDailyComments, compactLiveDailyPhotos, compactLiveDailySteps, emptyJourney, formatDateNO, compactActivity, normalizeLiveActivitySkips, normalizeSights, type Journey } from './journeyModel'
@@ -971,6 +972,7 @@ function JourneyExpensesView({
               )
             })}
           </ul>
+          <ExpensesDailyChart days={summary.byDay} />
         </div>
       )}
     </div>
