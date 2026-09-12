@@ -548,6 +548,8 @@ export type ExpenseLine = {
   expectedRaw?: string;
   /** Whether this item has been paid. */
   paid?: boolean;
+  /** Day-bucket category when line is part of per-day expense breakdown. */
+  category?: 'cruise' | 'hotel' | 'transport' | 'live' | 'program';
 };
 
 export type DayExpenseSummary = {
