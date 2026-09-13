@@ -552,6 +552,11 @@ export type ExpenseLine = {
   category?: 'cruise' | 'hotel' | 'transport' | 'live' | 'program';
 };
 
+/** Counts toward «betalt» in Utgifter: explicit paid flag or actual spend (live, faktisk transport). */
+export function isPaidOrActualExpenseLine(line: ExpenseLine): boolean {
+  return !!line.paid || !!line.isActual;
+}
+
 export type DayExpenseSummary = {
   date: string;
   place: string;
@@ -584,7 +589,7 @@ export type TripExpenseSummary = {
   program: { total: number; lines: ExpenseLine[] };
   byDay: DayExpenseSummary[];
   total: number;
-  /** Sum of lines where paid === true. */
+  /** Sum of lines counted as paid (see isPaidOrActualExpenseLine). */
   paidTotal: number;
   pricedCount: number;
   unparsedCount: number;
@@ -861,7 +866,7 @@ export function tripExpenseSummary(days: TripDay[]): TripExpenseSummary {
     byDay,
     total: cruiseTotal + hotelTotal + transportTotal,
     paidTotal: [...cruiseLines, ...hotelLines, ...transportLines]
-      .filter((l) => l.paid)
+      .filter(isPaidOrActualExpenseLine)
       .reduce((s, l) => s + l.amount, 0),
     pricedCount,
     unparsedCount,

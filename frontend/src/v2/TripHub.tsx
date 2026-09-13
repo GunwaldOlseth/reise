@@ -14,6 +14,7 @@ import {
   type HomePlace,
   type PlannerSettings,
 } from '../userSettings'
+import { isPaidOrActualExpenseLine } from '../api'
 import { journeyExpenseSummary } from './journeyExpenses'
 import { ExpensesDailyChart } from './ExpensesDailyChart'
 import { journeyMapRouteKey, journeyMapStopsInOrder } from './journeyMap'
@@ -633,6 +634,50 @@ export function TripHub({
   )
 }
 
+function sumExpenseLinesByPaidStatus(
+  lines: TripExpenseSummary['cruise']['lines'],
+): { paid: number; unpaid: number } {
+  let paid = 0
+  let unpaid = 0
+  for (const line of lines) {
+    if (isPaidOrActualExpenseLine(line)) paid += line.amount
+    else unpaid += line.amount
+  }
+  return { paid, unpaid }
+}
+
+function ExpenseCategoryAmounts({
+  total,
+  lines,
+}: {
+  total: number
+  lines: TripExpenseSummary['cruise']['lines']
+}) {
+  const { paid, unpaid } = sumExpenseLinesByPaidStatus(lines)
+  const hasSplit = lines.length > 0 && (paid > 0 || unpaid > 0)
+  return (
+    <div className="expense-category-amounts">
+      <strong className="expense-category-total">
+        {formatExpenseAmount(total)}
+      </strong>
+      {hasSplit ? (
+        <div className="expense-category-paid-split">
+          {paid > 0 ? (
+            <span className="expense-category-paid">
+              Betalt {formatExpenseAmount(paid)}
+            </span>
+          ) : null}
+          {unpaid > 0 ? (
+            <span className="expense-category-unpaid">
+              Ikke betalt {formatExpenseAmount(unpaid)}
+            </span>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
 function JourneyExpensesView({
   summary,
 }: {
@@ -657,11 +702,20 @@ function JourneyExpensesView({
           ) : null}
         </span>
         <span className="expense-line-amount">
-          {line.paid && (
-            <span className="expense-paid-mark" title="Betalt">
+          {isPaidOrActualExpenseLine(line) ? (
+            <span
+              className={`expense-paid-mark${line.paid ? '' : ' is-actual'}`}
+              title={
+                line.paid
+                  ? line.isActual
+                    ? 'Markert betalt (faktisk beløp)'
+                    : 'Markert som betalt i plan'
+                  : 'Registrert underveis — telles som betalt'
+              }
+            >
               ✓
             </span>
-          )}
+          ) : null}
           {formatExpenseAmount(line.amount)}
         </span>
       </li>
@@ -683,7 +737,7 @@ function JourneyExpensesView({
       <div className="expense-category">
         <div className="expense-category-head">
           <h3>{title}</h3>
-          <strong>{formatExpenseAmount(total)}</strong>
+          <ExpenseCategoryAmounts total={total} lines={lines} />
         </div>
         {lines.length === 0 ? (
           <p className="meta expense-empty">Ingen priser registrert</p>
@@ -731,7 +785,7 @@ function JourneyExpensesView({
       <div className="expense-category">
         <div className="expense-category-head">
           <h3>{title}</h3>
-          <strong>{formatExpenseAmount(total)}</strong>
+          <ExpenseCategoryAmounts total={total} lines={lines} />
         </div>
         {groups.length === 0 ? (
           <p className="meta expense-empty">Ingen priser registrert</p>
@@ -822,6 +876,12 @@ function JourneyExpensesView({
             </div>
           </div>
         </div>
+        <p className="meta expense-total-hint">
+          <strong>Betalt</strong> er poster du har krysset av i Plan eller Live,
+          pluss alt under <em>Underveis</em> og transport med faktisk beløp.{' '}
+          <strong>Gjenstår</strong> er planlagte priser som ikke er markert
+          betalt ennå. ✓ ved beløpet viser hva som telles med.
+        </p>
         <p className="meta expense-total-breakdown">
           Pakker {formatExpenseAmount(summary.cruise.total)}
           {' · '}
