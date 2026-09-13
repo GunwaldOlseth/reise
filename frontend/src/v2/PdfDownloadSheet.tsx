@@ -26,16 +26,22 @@ export function PdfDownloadSheet({
     ...DEFAULT_APPENDIX,
   }))
   const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
 
   function toggle(key: keyof PdfDailyAppendixOptions) {
     setAppendix((prev) => ({ ...prev, [key]: !prev[key] }))
   }
 
-  function download() {
+  async function download() {
     setBusy(true)
+    setError('')
     try {
-      downloadItineraryPdf(trip, journey, appendix)
+      await downloadItineraryPdf(trip, journey, appendix)
       onClose()
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : 'Kunne ikke lage PDF',
+      )
     } finally {
       setBusy(false)
     }
@@ -105,7 +111,10 @@ export function PdfDownloadSheet({
 
         <p className="v2-meta">
           Uten avkryssing får du bare kort oversikt og fullversjon av planen.
+          Med <strong>Bilder</strong> embeddes bildene i PDF-en (nedskalert).
         </p>
+
+        {error ? <p className="v2-error">{error}</p> : null}
 
         <div className="v2-sheet-actions">
           <button
@@ -122,7 +131,11 @@ export function PdfDownloadSheet({
             disabled={busy}
             onClick={download}
           >
-            Last ned
+            {busy
+              ? appendix.photos
+                ? 'Henter bilder…'
+                : 'Lager PDF…'
+              : 'Last ned'}
           </button>
         </div>
       </div>

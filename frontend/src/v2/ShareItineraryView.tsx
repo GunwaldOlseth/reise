@@ -206,7 +206,8 @@ export function SharePreviewCard({
         Andre får en kort liste med byer og via-transport. Ingen menyer, og de
         kan ikke redigere. PDF-en har den korte oversikten pluss en fullversjon
         med alle steg — bare første transport på listen. Du kan velge en
-        påfølgende inndeling per dag for utgifter, skritt, transport og bilder.
+        påfølgende inndeling per dag for utgifter, skritt, transport og bilder
+        (bildene embeddes i PDF-en).
         {published ? ' Listen er publisert.' : ''}
       </p>
       {trips.length > 1 ? (
