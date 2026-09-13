@@ -23,9 +23,8 @@ import {
   effectiveHotelName,
   formatCityStation,
   legTravelDate,
-  legModeLabel,
   normalizeCityTransport,
-  cityTransportRouteLabel,
+  cityTransportExpenseLabel,
   stopGoalLabel,
   type Journey,
   type JourneyCost,
@@ -404,11 +403,11 @@ export function journeyExpenseSummary(journey: Journey): TripExpenseSummary {
         }
         pricedCount += 1
         const date = addDaysIso(stop.arriveDate, hop.dayOffset)
-        const mode = hop.mode ? legModeLabel(hop.mode) : 'Transport'
-        const route = cityTransportRouteLabel(hop)
-        const title = [route, mode, (hop.company || '').trim()]
-          .filter(Boolean)
-          .join(' · ')
+        const title =
+          cityTransportExpenseLabel(hop) +
+          ((hop.company || '').trim()
+            ? ` · ${(hop.company || '').trim()}`
+            : '')
         const expected = (hop.price || '').trim()
         const actual = (hop.actualPrice || '').trim()
         const useActual = !!actual

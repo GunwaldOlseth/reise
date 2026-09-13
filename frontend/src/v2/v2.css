@@ -7503,34 +7503,27 @@ html[data-theme='plasma'] .v2-shell {
 .v2-live-city-transport-item {
   display: flex;
   flex-direction: column;
-  gap: 0.35rem;
+  gap: 0.25rem;
   padding: 0.55rem 0.6rem;
   border: 1px solid var(--v2-line);
   border-radius: 0.65rem;
   background: color-mix(in srgb, var(--v2-panel) 92%, var(--v2-ink) 8%);
 }
 
-.v2-live-city-transport-route {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.35rem 0.45rem;
-}
-
-.v2-live-city-transport-route label {
+.v2-live-city-transport-row {
   display: flex;
-  flex-direction: column;
-  gap: 0.15rem;
-  font-size: 0.72rem;
-  color: var(--v2-label);
-}
-
-.v2-live-city-transport-route input,
-.v2-live-city-transport-route select {
-  width: 100%;
-}
-
-.v2-live-city-transport-meta {
   flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.v2-live-city-transport-desc {
+  flex: 1 1 8rem;
+  min-width: 0;
+}
+
+.v2-live-city-transport-summary {
+  padding-left: 1.65rem;
 }
 
 .v2-live-lodging-item.is-missing {
