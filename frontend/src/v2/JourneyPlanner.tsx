@@ -58,6 +58,7 @@ import {
   optionIsTaken,
   parsePositiveMinutes,
   normalizeSights,
+  normalizeCityTransport,
   packageFreeDayLabel,
   packageNightsOf,
   packageOf,
@@ -473,6 +474,7 @@ export function JourneyPlanner({
           let stop: JourneyStop = {
             ...s,
             sights: normalizeSights(s.sights).map(compactActivity),
+            cityTransport: normalizeCityTransport(s.cityTransport),
             docs,
             notes: docs[0]?.body || compactNoteHtml(s.notes || ''),
           }
