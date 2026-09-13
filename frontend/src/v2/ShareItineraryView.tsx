@@ -205,7 +205,8 @@ export function SharePreviewCard({
       <p className="v2-meta">
         Andre får en kort liste med byer og via-transport. Ingen menyer, og de
         kan ikke redigere. PDF-en har den korte oversikten pluss en fullversjon
-        med alle steg — bare første transport på listen.
+        med alle steg — bare første transport på listen. Du kan velge en
+        påfølgende inndeling per dag for utgifter, skritt, transport og bilder.
         {published ? ' Listen er publisert.' : ''}
       </p>
       {trips.length > 1 ? (
