@@ -15,14 +15,13 @@ import {
   calendarDaysForStop,
   cityStayDays,
   cityTransportOnDay,
-  cityTransportRouteLabel,
+  cityTransportExpenseLabel,
   effectiveHotelName,
   formatDateNO,
   formatChangeTimeLabel,
   formatCityStation,
   formatTransportOptionLabel,
   isLiveActivitySkipped,
-  legModeLabel,
   liveSkippedActivityIds,
   isPackageStop,
   journeyActivityCalendarBounds,
@@ -79,7 +78,6 @@ import {
   type JourneyActivity,
   type JourneyCityDoc,
   type JourneyCityTransport,
-  type JourneyLegMode,
   type JourneyLiveEntry,
   type JourneyLiveKind,
   type JourneyPhoto,
@@ -487,16 +485,6 @@ const LIVE_KINDS: { kind: JourneyLiveKind; label: string }[] = [
   { kind: 'other', label: 'Annet' },
 ]
 
-const LOCAL_TRANSPORT_MODES: { value: JourneyLegMode; label: string }[] = [
-  { value: 'tram', label: 'Bybane/trikk' },
-  { value: 'bus', label: 'Buss' },
-  { value: 'train', label: 'Tog' },
-  { value: 'car', label: 'Bil' },
-  { value: 'walk', label: 'Til fots' },
-  { value: 'boat', label: 'Båt/ferge' },
-  { value: 'other', label: 'Annet' },
-]
-
 function LiveCityTransportSection({
   dayOffset,
   rows,
@@ -525,82 +513,52 @@ function LiveCityTransportSection({
   return (
     <div className="v2-live-city-transport">
       <div className="v2-live-city-transport-head">
-        <span className="v2-live-city-transport-title">Lokal transport</span>
+        <span className="v2-live-city-transport-title">Transport (utgift)</span>
         <button
           type="button"
           className="v2-chip-btn"
           disabled={disabled}
-          title="Legg til lokal transport denne dagen"
+          title="Legg til transportutgift for dagen (bussbillett, dagskort …)"
           onClick={addRow}
         >
-          + Transport
+          + Billett / transport
         </button>
       </div>
       {rows.length === 0 ? (
         <p className="v2-meta" style={{ margin: 0 }}>
-          Metro, taxi, buss innen byen…
+          Bussbillett, dagskort eller annen transport — telles under transport i
+          utgifter.
         </p>
       ) : (
         <ul className="v2-live-city-transport-list">
           {rows.map((row, idx) => {
             const mode = row.mode || 'bus'
+            const summary =
+              cityTransportExpenseLabel(row) ||
+              (row.price || row.actualPrice ? 'Transport' : '')
             return (
               <li key={row.id} className="v2-live-city-transport-item">
-                <div className="v2-live-city-transport-route">
-                  <label>
-                    Fra
-                    <input
-                      value={row.from || ''}
-                      disabled={disabled}
-                      placeholder="Hotell"
-                      onChange={(e) => patchRow(idx, { from: e.target.value })}
-                    />
-                  </label>
-                  <label>
-                    Til
-                    <input
-                      value={row.to || ''}
-                      disabled={disabled}
-                      placeholder="Sentrum"
-                      onChange={(e) => patchRow(idx, { to: e.target.value })}
-                    />
-                  </label>
-                  <label>
-                    Middel
-                    <select
-                      value={mode}
-                      disabled={disabled}
-                      onChange={(e) =>
-                        patchRow(idx, { mode: e.target.value as JourneyLegMode })
-                      }
-                    >
-                      {LOCAL_TRANSPORT_MODES.map((m) => (
-                        <option key={m.value} value={m.value}>
-                          {m.label}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label>
-                    Tid
-                    <input
-                      value={row.startTime || ''}
-                      disabled={disabled}
-                      placeholder="10:30"
-                      inputMode="numeric"
-                      onChange={(e) =>
-                        patchRow(idx, { startTime: e.target.value })
-                      }
-                    />
-                  </label>
-                </div>
-                <div className="v2-live-ride-opt-main v2-live-city-transport-meta">
+                <div className="v2-live-city-transport-row">
                   <TransportModeIcon mode={mode} size={18} />
-                  <span className="v2-meta">
-                    {[cityTransportRouteLabel(row), legModeLabel(mode)]
-                      .filter(Boolean)
-                      .join(' · ')}
-                  </span>
+                  <input
+                    className="v2-live-city-transport-desc"
+                    value={row.from || ''}
+                    disabled={disabled}
+                    placeholder="F.eks. bussbillett"
+                    title="Kort beskrivelse (valgfritt)"
+                    onChange={(e) => patchRow(idx, { from: e.target.value })}
+                  />
+                  <input
+                    className="v2-hop-price"
+                    inputMode="decimal"
+                    value={row.actualPrice || row.price || ''}
+                    disabled={disabled}
+                    placeholder="Pris"
+                    title="Beløp — telles som transport i utgifter"
+                    onChange={(e) =>
+                      patchRow(idx, { actualPrice: e.target.value })
+                    }
+                  />
                   <TicketToggle
                     checked={row.ticket || false}
                     disabled={disabled}
@@ -616,36 +574,18 @@ function LiveCityTransportSection({
                     type="button"
                     className="v2-via-remove"
                     disabled={disabled}
-                    aria-label="Slett lokal transport"
+                    aria-label="Slett"
                     title="Slett"
                     onClick={() => removeRow(idx)}
                   >
                     <TrashIcon size={14} />
                   </button>
                 </div>
-                <div className="v2-live-prices">
-                  <label>
-                    Forventet
-                    <input
-                      value={row.price || ''}
-                      disabled={disabled}
-                      placeholder="0"
-                      onChange={(e) => patchRow(idx, { price: e.target.value })}
-                    />
-                  </label>
-                  <label>
-                    Faktisk
-                    <input
-                      value={row.actualPrice || ''}
-                      disabled={disabled}
-                      placeholder={row.price?.trim() || 'Forventet pris'}
-                      title="Tomt felt bruker forventet pris i utgifter"
-                      onChange={(e) =>
-                        patchRow(idx, { actualPrice: e.target.value })
-                      }
-                    />
-                  </label>
-                </div>
+                {summary ? (
+                  <span className="v2-meta v2-live-city-transport-summary">
+                    {summary}
+                  </span>
+                ) : null}
               </li>
             )
           })}

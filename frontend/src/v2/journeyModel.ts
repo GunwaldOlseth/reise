@@ -2869,13 +2869,15 @@ export function replaceDayCityTransport(
   return normalizeCityTransport([...others, ...nextDay])
 }
 
-export function cityTransportRouteLabel(
-  hop: Pick<JourneyCityTransport, 'from' | 'to'>,
+/** Label for expenses and lists (description, not a route). */
+export function cityTransportExpenseLabel(
+  hop: Pick<JourneyCityTransport, 'from' | 'to' | 'notes'>,
 ): string {
-  const from = (hop.from || '').trim()
+  const desc = (hop.from || '').trim() || (hop.notes || '').trim()
+  if (desc) return desc
   const to = (hop.to || '').trim()
-  if (from && to) return `${from} → ${to}`
-  return from || to || 'Lokal transport'
+  if (to) return to
+  return 'Transport'
 }
 
 /**
