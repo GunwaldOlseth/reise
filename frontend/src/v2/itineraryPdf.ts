@@ -1,6 +1,12 @@
 import type { Trip } from '../api'
 import type { Journey } from './journeyModel'
-import { buildItineraryPdfLines, type PdfLine } from './shareItinerary'
+import {
+  buildItineraryPdfLines,
+  type PdfDailyAppendixOptions,
+  type PdfLine,
+} from './shareItinerary'
+
+export type { PdfDailyAppendixOptions }
 
 const PAGE_W = 595
 const PAGE_H = 842
@@ -233,8 +239,9 @@ function pdfFilename(name: string): string {
 export function downloadItineraryPdf(
   trip: Pick<Trip, 'name' | 'startDate' | 'endDate' | 'travelers'>,
   journey: Journey,
+  appendix?: PdfDailyAppendixOptions,
 ) {
-  const blob = buildPdf(buildItineraryPdfLines(trip, journey))
+  const blob = buildPdf(buildItineraryPdfLines(trip, journey, appendix))
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url

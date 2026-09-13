@@ -1,4 +1,5 @@
-import { formatTravelers, type Trip } from '../api'
+import { formatExpenseAmount, formatTravelers, type Trip } from '../api'
+import { journeyExpenseSummary } from './journeyExpenses'
 import {
   addDaysIso,
   chosenTransportOption,
@@ -25,6 +26,9 @@ import {
   sortTransportOptions,
   transportSegments,
   viaTransportOptions,
+  journeyOverviewRides,
+  journeyOverviewStepsSummary,
+  normalizeLiveDailyPhotos,
   type Journey,
   type JourneyStop,
   type JourneyVia,
@@ -345,6 +349,145 @@ export type PdfLine = {
   style: 'h1' | 'h2' | 'meta' | 'place' | 'hop' | 'sub'
 }
 
+export type PdfDailyAppendixOptions = {
+  expenses: boolean
+  steps: boolean
+  transport: boolean
+  photos: boolean
+}
+
+export function pdfDailyAppendixEnabled(opts: PdfDailyAppendixOptions): boolean {
+  return opts.expenses || opts.steps || opts.transport || opts.photos
+}
+
+function formatStepCountPdf(n: number): string {
+  return n.toLocaleString('nb-NO')
+}
+
+function buildPdfDailyAppendixLines(
+  trip: Pick<Trip, 'travelers'>,
+  journey: Journey,
+  appendix: PdfDailyAppendixOptions,
+): PdfLine[] {
+  if (!pdfDailyAppendixEnabled(appendix)) return []
+
+  const out: PdfLine[] = [{ style: 'h2', text: 'Påfølgende' }]
+
+  if (appendix.expenses) {
+    out.push({ style: 'h2', text: 'Utgifter per dag' })
+    const summary = journeyExpenseSummary(journey)
+    const days = summary.byDay.filter((d) => d.total > 0 || d.lines.length > 0)
+    if (days.length === 0) {
+      out.push({ style: 'meta', text: 'Ingen utgifter registrert.' })
+    } else {
+      for (const day of days) {
+        out.push({ style: 'place', text: formatDateNO(day.date) })
+        const priced = day.lines.filter((l) => l.amount > 0)
+        if (priced.length === 0) {
+          out.push({ style: 'sub', text: `Sum ${formatExpenseAmount(day.total)}` })
+          continue
+        }
+        for (const line of priced) {
+          const paid = line.paid || line.isActual ? ' (betalt)' : ''
+          out.push({
+            style: 'sub',
+            text: `${line.title}: ${formatExpenseAmount(line.amount)}${paid}`,
+          })
+        }
+      }
+    }
+  }
+
+  if (appendix.steps) {
+    out.push({ style: 'h2', text: 'Skritt per dag' })
+    const steps = journeyOverviewStepsSummary(journey, trip.travelers)
+    if (steps.days.length === 0) {
+      out.push({ style: 'meta', text: 'Ingen skritt registrert.' })
+    } else {
+      for (const row of steps.days) {
+        out.push({ style: 'place', text: formatDateNO(row.date) })
+        if (steps.travelers.length === 0) {
+          out.push({
+            style: 'sub',
+            text: `${formatStepCountPdf(row.total)} skritt`,
+          })
+        } else {
+          for (const name of steps.travelers) {
+            const n = row.byTraveler[name] || 0
+            if (n <= 0) continue
+            out.push({
+              style: 'sub',
+              text: `${name}: ${formatStepCountPdf(n)} skritt`,
+            })
+          }
+          if (row.total > 0 && steps.travelers.length > 1) {
+            out.push({
+              style: 'sub',
+              text: `Sum: ${formatStepCountPdf(row.total)} skritt`,
+            })
+          }
+        }
+      }
+    }
+  }
+
+  if (appendix.transport) {
+    out.push({ style: 'h2', text: 'Transport per dag' })
+    const rides = journeyOverviewRides(journey)
+    const byDate = new Map<string, typeof rides>()
+    for (const ride of rides) {
+      const key = (ride.date || '').trim() || 'uten-dato'
+      const list = byDate.get(key) || []
+      list.push(ride)
+      byDate.set(key, list)
+    }
+    const keys = [...byDate.keys()].sort((a, b) => {
+      if (a === 'uten-dato') return 1
+      if (b === 'uten-dato') return -1
+      return a.localeCompare(b)
+    })
+    if (keys.length === 0) {
+      out.push({ style: 'meta', text: 'Ingen transport registrert.' })
+    } else {
+      for (const key of keys) {
+        const label =
+          key === 'uten-dato' ? 'Uten dato' : formatDateNO(key)
+        out.push({ style: 'place', text: label })
+        for (const ride of byDate.get(key) || []) {
+          const route = `${ride.fromLabel} → ${ride.toLabel}`
+          const line = ride.detail ? `${route} · ${ride.detail}` : route
+          out.push({ style: 'sub', text: line })
+        }
+      }
+    }
+  }
+
+  if (appendix.photos) {
+    out.push({ style: 'h2', text: 'Bilder per dag' })
+    const byDate = new Map<string, number>()
+    for (const photo of normalizeLiveDailyPhotos(journey.liveDailyPhotos)) {
+      const d = (photo.date || '').trim()
+      if (!d) continue
+      byDate.set(d, (byDate.get(d) || 0) + 1)
+    }
+    const dates = [...byDate.keys()].sort()
+    if (dates.length === 0) {
+      out.push({ style: 'meta', text: 'Ingen bilder registrert.' })
+    } else {
+      for (const date of dates) {
+        const n = byDate.get(date) || 0
+        const word = n === 1 ? 'bilde' : 'bilder'
+        out.push({
+          style: 'place',
+          text: `${formatDateNO(date)} · ${n} ${word}`,
+        })
+      }
+    }
+  }
+
+  return out
+}
+
 function placeMeta(stop: JourneyStop): string {
   const bits: string[] = []
   if (stop.kind === 'home') bits.push('Hjem')
@@ -366,6 +509,7 @@ function placeMeta(stop: JourneyStop): string {
 export function buildItineraryPdfLines(
   trip: Pick<Trip, 'name' | 'startDate' | 'endDate' | 'travelers'>,
   journey: Journey,
+  appendix?: PdfDailyAppendixOptions,
 ): PdfLine[] {
   const short = buildShareItinerary(trip, journey, 'first')
   const dates = formatShareDateRange(trip.startDate || '', trip.endDate || '')
@@ -397,6 +541,9 @@ export function buildItineraryPdfLines(
   )
   if (stops.length === 0) {
     lines.push({ style: 'meta', text: 'Ingen steg ennå.' })
+    if (appendix && pdfDailyAppendixEnabled(appendix)) {
+      lines.push(...buildPdfDailyAppendixLines(trip, journey, appendix))
+    }
     return lines
   }
 
@@ -437,6 +584,10 @@ export function buildItineraryPdfLines(
       const label = formatShareHop(via, 'first', true)
       if (label) lines.push({ style: 'hop', text: label })
     }
+  }
+
+  if (appendix && pdfDailyAppendixEnabled(appendix)) {
+    lines.push(...buildPdfDailyAppendixLines(trip, journey, appendix))
   }
 
   return lines

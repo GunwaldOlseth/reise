@@ -10,7 +10,7 @@ import {
   sharePageUrl,
   type ShareItinerary,
 } from './shareItinerary'
-import { downloadItineraryPdf } from './itineraryPdf'
+import { PdfDownloadSheet } from './PdfDownloadSheet'
 
 export function ShareItineraryView({
   itinerary,
@@ -89,6 +89,7 @@ export function SharePreviewCard({
   const [loading, setLoading] = useState(false)
   const [hint, setHint] = useState('')
   const [busy, setBusy] = useState(false)
+  const [pdfOpen, setPdfOpen] = useState(false)
   const [published, setPublished] = useState(
     () => !!trips.find((t) => t.id === (initialTripId || trips[0]?.id))?.shareToken,
   )
@@ -195,10 +196,7 @@ export function SharePreviewCard({
   }
 
   function downloadPdf() {
-    const trip = trips.find((t) => t.id === tripId)
-    if (!trip || !journey) return
-    downloadItineraryPdf(trip, journey)
-    setHint('PDF lastet ned')
+    setPdfOpen(true)
   }
 
   return (
@@ -270,6 +268,20 @@ export function SharePreviewCard({
         </div>
       ) : null}
       {hint ? <p className="v2-meta">{hint}</p> : null}
+      {pdfOpen && journey && !isDemo ? (() => {
+        const tripForPdf = trips.find((t) => t.id === tripId)
+        if (!tripForPdf) return null
+        return (
+          <PdfDownloadSheet
+            trip={tripForPdf}
+            journey={journey}
+            onClose={() => {
+              setPdfOpen(false)
+              setHint('PDF lastet ned')
+            }}
+          />
+        )
+      })() : null}
     </section>
   )
 }
