@@ -1,5 +1,6 @@
 import {
   formatExpenseAmount,
+  isPaidOrActualExpenseLine,
   parsePriceAmount,
   type DayExpenseSummary,
   type ExpenseLine,
@@ -550,7 +551,9 @@ export function journeyExpenseSummary(journey: Journey): TripExpenseSummary {
     ...liveLines,
     ...programLines,
   ]
-  const paidTotal = allLines.filter((l) => l.paid).reduce((s, l) => s + l.amount, 0)
+  const paidTotal = allLines
+    .filter(isPaidOrActualExpenseLine)
+    .reduce((s, l) => s + l.amount, 0)
 
   return {
     cruise: {
@@ -579,11 +582,6 @@ export function journeyExpenseSummary(journey: Journey): TripExpenseSummary {
     pricedCount,
     unparsedCount,
   }
-}
-
-/** Plan items marked paid, plus faktiske beløp (live, transport actual). */
-export function isPaidOrActualExpenseLine(line: ExpenseLine): boolean {
-  return !!line.paid || !!line.isActual
 }
 
 export type DayPaidExpenseStacks = {

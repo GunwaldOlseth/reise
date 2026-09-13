@@ -14,6 +14,7 @@ import {
   type HomePlace,
   type PlannerSettings,
 } from '../userSettings'
+import { isPaidOrActualExpenseLine } from '../api'
 import { journeyExpenseSummary } from './journeyExpenses'
 import { ExpensesDailyChart } from './ExpensesDailyChart'
 import { journeyMapRouteKey, journeyMapStopsInOrder } from './journeyMap'
@@ -657,11 +658,20 @@ function JourneyExpensesView({
           ) : null}
         </span>
         <span className="expense-line-amount">
-          {line.paid && (
-            <span className="expense-paid-mark" title="Betalt">
+          {isPaidOrActualExpenseLine(line) ? (
+            <span
+              className={`expense-paid-mark${line.paid ? '' : ' is-actual'}`}
+              title={
+                line.paid
+                  ? line.isActual
+                    ? 'Markert betalt (faktisk beløp)'
+                    : 'Markert som betalt i plan'
+                  : 'Registrert underveis — telles som betalt'
+              }
+            >
               ✓
             </span>
-          )}
+          ) : null}
           {formatExpenseAmount(line.amount)}
         </span>
       </li>
@@ -822,6 +832,12 @@ function JourneyExpensesView({
             </div>
           </div>
         </div>
+        <p className="meta expense-total-hint">
+          <strong>Betalt</strong> er poster du har krysset av i Plan eller Live,
+          pluss alt under <em>Underveis</em> og transport med faktisk beløp.{' '}
+          <strong>Gjenstår</strong> er planlagte priser som ikke er markert
+          betalt ennå. ✓ ved beløpet viser hva som telles med.
+        </p>
         <p className="meta expense-total-breakdown">
           Pakker {formatExpenseAmount(summary.cruise.total)}
           {' · '}

@@ -7129,6 +7129,23 @@ html[data-theme='plasma'] .v2-shell {
   margin-right: 0.35rem;
 }
 
+.v2-shell .expense-paid-mark.is-actual {
+  color: var(--v2-muted);
+  opacity: 0.9;
+}
+
+.v2-shell .expense-total-hint {
+  margin: 0.65rem 0 0;
+  font-size: 0.82rem;
+  line-height: 1.45;
+  max-width: 34rem;
+}
+
+.v2-shell .expense-total-hint strong {
+  font-weight: 600;
+  color: var(--v2-ink-soft);
+}
+
 .v2-shell .expense-stats {
   list-style: none;
   margin: 0;
