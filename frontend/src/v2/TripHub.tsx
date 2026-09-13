@@ -21,7 +21,7 @@ import { journeyMapRouteKey, journeyMapStopsInOrder } from './journeyMap'
 import { localizeJourneyPlaces } from '../placeNames'
 import { compactLive, compactLiveDailyComments, compactLiveDailyPhotos, compactLiveDailySteps, emptyJourney, formatDateNO, compactActivity, normalizeLiveActivitySkips, normalizeSights, normalizeCityTransport, type Journey } from './journeyModel'
 import { shareOrCopy, sharePageUrl } from './shareItinerary'
-import { downloadItineraryPdf } from './itineraryPdf'
+import { PdfDownloadSheet } from './PdfDownloadSheet'
 import { DeleteTripSheet } from './DeleteTripSheet'
 import { JourneyLive } from './JourneyLive'
 import { JourneyLog } from './JourneyLog'
@@ -105,6 +105,7 @@ export function TripHub({
   const [menuOpen, setMenuOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [editOpen, setEditOpen] = useState(false)
+  const [pdfOpen, setPdfOpen] = useState(false)
   const [shareBusy, setShareBusy] = useState(false)
   const [shareHint, setShareHint] = useState('')
   const [journey, setJourney] = useState<Journey>(() => emptyJourney(tripId))
@@ -333,11 +334,9 @@ export function TripHub({
           <button
             type="button"
             className="btn btn-ghost btn-sm"
-            title="Last ned PDF med kort oversikt og fullversjon"
+            title="Last ned PDF med valgfri dag-for-dag-inndeling"
             disabled={!trip}
-            onClick={() => {
-              if (trip) downloadItineraryPdf(trip, journey)
-            }}
+            onClick={() => setPdfOpen(true)}
           >
             PDF
           </button>
@@ -442,7 +441,7 @@ export function TripHub({
                   disabled={!trip}
                   onClick={() => {
                     setMenuOpen(false)
-                    if (trip) downloadItineraryPdf(trip, journey)
+                    setPdfOpen(true)
                   }}
                 >
                   Last ned PDF
@@ -628,6 +627,14 @@ export function TripHub({
           tripName={tripName}
           onCancel={() => setDeleteOpen(false)}
           onDeleted={onTripDeleted}
+        />
+      )}
+
+      {pdfOpen && trip && journeyReady && (
+        <PdfDownloadSheet
+          trip={trip}
+          journey={journey}
+          onClose={() => setPdfOpen(false)}
         />
       )}
     </div>
