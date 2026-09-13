@@ -79,6 +79,42 @@ func normalizeSights(sights []JourneySight) {
 	}
 }
 
+func normalizeCityTransport(list []JourneyCityTransport) []JourneyCityTransport {
+	if len(list) == 0 {
+		return nil
+	}
+	out := make([]JourneyCityTransport, 0, len(list))
+	for i := range list {
+		row := list[i]
+		row.From = strings.TrimSpace(row.From)
+		row.To = strings.TrimSpace(row.To)
+		row.Mode = strings.TrimSpace(row.Mode)
+		row.StartTime = strings.TrimSpace(row.StartTime)
+		row.EndTime = strings.TrimSpace(row.EndTime)
+		row.Company = strings.TrimSpace(row.Company)
+		row.Price = strings.TrimSpace(row.Price)
+		row.ActualPrice = strings.TrimSpace(row.ActualPrice)
+		row.Notes = strings.TrimSpace(row.Notes)
+		if row.DayOffset < 0 {
+			row.DayOffset = 0
+		}
+		if row.ID == "" {
+			row.ID = newJourneyID("ct")
+		}
+		if row.From == "" && row.To == "" && row.Mode == "" && row.StartTime == "" &&
+			row.EndTime == "" && row.Company == "" && row.Price == "" &&
+			row.ActualPrice == "" && row.Notes == "" {
+			continue
+		}
+		row.SortOrder = len(out)
+		out = append(out, row)
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
 func normalizeCityDocs(stop *JourneyStop) {
 	if stop == nil {
 		return
@@ -484,6 +520,7 @@ func normalizeJourney(j *Journey) {
 		}
 		normalizePackageStop(&j.Stops[i])
 		normalizeSights(j.Stops[i].Sights)
+		j.Stops[i].CityTransport = normalizeCityTransport(j.Stops[i].CityTransport)
 	}
 	byPair := map[string]JourneyLeg{}
 	for _, leg := range j.Legs {

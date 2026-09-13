@@ -224,6 +224,25 @@ export interface JourneyActivity {
   sortOrder: number
 }
 
+/** Local transport within a city stay day (metro, taxi, bus …). */
+export interface JourneyCityTransport {
+  id: string
+  /** Day index from stop.arriveDate (0 = ankomstdag). */
+  dayOffset: number
+  from?: string
+  to?: string
+  mode?: JourneyLegMode | string
+  startTime?: string
+  endTime?: string
+  company?: string
+  price?: string
+  actualPrice?: string
+  ticket?: boolean
+  paid?: boolean
+  notes?: string
+  sortOrder: number
+}
+
 /** One day inside a multi-day package (not a separate thread stop). */
 export interface JourneyPackageDay {
   id: string
@@ -320,6 +339,8 @@ export interface JourneyStop {
   cruise?: JourneyCruise | null
   /** Attractions / excursions in this city (optionally per dayOffset). */
   sights?: JourneyActivity[]
+  /** Local transport hops per city day. */
+  cityTransport?: JourneyCityTransport[]
   /** Visit the city, or only change transport there. */
   purpose?: PlacePurpose
   /** Omit this stop from the trip map. */
@@ -2754,6 +2775,107 @@ export function normalizeSights(
         (s.endTime || '').trim() ||
         (s.price || '').trim(),
     )
+}
+
+export function newCityTransportId(): string {
+  return crypto.randomUUID()
+}
+
+export function newCityTransport(
+  dayOffset: number,
+  sortOrder = 0,
+): JourneyCityTransport {
+  return {
+    id: newCityTransportId(),
+    dayOffset: Math.max(0, Math.floor(dayOffset)),
+    from: '',
+    to: '',
+    mode: 'bus',
+    startTime: '',
+    endTime: '',
+    company: '',
+    price: '',
+    actualPrice: '',
+    ticket: false,
+    paid: false,
+    notes: '',
+    sortOrder,
+  }
+}
+
+export function normalizeCityTransport(
+  list?: JourneyCityTransport[] | null,
+): JourneyCityTransport[] {
+  return [...(list || [])]
+    .map((row, i) => ({
+      ...row,
+      id: row.id || newCityTransportId(),
+      dayOffset:
+        typeof row.dayOffset === 'number' && row.dayOffset >= 0
+          ? Math.floor(row.dayOffset)
+          : 0,
+      from: (row.from || '').trim(),
+      to: (row.to || '').trim(),
+      mode: (row.mode || '').trim(),
+      startTime: row.startTime
+        ? normalizeClockTime(row.startTime) || row.startTime
+        : '',
+      endTime: row.endTime
+        ? normalizeClockTime(row.endTime) || row.endTime
+        : '',
+      company: (row.company || '').trim(),
+      price: (row.price || '').trim(),
+      actualPrice: (row.actualPrice || '').trim(),
+      ticket: row.ticket || false,
+      paid: row.paid || false,
+      notes: (row.notes || '').trim(),
+      sortOrder: i,
+    }))
+    .filter(
+      (row) =>
+        row.from ||
+        row.to ||
+        row.mode ||
+        row.startTime ||
+        row.endTime ||
+        row.company ||
+        row.price ||
+        row.actualPrice ||
+        row.notes,
+    )
+}
+
+export function cityTransportOnDay(
+  stop: JourneyStop | null | undefined,
+  dayOffset: number,
+): JourneyCityTransport[] {
+  return normalizeCityTransport(stop?.cityTransport).filter(
+    (row) => row.dayOffset === dayOffset,
+  )
+}
+
+export function replaceDayCityTransport(
+  list: JourneyCityTransport[] | null | undefined,
+  dayOffset: number,
+  dayList: JourneyCityTransport[],
+): JourneyCityTransport[] {
+  const others = normalizeCityTransport(list).filter(
+    (row) => row.dayOffset !== dayOffset,
+  )
+  const nextDay = normalizeCityTransport(dayList).map((row) => ({
+    ...row,
+    dayOffset,
+  }))
+  return normalizeCityTransport([...others, ...nextDay])
+}
+
+export function cityTransportRouteLabel(
+  hop: Pick<JourneyCityTransport, 'from' | 'to'>,
+): string {
+  const from = (hop.from || '').trim()
+  const to = (hop.to || '').trim()
+  if (from && to) return `${from} → ${to}`
+  return from || to || 'Lokal transport'
 }
 
 /**

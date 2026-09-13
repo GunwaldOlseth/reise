@@ -23,6 +23,9 @@ import {
   effectiveHotelName,
   formatCityStation,
   legTravelDate,
+  legModeLabel,
+  normalizeCityTransport,
+  cityTransportRouteLabel,
   stopGoalLabel,
   type Journey,
   type JourneyCost,
@@ -387,6 +390,43 @@ export function journeyExpenseSummary(journey: Journey): TripExpenseSummary {
             line,
           )
         }
+      }
+    }
+
+    if (stop.kind !== 'home' && (stop.arriveDate || '').trim()) {
+      for (const hop of normalizeCityTransport(stop.cityTransport)) {
+        const raw = effectiveTransportPrice(hop)
+        const resolved = takeAmount(raw)
+        if (resolved === 'empty') continue
+        if (resolved === 'unparsed') {
+          unparsedCount += 1
+          continue
+        }
+        pricedCount += 1
+        const date = addDaysIso(stop.arriveDate, hop.dayOffset)
+        const mode = hop.mode ? legModeLabel(hop.mode) : 'Transport'
+        const route = cityTransportRouteLabel(hop)
+        const title = [route, mode, (hop.company || '').trim()]
+          .filter(Boolean)
+          .join(' · ')
+        const expected = (hop.price || '').trim()
+        const actual = (hop.actualPrice || '').trim()
+        const useActual = !!actual
+        const line: ExpenseLine = {
+          id: `${stop.id}:ct:${hop.id}`,
+          title,
+          date,
+          rawPrice: resolved.raw,
+          amount: resolved.amount,
+          isActual: useActual || undefined,
+          expectedRaw:
+            useActual && expected && expected !== actual
+              ? expected
+              : undefined,
+          paid: hop.paid || false,
+        }
+        transportLines.push(line)
+        addShare(date, stop.city, 'transport', resolved.amount, line)
       }
     }
   }

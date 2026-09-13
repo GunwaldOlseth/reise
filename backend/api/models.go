@@ -248,6 +248,24 @@ type JourneyCruise struct {
 	Days        []JourneyCruiseDay `json:"days,omitempty" firestore:"days,omitempty"`
 }
 
+// JourneyCityTransport is local transport within a city stay day (metro, taxi, …).
+type JourneyCityTransport struct {
+	ID          string `json:"id" firestore:"id"`
+	DayOffset   int    `json:"dayOffset,omitempty" firestore:"dayOffset,omitempty"`
+	From        string `json:"from,omitempty" firestore:"from,omitempty"`
+	To          string `json:"to,omitempty" firestore:"to,omitempty"`
+	Mode        string `json:"mode,omitempty" firestore:"mode,omitempty"`
+	StartTime   string `json:"startTime,omitempty" firestore:"startTime,omitempty"`
+	EndTime     string `json:"endTime,omitempty" firestore:"endTime,omitempty"`
+	Company     string `json:"company,omitempty" firestore:"company,omitempty"`
+	Price       string `json:"price,omitempty" firestore:"price,omitempty"`
+	ActualPrice string `json:"actualPrice,omitempty" firestore:"actualPrice,omitempty"`
+	Ticket      bool   `json:"ticket,omitempty" firestore:"ticket,omitempty"`
+	Paid        bool   `json:"paid,omitempty" firestore:"paid,omitempty"`
+	Notes       string `json:"notes,omitempty" firestore:"notes,omitempty"`
+	SortOrder   int    `json:"sortOrder" firestore:"sortOrder"`
+}
+
 // JourneyStop is one place on the trip thread (not a single calendar day).
 type JourneyStop struct {
 	ID         string          `json:"id" firestore:"id"`
@@ -266,7 +284,8 @@ type JourneyStop struct {
 	Cruise     *JourneyCruise  `json:"cruise,omitempty" firestore:"cruise,omitempty"` // legacy
 	Notes      string           `json:"notes,omitempty" firestore:"notes,omitempty"`
 	Docs       []JourneyCityDoc `json:"docs,omitempty" firestore:"docs,omitempty"`
-	Sights     []JourneySight   `json:"sights,omitempty" firestore:"sights,omitempty"`
+	Sights         []JourneySight           `json:"sights,omitempty" firestore:"sights,omitempty"`
+	CityTransport  []JourneyCityTransport   `json:"cityTransport,omitempty" firestore:"cityTransport,omitempty"`
 	Purpose    string          `json:"purpose,omitempty" firestore:"purpose,omitempty"` // visit | transfer
 	HideOnMap  bool            `json:"hideOnMap,omitempty" firestore:"hideOnMap,omitempty"`
 	SortOrder  int             `json:"sortOrder" firestore:"sortOrder"`
