@@ -464,28 +464,39 @@ function buildPdfDailyAppendixLines(
 
   if (appendix.photos) {
     out.push({ style: 'h2', text: 'Bilder per dag' })
-    const byDate = new Map<string, number>()
-    for (const photo of normalizeLiveDailyPhotos(journey.liveDailyPhotos)) {
-      const d = (photo.date || '').trim()
-      if (!d) continue
-      byDate.set(d, (byDate.get(d) || 0) + 1)
-    }
-    const dates = [...byDate.keys()].sort()
-    if (dates.length === 0) {
+    const groups = buildPdfPhotoGroups(journey)
+    if (groups.length === 0) {
       out.push({ style: 'meta', text: 'Ingen bilder registrert.' })
-    } else {
-      for (const date of dates) {
-        const n = byDate.get(date) || 0
-        const word = n === 1 ? 'bilde' : 'bilder'
-        out.push({
-          style: 'place',
-          text: `${formatDateNO(date)} · ${n} ${word}`,
-        })
-      }
     }
   }
 
   return out
+}
+
+export type PdfPhotoDayGroup = {
+  date: string
+  dateLabel: string
+  urls: string[]
+}
+
+/** Live photos grouped by calendar day (for PDF embedding). */
+export function buildPdfPhotoGroups(journey: Journey): PdfPhotoDayGroup[] {
+  const byDate = new Map<string, string[]>()
+  for (const photo of normalizeLiveDailyPhotos(journey.liveDailyPhotos)) {
+    const d = (photo.date || '').trim()
+    const url = (photo.url || '').trim()
+    if (!d || !url) continue
+    const list = byDate.get(d) || []
+    list.push(url)
+    byDate.set(d, list)
+  }
+  return [...byDate.keys()]
+    .sort()
+    .map((date) => ({
+      date,
+      dateLabel: formatDateNO(date),
+      urls: byDate.get(date) || [],
+    }))
 }
 
 function placeMeta(stop: JourneyStop): string {
