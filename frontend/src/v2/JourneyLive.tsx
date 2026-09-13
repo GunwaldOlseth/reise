@@ -14,12 +14,15 @@ import {
   addDaysIso,
   calendarDaysForStop,
   cityStayDays,
+  cityTransportOnDay,
+  cityTransportRouteLabel,
   effectiveHotelName,
   formatDateNO,
   formatChangeTimeLabel,
   formatCityStation,
   formatTransportOptionLabel,
   isLiveActivitySkipped,
+  legModeLabel,
   liveSkippedActivityIds,
   isPackageStop,
   journeyActivityCalendarBounds,
@@ -34,7 +37,9 @@ import {
   moveActivityToCalendarDate,
   moveActivityToDay,
   newLiveEntry,
+  newCityTransport,
   normalizeLive,
+  normalizeCityTransport,
   normalizeSights,
   optionIsTaken,
   chosenFromOptions,
@@ -42,6 +47,7 @@ import {
   packageFreeDayLabel,
   packageOf,
   replaceDayActivities,
+  replaceDayCityTransport,
   stopDepartDate,
   stopGoalLabel,
   optionHasTicket,
@@ -72,6 +78,8 @@ import {
   type Journey,
   type JourneyActivity,
   type JourneyCityDoc,
+  type JourneyCityTransport,
+  type JourneyLegMode,
   type JourneyLiveEntry,
   type JourneyLiveKind,
   type JourneyPhoto,
@@ -479,6 +487,174 @@ const LIVE_KINDS: { kind: JourneyLiveKind; label: string }[] = [
   { kind: 'other', label: 'Annet' },
 ]
 
+const LOCAL_TRANSPORT_MODES: { value: JourneyLegMode; label: string }[] = [
+  { value: 'tram', label: 'Bybane/trikk' },
+  { value: 'bus', label: 'Buss' },
+  { value: 'train', label: 'Tog' },
+  { value: 'car', label: 'Bil' },
+  { value: 'walk', label: 'Til fots' },
+  { value: 'boat', label: 'Båt/ferge' },
+  { value: 'other', label: 'Annet' },
+]
+
+function LiveCityTransportSection({
+  dayOffset,
+  rows,
+  disabled,
+  onChange,
+}: {
+  dayOffset: number
+  rows: JourneyCityTransport[]
+  disabled?: boolean
+  onChange: (next: JourneyCityTransport[]) => void
+}) {
+  function patchRow(idx: number, partial: Partial<JourneyCityTransport>) {
+    onChange(
+      rows.map((row, i) => (i === idx ? { ...row, ...partial } : row)),
+    )
+  }
+
+  function addRow() {
+    onChange([...rows, newCityTransport(dayOffset, rows.length)])
+  }
+
+  function removeRow(idx: number) {
+    onChange(rows.filter((_, i) => i !== idx))
+  }
+
+  return (
+    <div className="v2-live-city-transport">
+      <div className="v2-live-city-transport-head">
+        <span className="v2-live-city-transport-title">Lokal transport</span>
+        <button
+          type="button"
+          className="v2-chip-btn"
+          disabled={disabled}
+          title="Legg til lokal transport denne dagen"
+          onClick={addRow}
+        >
+          + Transport
+        </button>
+      </div>
+      {rows.length === 0 ? (
+        <p className="v2-meta" style={{ margin: 0 }}>
+          Metro, taxi, buss innen byen…
+        </p>
+      ) : (
+        <ul className="v2-live-city-transport-list">
+          {rows.map((row, idx) => {
+            const mode = row.mode || 'bus'
+            return (
+              <li key={row.id} className="v2-live-city-transport-item">
+                <div className="v2-live-city-transport-route">
+                  <label>
+                    Fra
+                    <input
+                      value={row.from || ''}
+                      disabled={disabled}
+                      placeholder="Hotell"
+                      onChange={(e) => patchRow(idx, { from: e.target.value })}
+                    />
+                  </label>
+                  <label>
+                    Til
+                    <input
+                      value={row.to || ''}
+                      disabled={disabled}
+                      placeholder="Sentrum"
+                      onChange={(e) => patchRow(idx, { to: e.target.value })}
+                    />
+                  </label>
+                  <label>
+                    Middel
+                    <select
+                      value={mode}
+                      disabled={disabled}
+                      onChange={(e) =>
+                        patchRow(idx, { mode: e.target.value as JourneyLegMode })
+                      }
+                    >
+                      {LOCAL_TRANSPORT_MODES.map((m) => (
+                        <option key={m.value} value={m.value}>
+                          {m.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    Tid
+                    <input
+                      value={row.startTime || ''}
+                      disabled={disabled}
+                      placeholder="10:30"
+                      inputMode="numeric"
+                      onChange={(e) =>
+                        patchRow(idx, { startTime: e.target.value })
+                      }
+                    />
+                  </label>
+                </div>
+                <div className="v2-live-ride-opt-main v2-live-city-transport-meta">
+                  <TransportModeIcon mode={mode} size={18} />
+                  <span className="v2-meta">
+                    {[cityTransportRouteLabel(row), legModeLabel(mode)]
+                      .filter(Boolean)
+                      .join(' · ')}
+                  </span>
+                  <TicketToggle
+                    checked={row.ticket || false}
+                    disabled={disabled}
+                    onChange={(ticket) => patchRow(idx, { ticket })}
+                  />
+                  <PaidToggle
+                    compact
+                    checked={row.paid || false}
+                    disabled={disabled}
+                    onChange={(paid) => patchRow(idx, { paid })}
+                  />
+                  <button
+                    type="button"
+                    className="v2-via-remove"
+                    disabled={disabled}
+                    aria-label="Slett lokal transport"
+                    title="Slett"
+                    onClick={() => removeRow(idx)}
+                  >
+                    <TrashIcon size={14} />
+                  </button>
+                </div>
+                <div className="v2-live-prices">
+                  <label>
+                    Forventet
+                    <input
+                      value={row.price || ''}
+                      disabled={disabled}
+                      placeholder="0"
+                      onChange={(e) => patchRow(idx, { price: e.target.value })}
+                    />
+                  </label>
+                  <label>
+                    Faktisk
+                    <input
+                      value={row.actualPrice || ''}
+                      disabled={disabled}
+                      placeholder={row.price?.trim() || 'Forventet pris'}
+                      title="Tomt felt bruker forventet pris i utgifter"
+                      onChange={(e) =>
+                        patchRow(idx, { actualPrice: e.target.value })
+                      }
+                    />
+                  </label>
+                </div>
+              </li>
+            )
+          })}
+        </ul>
+      )}
+    </div>
+  )
+}
+
 type DayPlace = {
   stop: JourneyStop
   city: string
@@ -835,6 +1011,28 @@ export function JourneyLive({
       next = withLiveActivitySkip(next, date, stopId, dayOffset, false)
     }
     patchJourney(next)
+  }
+
+  function patchDayCityTransport(
+    stopId: string,
+    dayOffset: number,
+    dayList: JourneyCityTransport[],
+  ) {
+    patchJourney({
+      ...journey,
+      stops: (journey.stops || []).map((stop) =>
+        stop.id !== stopId
+          ? stop
+          : {
+              ...stop,
+              cityTransport: replaceDayCityTransport(
+                stop.cityTransport,
+                dayOffset,
+                normalizeCityTransport(dayList),
+              ),
+            },
+      ),
+    })
   }
 
   function setActivitySkip(
@@ -1450,6 +1648,24 @@ export function JourneyLive({
                         )
                       }
                     />
+                    {target.stop.kind !== 'home' &&
+                    !isPackageStop(target.stop) ? (
+                      <LiveCityTransportSection
+                        dayOffset={target.dayOffset}
+                        rows={cityTransportOnDay(
+                          target.stop,
+                          target.dayOffset,
+                        )}
+                        disabled={disabled}
+                        onChange={(list) =>
+                          patchDayCityTransport(
+                            target.stop.id,
+                            target.dayOffset,
+                            list,
+                          )
+                        }
+                      />
+                    ) : null}
                     {skippedSights.length > 0 ? (
                       <ul className="v2-live-activity-skipped-list">
                         {skippedSights.map((sight) => (
