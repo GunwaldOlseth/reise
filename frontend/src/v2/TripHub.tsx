@@ -17,6 +17,7 @@ import {
 import { isPaidOrActualExpenseLine } from '../api'
 import { journeyExpenseSummary } from './journeyExpenses'
 import { prefetchJourneyCurrencyRates } from './priceCurrency'
+import { normalizeJourneyPricesToNok } from './journeyPricePersist'
 import { ExpensesDailyChart } from './ExpensesDailyChart'
 import { journeyMapRouteKey, journeyMapStopsInOrder } from './journeyMap'
 import { localizeJourneyPlaces } from '../placeNames'
@@ -192,7 +193,7 @@ export function TripHub({
   const liveSaveChain = useRef(Promise.resolve())
 
   function buildLivePersistPayload(source: Journey): Journey {
-    return {
+    return normalizeJourneyPricesToNok({
       ...source,
       live: compactLive(source.live, trip?.travelers),
       liveActivitySkips: normalizeLiveActivitySkips(source.liveActivitySkips),
@@ -211,7 +212,7 @@ export function TripHub({
           sights: normalizeSights(v.sights).map(compactActivity),
         })),
       })),
-    }
+    })
   }
 
   function persistJourneyQuiet(next: Journey) {

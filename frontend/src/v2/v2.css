@@ -8074,9 +8074,18 @@ html[data-theme='plasma'] .v2-shell {
 
 .v2-price-currency {
   display: inline-flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 0.35rem;
   min-width: 0;
+}
+
+.v2-price-currency-hint {
+  flex: 1 1 100%;
+  margin: 0;
+  font-size: 0.72rem;
+  line-height: 1.25;
+  color: color-mix(in srgb, #c94a4a 85%, var(--v2-ink));
 }
 
 .v2-price-currency.is-compact .v2-price-currency-select {

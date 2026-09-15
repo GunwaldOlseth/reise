@@ -96,6 +96,7 @@ import {
   DEFAULT_PRICE_CURRENCY,
   formatPriceLabel,
   normalizePriceCurrency,
+  persistPriceAsNok,
   PRICE_CURRENCY_OPTIONS,
 } from './priceCurrency'
 import {
@@ -568,6 +569,13 @@ function LiveCityTransportSection({
                     }
                     onCurrencyChange={(currency) =>
                       patchRow(idx, { currency })
+                    }
+                    onPersist={(price) =>
+                      patchRow(idx, {
+                        actualPrice: price,
+                        price: '',
+                        currency: undefined,
+                      })
                     }
                   />
                   <TicketToggle
@@ -1507,6 +1515,23 @@ export function JourneyLive({
                                       price: e.target.value,
                                     })
                                   }
+                                  onBlur={() => {
+                                    void persistPriceAsNok(
+                                      option.price,
+                                      option.currency,
+                                    ).then((result) => {
+                                      if (
+                                        result === 'failed' ||
+                                        result === 'empty'
+                                      ) {
+                                        return
+                                      }
+                                      patchOption(ride.via.id, option.id, {
+                                        price: result.price,
+                                        currency: undefined,
+                                      })
+                                    })
+                                  }}
                                 />
                               </label>
                               <label>
@@ -1523,6 +1548,23 @@ export function JourneyLive({
                                       actualPrice: e.target.value,
                                     })
                                   }
+                                  onBlur={() => {
+                                    void persistPriceAsNok(
+                                      option.actualPrice,
+                                      option.currency,
+                                    ).then((result) => {
+                                      if (
+                                        result === 'failed' ||
+                                        result === 'empty'
+                                      ) {
+                                        return
+                                      }
+                                      patchOption(ride.via.id, option.id, {
+                                        actualPrice: result.price,
+                                        currency: undefined,
+                                      })
+                                    })
+                                  }}
                                 />
                               </label>
                               <label className="v2-live-prices-currency">
@@ -1960,24 +2002,12 @@ export function LiveEntryRow({
             amountPlaceholder="Pris"
             amountClassName="v2-live-price"
             onAmountChange={setPrice}
-            onCurrencyChange={(code) => {
-              setCurrency(code)
-              onChange({
-                currency:
-                  normalizePriceCurrency(code) === DEFAULT_PRICE_CURRENCY
-                    ? undefined
-                    : normalizePriceCurrency(code),
-              })
+            onCurrencyChange={setCurrency}
+            onPersist={(stored) => {
+              setPrice(stored)
+              setCurrency(DEFAULT_PRICE_CURRENCY)
+              onChange({ price: stored, currency: undefined })
             }}
-            onAmountBlur={() =>
-              onChange({
-                price: price.trim(),
-                currency:
-                  normalizePriceCurrency(currency) === DEFAULT_PRICE_CURRENCY
-                    ? undefined
-                    : normalizePriceCurrency(currency),
-              })
-            }
           />
           <input
             className="v2-live-notes"

@@ -474,7 +474,10 @@ export function SightList({
                             : normalizePriceCurrency(code),
                       })
                     }
-                    onAmountBlur={() => emit(draftRef.current, true)}
+                    onPersist={(stored) => {
+                      update(idx, { price: stored, currency: undefined })
+                      emit(draftRef.current, true)
+                    }}
                   />
                   <PaidToggle
                     compact
@@ -723,7 +726,10 @@ export function SightList({
                                 : normalizePriceCurrency(code),
                           })
                         }
-                        onAmountBlur={() => commit(idx)}
+                        onPersist={(stored) => {
+                          update(idx, { price: stored, currency: undefined })
+                          commit(idx)
+                        }}
                       />
                     </label>
                     <PaidToggle

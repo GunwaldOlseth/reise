@@ -77,6 +77,44 @@ export function suggestPriceCurrencyForCountry(
   return DEFAULT_PRICE_CURRENCY
 }
 
+async function fetchFrankfurterRateToNok(code: string): Promise<number | null> {
+  const c = normalizePriceCurrency(code)
+  if (c === DEFAULT_PRICE_CURRENCY) return 1
+  try {
+    const res = await fetch(
+      `https://api.frankfurter.app/latest?from=${encodeURIComponent(c)}&to=NOK`,
+    )
+    if (!res.ok) return null
+    const data = (await res.json()) as { rates?: { NOK?: number } }
+    const rate = data.rates?.NOK
+    return rate && rate > 0 ? rate : null
+  } catch {
+    return null
+  }
+}
+
+/** Load rate for one currency if missing (Frankfurter). */
+export async function ensureCurrencyRate(code: string): Promise<boolean> {
+  const c = normalizePriceCurrency(code)
+  if (c === DEFAULT_PRICE_CURRENCY) return true
+  if (getCurrencyRateToNok(c)) return true
+  const rate = await fetchFrankfurterRateToNok(c)
+  if (!rate) return false
+  setCurrencyRateToNok(c, rate)
+  return true
+}
+
+export async function ensureCurrencyRates(codes: string[]): Promise<void> {
+  const unique = [
+    ...new Set(
+      codes
+        .map((c) => normalizePriceCurrency(c))
+        .filter((c) => c !== DEFAULT_PRICE_CURRENCY),
+    ),
+  ]
+  await Promise.all(unique.map((c) => ensureCurrencyRate(c)))
+}
+
 export function amountInNok(
   amount: number,
   currency?: string | null,
@@ -141,6 +179,9 @@ export function formatPriceLabel(
 export async function prefetchJourneyCurrencyRates(
   journey: Journey,
 ): Promise<void> {
+  await ensureCurrencyRates(
+    PRICE_CURRENCY_OPTIONS.map((o) => o.code),
+  )
   const { countries } = journeyVisitPlaces(journey)
   const currencyByCountry: Record<string, string> = {}
   await Promise.all(
@@ -158,6 +199,45 @@ export async function prefetchJourneyCurrencyRates(
     }),
   )
   applyCustomCountryRates(countries, currencyByCountry)
+}
+
+export type NokStoredPrice = { price: string; currency?: undefined }
+
+export function convertPriceToNokStorage(
+  raw: string | undefined,
+  currency?: string | null,
+): NokStoredPrice | 'empty' | 'no-rate' {
+  const t = (raw || '').trim()
+  if (!t) return 'empty'
+  const code = normalizePriceCurrency(currency)
+  const amount = parsePriceAmount(t)
+  if (amount === null) return { price: t }
+  if (code === DEFAULT_PRICE_CURRENCY) {
+    return { price: formatExpenseAmount(amount) }
+  }
+  const nok = amountInNok(amount, code)
+  if (nok === null) return 'no-rate'
+  return { price: formatExpenseAmount(nok) }
+}
+
+/** Parse, convert foreign currency to NOK, return value for Firestore/local save. */
+export async function persistPriceAsNok(
+  raw: string | undefined,
+  currency?: string | null,
+): Promise<NokStoredPrice | 'empty' | 'failed'> {
+  const code = normalizePriceCurrency(currency)
+  if (code !== DEFAULT_PRICE_CURRENCY) {
+    const ok = await ensureCurrencyRate(code)
+    if (!ok) return 'failed'
+  }
+  let result = convertPriceToNokStorage(raw, currency)
+  if (result === 'no-rate' && code !== DEFAULT_PRICE_CURRENCY) {
+    const ok = await ensureCurrencyRate(code)
+    if (!ok) return 'failed'
+    result = convertPriceToNokStorage(raw, currency)
+  }
+  if (result === 'no-rate') return 'failed'
+  return result
 }
 
 export function formatNokWithForeignHint(

@@ -139,6 +139,7 @@ import {
 import { TransportCompanyInput } from './TransportCompanyInput'
 import { SightList, SightPreview, PlaceLinkedPreview } from './SightList'
 import { PriceWithCurrencyInput } from './PriceWithCurrencyInput'
+import { normalizeJourneyPricesToNok } from './journeyPricePersist'
 import { DEFAULT_PRICE_CURRENCY, normalizePriceCurrency } from './priceCurrency'
 import './v2.css'
 
@@ -505,7 +506,12 @@ export function JourneyPlanner({
       const saved = await api.saveJourney(
         tripId,
         localizeJourneyPlaces(
-          journeyWithRegisteredHome(syncJourneyLegs(withSights), homePlace),
+          journeyWithRegisteredHome(
+            syncJourneyLegs(
+              normalizeJourneyPricesToNok(withSights),
+            ),
+            homePlace,
+          ),
         ),
       )
       // Quiet saves keep optimistic UI — applying the response would steal
@@ -2125,9 +2131,9 @@ function PlaceStopPanel({
                             { immediate: true },
                           )
                         }
-                        onAmountBlur={() =>
+                        onPersist={(stored) =>
                           patchStay(
-                            { price: (stay.price || '').trim() },
+                            { price: stored, currency: undefined },
                             true,
                             { immediate: true },
                           )
