@@ -1649,6 +1649,17 @@ export interface WeatherHistory {
   resolution: string;
 }
 
+export interface CurrencyReport {
+  country: string;
+  countryEnglish?: string;
+  currencyCode: string;
+  currencyName: string;
+  rateToNok?: number;
+  rateDate?: string;
+  isNok: boolean;
+  source: string;
+}
+
 export const api = {
   health: () => request<{ status: string }>('/health'),
 
@@ -1717,6 +1728,13 @@ export const api = {
     const qs = new URLSearchParams({ city });
     if (country.trim()) qs.set('country', country.trim());
     return request<WeatherHistory>(`/weather/history?${qs.toString()}`);
+  },
+
+  /** Currency used in a country and approximate rate to NOK (Frankfurter). */
+  getCurrency: (country: string, countrySearch = '') => {
+    const qs = new URLSearchParams({ country: country.trim() });
+    if (countrySearch.trim()) qs.set('countrySearch', countrySearch.trim());
+    return request<CurrencyReport>(`/currency?${qs.toString()}`);
   },
 
   /** Place suggestions for city spelling / map geocoding (Open-Meteo). */
