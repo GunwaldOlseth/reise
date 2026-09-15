@@ -16,6 +16,14 @@ export function foreignUnitLabel(currencyCode: string): string {
   return `1 ${code}`
 }
 
+/** Unit name for inverse rate (foreign amount per 1 kr). */
+export function foreignUnitPerKrLabel(currencyCode: string): string {
+  const code = (currencyCode || '').trim().toUpperCase()
+  if (code === 'EUR') return 'euro'
+  if (!code) return 'enhet'
+  return code
+}
+
 export function rateFromNok(rateToNok: number): number {
   if (!Number.isFinite(rateToNok) || rateToNok <= 0) return 0
   return 1 / rateToNok
@@ -37,7 +45,7 @@ export function formatUnitPerKr(currencyCode: string, rateToNok: number): string
   const inverse = rateFromNok(rateToNok)
   const amount = formatExchangeAmount(inverse)
   if (!amount) return ''
-  const unit = foreignUnitLabel(currencyCode)
+  const unit = foreignUnitPerKrLabel(currencyCode)
   return `ca. ${amount} ${unit} per kr`
 }
 
