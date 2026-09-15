@@ -1,5 +1,15 @@
 import { useEffect, useState } from 'react'
 import { api, type CurrencyReport } from '../api'
+import {
+  customRateToNok,
+  loadCustomCurrencyRate,
+  subscribeCustomCurrencyRates,
+} from '../userSettings'
+import {
+  formatKrPerUnit,
+  formatUnitPerKr,
+  joinCurrencyParts,
+} from './currencyFormat'
 
 const cache = new Map<string, CurrencyReport | 'loading' | 'error'>()
 const inflight = new Map<string, Promise<CurrencyReport>>()
@@ -32,16 +42,10 @@ function loadCurrency(country: string, countrySearch?: string): Promise<Currency
   return p
 }
 
-function formatRate(rate: number): string {
-  if (!Number.isFinite(rate)) return ''
-  const digits = rate >= 100 ? 0 : rate >= 10 ? 2 : 3
-  return new Intl.NumberFormat('nb-NO', {
-    minimumFractionDigits: 0,
-    maximumFractionDigits: digits,
-  }).format(rate)
-}
-
-function currencyLine(report: CurrencyReport): string | null {
+function currencyLines(
+  report: CurrencyReport,
+  nation: string,
+): { main: string; inverse?: string } | null {
   const code = (report.currencyCode || '').trim()
   if (!code) return null
   const name = (report.currencyName || code).trim()
@@ -49,14 +53,25 @@ function currencyLine(report: CurrencyReport): string | null {
     ? code
     : `${name} (${code})`
   if (report.isNok) {
-    return `Valuta: ${label}`
+    return { main: `Valuta: ${label}` }
   }
-  if (report.rateToNok && report.rateToNok > 0) {
-    const rate = formatRate(report.rateToNok)
-    const unit = code === 'EUR' ? 'euro' : `1 ${code}`
-    return `Valuta: ${label} · ca. ${rate} kr per ${unit}`
+
+  const custom = loadCustomCurrencyRate(nation)
+  const customRate = custom ? customRateToNok(custom) : null
+  const marketRate =
+    report.rateToNok && report.rateToNok > 0 ? report.rateToNok : null
+  const rate = customRate ?? marketRate
+
+  if (!rate) {
+    return { main: `Valuta: ${label}` }
   }
-  return `Valuta: ${label}`
+
+  const krLine = formatKrPerUnit(code, rate, { custom: !!customRate })
+  const inverseLine = formatUnitPerKr(code, rate)
+  return {
+    main: joinCurrencyParts([`Valuta: ${label}`, krLine]),
+    inverse: inverseLine || undefined,
+  }
 }
 
 export function LiveCityCurrency({
@@ -67,27 +82,50 @@ export function LiveCityCurrency({
   countrySearch?: string
 }) {
   const nation = (country || '').trim()
-  const [line, setLine] = useState<string | null>(null)
+  const [lines, setLines] = useState<{ main: string; inverse?: string } | null>(
+    null,
+  )
 
   useEffect(() => {
     if (!nation) {
-      setLine(null)
+      setLines(null)
       return
     }
     let cancelled = false
-    loadCurrency(nation, countrySearch)
-      .then((report) => {
-        if (cancelled) return
-        setLine(currencyLine(report))
-      })
-      .catch(() => {
-        if (!cancelled) setLine(null)
-      })
+    const refresh = () => {
+      loadCurrency(nation, countrySearch)
+        .then((report) => {
+          if (cancelled) return
+          setLines(currencyLines(report, nation))
+        })
+        .catch(() => {
+          if (!cancelled) setLines(null)
+        })
+    }
+    refresh()
+    const unsub = subscribeCustomCurrencyRates(() => {
+      loadCurrency(nation, countrySearch)
+        .then((report) => {
+          if (cancelled) return
+          setLines(currencyLines(report, nation))
+        })
+        .catch(() => {
+          if (!cancelled) setLines(null)
+        })
+    })
     return () => {
       cancelled = true
+      unsub()
     }
   }, [nation, countrySearch])
 
-  if (!line) return null
-  return <span className="v2-meta v2-live-currency">{line}</span>
+  if (!lines) return null
+  return (
+    <span className="v2-meta v2-live-currency">
+      <span>{lines.main}</span>
+      {lines.inverse ? (
+        <span className="v2-live-currency-inverse">{lines.inverse}</span>
+      ) : null}
+    </span>
+  )
 }

@@ -39,6 +39,7 @@ import { localizeJourneyPlaces } from './placeNames'
 import { AdminPage } from './v2/AdminPage'
 import { enqueueJourneyWeather } from './v2/JourneyWeather'
 import { cacheJourney } from './v2/journeyCache'
+import { CurrencyRatesCard } from './v2/CurrencyRatesCard'
 import { MissingHotelDaysCard } from './v2/MissingHotelDaysCard'
 import {
   hashesEqual,
@@ -171,7 +172,7 @@ function SettingsPage({
           </button>
           <div>
             <h1>Innstillinger</h1>
-            <p className="v2-meta">Hjem, lenker, steg og varsler</p>
+            <p className="v2-meta">Hjem, lenker, valuta, steg og varsler</p>
           </div>
         </div>
       </header>
@@ -222,6 +223,8 @@ function SettingsPage({
         <UsefulLinksCard onOpenPage={onOpenLinks} />
 
         <MissingHotelDaysCard trips={trips} focusTripId={focusTripId} />
+
+        <CurrencyRatesCard trips={trips} focusTripId={focusTripId} />
 
         <section className="v2-settings-card">
           <h2>Planlegger — steg</h2>

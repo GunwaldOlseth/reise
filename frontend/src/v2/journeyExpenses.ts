@@ -1,7 +1,6 @@
 import {
   formatExpenseAmount,
   isPaidOrActualExpenseLine,
-  parsePriceAmount,
   type DayExpenseSummary,
   type ExpenseLine,
   type TripExpenseSummary,
@@ -32,6 +31,7 @@ import {
   type JourneyStop,
   type JourneyActivity,
 } from './journeyModel'
+import { resolvePriceInNok } from './priceCurrency'
 
 function emptySummary(): TripExpenseSummary {
   return {
@@ -165,12 +165,27 @@ export function journeyExpenseSummary(journey: Journey): TripExpenseSummary {
 
   function takeAmount(
     raw: string,
-  ): { amount: number; raw: string } | 'empty' | 'unparsed' {
-    const t = raw.trim()
-    if (!t) return 'empty'
-    const amount = parsePriceAmount(t)
-    if (amount === null) return 'unparsed'
-    return { amount, raw: t }
+    currency?: string,
+  ):
+    | {
+        amount: number
+        raw: string
+        currency?: string
+        foreignAmount?: number
+      }
+    | 'empty'
+    | 'unparsed' {
+    const resolved = resolvePriceInNok(raw, currency)
+    if (resolved === 'empty') return 'empty'
+    if (resolved === 'unparsed') return 'unparsed'
+    return {
+      amount: resolved.amountNok,
+      raw: resolved.raw,
+      currency:
+        resolved.currency !== 'NOK' ? resolved.currency : undefined,
+      foreignAmount:
+        resolved.currency !== 'NOK' ? resolved.foreignAmount : undefined,
+    }
   }
 
   function addActivityPrice(
@@ -181,7 +196,7 @@ export function journeyExpenseSummary(journey: Journey): TripExpenseSummary {
     ship = '',
     dayOffsetOverride?: number,
   ) {
-    const resolved = takeAmount(activity.price || '')
+    const resolved = takeAmount(activity.price || '', activity.currency)
     if (resolved === 'empty') return
     if (resolved === 'unparsed') {
       unparsedCount += 1
@@ -204,6 +219,8 @@ export function journeyExpenseSummary(journey: Journey): TripExpenseSummary {
       date,
       rawPrice: resolved.raw,
       amount: resolved.amount,
+      currency: resolved.currency,
+      foreignAmount: resolved.foreignAmount,
       place: place || undefined,
       paid: activity.paid || false,
     }
@@ -229,7 +246,7 @@ export function journeyExpenseSummary(journey: Journey): TripExpenseSummary {
     nights: number,
     spread: boolean,
   ) {
-    const resolved = takeAmount(cost.price || '')
+    const resolved = takeAmount(cost.price || '', cost.currency)
     if (resolved === 'empty') return
     if (resolved === 'unparsed') {
       unparsedCount += 1
@@ -301,7 +318,7 @@ export function journeyExpenseSummary(journey: Journey): TripExpenseSummary {
     if (isPackageStop(stop)) {
       const pack = packageOf(stop)
       const nights = Math.max(1, Math.floor(pack?.nights || 1))
-      const ticket = takeAmount(pack?.price || '')
+      const ticket = takeAmount(pack?.price || '', pack?.currency)
       if (ticket === 'unparsed') unparsedCount += 1
       else if (ticket !== 'empty') {
         pricedCount += 1
@@ -348,7 +365,7 @@ export function journeyExpenseSummary(journey: Journey): TripExpenseSummary {
 
     const stay = stop.stay
     if (stay) {
-      const resolved = takeAmount(stay.price || '')
+      const resolved = takeAmount(stay.price || '', stay.currency)
       if (resolved === 'unparsed') unparsedCount += 1
       else if (resolved !== 'empty') {
         pricedCount += 1
@@ -396,7 +413,7 @@ export function journeyExpenseSummary(journey: Journey): TripExpenseSummary {
     if (stop.kind !== 'home' && (stop.arriveDate || '').trim()) {
       for (const hop of normalizeCityTransport(stop.cityTransport)) {
         const raw = effectiveTransportPrice(hop)
-        const resolved = takeAmount(raw)
+        const resolved = takeAmount(raw, hop.currency)
         if (resolved === 'empty') continue
         if (resolved === 'unparsed') {
           unparsedCount += 1
@@ -418,6 +435,8 @@ export function journeyExpenseSummary(journey: Journey): TripExpenseSummary {
           date,
           rawPrice: resolved.raw,
           amount: resolved.amount,
+          currency: resolved.currency,
+          foreignAmount: resolved.foreignAmount,
           isActual: useActual || undefined,
           expectedRaw:
             useActual && expected && expected !== actual
@@ -447,7 +466,7 @@ export function journeyExpenseSummary(journey: Journey): TripExpenseSummary {
       const actual = (opt.actualPrice || '').trim()
       const useActual = !!actual
       const raw = effectiveTransportPrice(opt)
-      const resolved = takeAmount(raw)
+      const resolved = takeAmount(raw, opt.currency)
       if (resolved === 'empty') continue
       if (resolved === 'unparsed') {
         unparsedCount += 1
@@ -467,6 +486,8 @@ export function journeyExpenseSummary(journey: Journey): TripExpenseSummary {
         date,
         rawPrice: resolved.raw,
         amount: resolved.amount,
+        currency: resolved.currency,
+        foreignAmount: resolved.foreignAmount,
         isActual: useActual || undefined,
         expectedRaw:
           useActual && expected && expected !== actual
@@ -485,7 +506,7 @@ export function journeyExpenseSummary(journey: Journey): TripExpenseSummary {
   }
 
   for (const entry of compactLive(journey.live)) {
-    const resolved = takeAmount(entry.price || '')
+    const resolved = takeAmount(entry.price || '', entry.currency)
     if (resolved === 'empty') continue
     if (resolved === 'unparsed') {
       unparsedCount += 1

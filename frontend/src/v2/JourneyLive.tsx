@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { api, formatExpenseAmount, mediaUrl, normalizeTravelers, parsePriceAmount } from '../api'
+import { api, mediaUrl, normalizeTravelers } from '../api'
 import { TripMap } from '../TripMap'
 import { downscaleImage } from './imageResize'
 import { localizeCity } from '../placeNames'
@@ -91,6 +91,14 @@ import { PencilIcon, TrashIcon, TransportModeIcon } from '../TransportModeIcon'
 import { useConfirmDelete } from './ConfirmDelete'
 import { PaidToggle, TicketToggle } from './PurposeToggle'
 import { SightList } from './SightList'
+import { PriceWithCurrencyInput } from './PriceWithCurrencyInput'
+import {
+  DEFAULT_PRICE_CURRENCY,
+  formatPriceLabel,
+  normalizePriceCurrency,
+  persistPriceAsNok,
+  PRICE_CURRENCY_OPTIONS,
+} from './priceCurrency'
 import {
   journeyMapRouteKeyForDate,
   journeyMapStopsForDate,
@@ -549,15 +557,25 @@ function LiveCityTransportSection({
                     title="Kort beskrivelse (valgfritt)"
                     onChange={(e) => patchRow(idx, { from: e.target.value })}
                   />
-                  <input
-                    className="v2-hop-price"
-                    inputMode="decimal"
-                    value={row.actualPrice || row.price || ''}
+                  <PriceWithCurrencyInput
+                    compact
+                    amount={row.actualPrice || row.price || ''}
+                    currency={row.currency}
                     disabled={disabled}
-                    placeholder="Pris"
-                    title="Beløp — telles som transport i utgifter"
-                    onChange={(e) =>
-                      patchRow(idx, { actualPrice: e.target.value })
+                    amountPlaceholder="Pris"
+                    amountTitle="Beløp — telles som transport i utgifter"
+                    onAmountChange={(value) =>
+                      patchRow(idx, { actualPrice: value })
+                    }
+                    onCurrencyChange={(currency) =>
+                      patchRow(idx, { currency })
+                    }
+                    onPersist={(price) =>
+                      patchRow(idx, {
+                        actualPrice: price,
+                        price: '',
+                        currency: undefined,
+                      })
                     }
                   />
                   <TicketToggle
@@ -1497,6 +1515,23 @@ export function JourneyLive({
                                       price: e.target.value,
                                     })
                                   }
+                                  onBlur={() => {
+                                    void persistPriceAsNok(
+                                      option.price,
+                                      option.currency,
+                                    ).then((result) => {
+                                      if (
+                                        result === 'failed' ||
+                                        result === 'empty'
+                                      ) {
+                                        return
+                                      }
+                                      patchOption(ride.via.id, option.id, {
+                                        price: result.price,
+                                        currency: undefined,
+                                      })
+                                    })
+                                  }}
                                 />
                               </label>
                               <label>
@@ -1513,7 +1548,43 @@ export function JourneyLive({
                                       actualPrice: e.target.value,
                                     })
                                   }
+                                  onBlur={() => {
+                                    void persistPriceAsNok(
+                                      option.actualPrice,
+                                      option.currency,
+                                    ).then((result) => {
+                                      if (
+                                        result === 'failed' ||
+                                        result === 'empty'
+                                      ) {
+                                        return
+                                      }
+                                      patchOption(ride.via.id, option.id, {
+                                        actualPrice: result.price,
+                                        currency: undefined,
+                                      })
+                                    })
+                                  }}
                                 />
+                              </label>
+                              <label className="v2-live-prices-currency">
+                                Valuta
+                                <select
+                                  className="v2-price-currency-select"
+                                  value={normalizePriceCurrency(option.currency)}
+                                  disabled={disabled}
+                                  onChange={(e) =>
+                                    patchOption(ride.via.id, option.id, {
+                                      currency: e.target.value,
+                                    })
+                                  }
+                                >
+                                  {PRICE_CURRENCY_OPTIONS.map((opt) => (
+                                    <option key={opt.code} value={opt.code}>
+                                      {opt.label}
+                                    </option>
+                                  ))}
+                                </select>
                               </label>
                             </div>
                           ) : null}
@@ -1757,11 +1828,14 @@ function livePlacePlaceholder(kind: JourneyLiveKind): string {
   }
 }
 
-function liveEntryPriceLabel(raw?: string): string | null {
+function liveEntryPriceLabel(
+  raw?: string,
+  currency?: string,
+): string | null {
   const trimmed = (raw || '').trim()
   if (!trimmed) return null
-  const parsed = parsePriceAmount(trimmed)
-  return parsed !== null ? formatExpenseAmount(parsed) : trimmed
+  const labeled = formatPriceLabel(trimmed, currency)
+  return labeled || trimmed
 }
 
 export function LiveEntryRow({
@@ -1780,6 +1854,9 @@ export function LiveEntryRow({
   const [title, setTitle] = useState(entry.title)
   const [place, setPlace] = useState(entry.place || '')
   const [price, setPrice] = useState(entry.price || '')
+  const [currency, setCurrency] = useState(
+    normalizePriceCurrency(entry.currency),
+  )
   const [notes, setNotes] = useState(entry.notes || '')
   const [editing, setEditing] = useState(() => !liveEntryHasContent(entry))
 
@@ -1791,8 +1868,9 @@ export function LiveEntryRow({
     setTitle(entry.title)
     setPlace(entry.place || '')
     setPrice(entry.price || '')
+    setCurrency(normalizePriceCurrency(entry.currency))
     setNotes(entry.notes || '')
-  }, [entry.id, entry.title, entry.place, entry.price, entry.notes])
+  }, [entry.id, entry.title, entry.place, entry.price, entry.currency, entry.notes])
 
   useEffect(() => {
     setEditing(!liveEntryHasContent(entry))
@@ -1817,6 +1895,10 @@ export function LiveEntryRow({
       title: title.trim(),
       place: place.trim(),
       price: price.trim(),
+      currency:
+        normalizePriceCurrency(currency) === DEFAULT_PRICE_CURRENCY
+          ? undefined
+          : normalizePriceCurrency(currency),
       notes: notes.trim(),
     })
   }
@@ -1828,6 +1910,10 @@ export function LiveEntryRow({
       title: title.trim(),
       place: place.trim(),
       price: price.trim(),
+      currency:
+        normalizePriceCurrency(currency) === DEFAULT_PRICE_CURRENCY
+          ? undefined
+          : normalizePriceCurrency(currency),
       notes: notes.trim(),
     }
     if (liveEntryHasContent(next)) setEditing(false)
@@ -1872,7 +1958,7 @@ export function LiveEntryRow({
     onChange({ photos: photos.filter((p) => p.id !== id) })
   }
 
-  const priceLabel = liveEntryPriceLabel(entry.price)
+  const priceLabel = liveEntryPriceLabel(entry.price, entry.currency)
   const displayTitle = entry.title.trim() || liveKindLabel(entry.kind)
   const displayPlace = (entry.place || '').trim()
 
@@ -1909,14 +1995,19 @@ export function LiveEntryRow({
             onChange={(e) => setPlace(e.target.value)}
             onBlur={() => onChange({ place: place.trim() })}
           />
-          <input
-            className="v2-live-price"
-            value={price}
+          <PriceWithCurrencyInput
+            amount={price}
+            currency={currency}
             disabled={disabled}
-            placeholder="Pris"
-            inputMode="decimal"
-            onChange={(e) => setPrice(e.target.value)}
-            onBlur={() => onChange({ price: price.trim() })}
+            amountPlaceholder="Pris"
+            amountClassName="v2-live-price"
+            onAmountChange={setPrice}
+            onCurrencyChange={setCurrency}
+            onPersist={(stored) => {
+              setPrice(stored)
+              setCurrency(DEFAULT_PRICE_CURRENCY)
+              onChange({ price: stored, currency: undefined })
+            }}
           />
           <input
             className="v2-live-notes"

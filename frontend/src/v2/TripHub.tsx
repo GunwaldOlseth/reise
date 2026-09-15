@@ -16,6 +16,8 @@ import {
 } from '../userSettings'
 import { isPaidOrActualExpenseLine } from '../api'
 import { journeyExpenseSummary } from './journeyExpenses'
+import { prefetchJourneyCurrencyRates } from './priceCurrency'
+import { normalizeJourneyPricesToNok } from './journeyPricePersist'
 import { ExpensesDailyChart } from './ExpensesDailyChart'
 import { journeyMapRouteKey, journeyMapStopsInOrder } from './journeyMap'
 import { localizeJourneyPlaces } from '../placeNames'
@@ -112,6 +114,7 @@ export function TripHub({
   const [journeyTick, setJourneyTick] = useState(0)
   /** False until first successful/failed journey fetch for this trip. */
   const [journeyReady, setJourneyReady] = useState(false)
+  const [currencyRatesVersion, setCurrencyRatesVersion] = useState(0)
 
   useEffect(() => {
     setTab(initialTab)
@@ -154,6 +157,17 @@ export function TripHub({
     enqueueJourneyWeather(journey)
   }, [journey, journeyReady])
 
+  useEffect(() => {
+    if (!journeyReady) return
+    let cancelled = false
+    void prefetchJourneyCurrencyRates(journey).then(() => {
+      if (!cancelled) setCurrencyRatesVersion((v) => v + 1)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [journey, journeyReady])
+
   function goTab(id: TripHubTab) {
     setMenuOpen(false)
     if ((tab === 'live' || tab === 'log') && id !== tab) flushLiveSave()
@@ -168,7 +182,7 @@ export function TripHub({
   const mapKey = useMemo(() => journeyMapRouteKey(journey), [journey])
   const expenseSummary = useMemo(
     () => journeyExpenseSummary(journey),
-    [journey],
+    [journey, currencyRatesVersion],
   )
   const tripTravelers = useMemo(
     () => normalizeTravelers(trip?.travelers),
@@ -179,7 +193,7 @@ export function TripHub({
   const liveSaveChain = useRef(Promise.resolve())
 
   function buildLivePersistPayload(source: Journey): Journey {
-    return {
+    return normalizeJourneyPricesToNok({
       ...source,
       live: compactLive(source.live, trip?.travelers),
       liveActivitySkips: normalizeLiveActivitySkips(source.liveActivitySkips),
@@ -198,7 +212,7 @@ export function TripHub({
           sights: normalizeSights(v.sights).map(compactActivity),
         })),
       })),
-    }
+    })
   }
 
   function persistJourneyQuiet(next: Journey) {
@@ -706,6 +720,12 @@ function JourneyExpensesView({
           ) : null}
           {line.isActual && line.expectedRaw ? (
             <span className="meta"> · (forv. {line.expectedRaw})</span>
+          ) : null}
+          {line.currency && line.foreignAmount != null ? (
+            <span className="meta">
+              {' '}
+              · {line.rawPrice}
+            </span>
           ) : null}
         </span>
         <span className="expense-line-amount">

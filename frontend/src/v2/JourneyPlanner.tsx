@@ -138,6 +138,9 @@ import {
 } from './PurposeToggle'
 import { TransportCompanyInput } from './TransportCompanyInput'
 import { SightList, SightPreview, PlaceLinkedPreview } from './SightList'
+import { PriceWithCurrencyInput } from './PriceWithCurrencyInput'
+import { normalizeJourneyPricesToNok } from './journeyPricePersist'
+import { DEFAULT_PRICE_CURRENCY, normalizePriceCurrency } from './priceCurrency'
 import './v2.css'
 
 function normalizeStayClockTimes(stay: JourneyStay): JourneyStay {
@@ -503,7 +506,12 @@ export function JourneyPlanner({
       const saved = await api.saveJourney(
         tripId,
         localizeJourneyPlaces(
-          journeyWithRegisteredHome(syncJourneyLegs(withSights), homePlace),
+          journeyWithRegisteredHome(
+            syncJourneyLegs(
+              normalizeJourneyPricesToNok(withSights),
+            ),
+            homePlace,
+          ),
         ),
       )
       // Quiet saves keep optimistic UI — applying the response would steal
@@ -2095,24 +2103,37 @@ function PlaceStopPanel({
                   <div className="v2-price-paid-row full">
                     <label className="v2-price-paid-field">
                       Pris
-                      <input
-                        value={stay.price || ''}
+                      <PriceWithCurrencyInput
+                        amount={stay.price || ''}
+                        currency={stay.currency}
                         disabled={disabled}
-                        placeholder="4500 kr"
-                        inputMode="decimal"
-                        onChange={(e) =>
+                        amountPlaceholder="4500"
+                        onAmountChange={(value) =>
                           onChange({
                             ...stop,
                             stay: {
                               ...stay,
                               nights: stay.nights || 1,
-                              price: e.target.value,
+                              price: value,
                             },
                           })
                         }
-                        onBlur={(e) =>
+                        onCurrencyChange={(code) =>
                           patchStay(
-                            { price: e.target.value },
+                            {
+                              currency:
+                                normalizePriceCurrency(code) ===
+                                DEFAULT_PRICE_CURRENCY
+                                  ? undefined
+                                  : normalizePriceCurrency(code),
+                            },
+                            true,
+                            { immediate: true },
+                          )
+                        }
+                        onPersist={(stored) =>
+                          patchStay(
+                            { price: stored, currency: undefined },
                             true,
                             { immediate: true },
                           )
@@ -3499,16 +3520,25 @@ function TransportBlock({
                                           aria-label="Perong"
                                         />
                                       ) : null}
-                                      <input
-                                        className="v2-hop-price"
-                                        inputMode="decimal"
-                                        placeholder="Pris"
-                                        value={opt.price || ''}
+                                      <PriceWithCurrencyInput
+                                        compact
+                                        amount={opt.price || ''}
+                                        currency={opt.currency}
                                         disabled={disabled}
-                                        title="Forventet pris"
-                                        onChange={(e) =>
+                                        amountPlaceholder="Pris"
+                                        amountTitle="Forventet pris"
+                                        onAmountChange={(value) =>
                                           updateOption(idx, oi, {
-                                            price: e.target.value,
+                                            price: value,
+                                          })
+                                        }
+                                        onCurrencyChange={(code) =>
+                                          updateOption(idx, oi, {
+                                            currency:
+                                              normalizePriceCurrency(code) ===
+                                              DEFAULT_PRICE_CURRENCY
+                                                ? undefined
+                                                : normalizePriceCurrency(code),
                                           })
                                         }
                                       />
