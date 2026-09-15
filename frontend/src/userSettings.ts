@@ -5,6 +5,7 @@ const PLANNER_KEY = 'reise.plannerSettings'
 const THEME_KEY = 'reise.theme'
 const LINKS_KEY = 'reise.usefulLinks'
 const ALERTS_KEY = 'reise.timeAlerts'
+const CUSTOM_CURRENCY_KEY = 'reise.customCurrencyRates'
 
 export const THEME_IDS = [
   'skog',
@@ -585,5 +586,96 @@ export function saveTimeAlertSettings(
   }
   localStorage.setItem(ALERTS_KEY, JSON.stringify(next))
   return next
+}
+
+/** One real purchase used to derive kr per 1 unit of foreign currency. */
+export interface CustomCurrencySample {
+  foreignAmount: number
+  nokCharged: number
+}
+
+export function countryCurrencyKey(country: string): string {
+  return (country || '').trim().toLowerCase()
+}
+
+export function customRateToNok(sample: CustomCurrencySample): number | null {
+  const foreign = Number(sample.foreignAmount)
+  const nok = Number(sample.nokCharged)
+  if (!Number.isFinite(foreign) || foreign <= 0) return null
+  if (!Number.isFinite(nok) || nok <= 0) return null
+  return nok / foreign
+}
+
+function readCustomCurrencySample(raw: unknown): CustomCurrencySample | null {
+  if (!raw || typeof raw !== 'object') return null
+  const item = raw as Partial<CustomCurrencySample>
+  const foreignAmount = Number(item.foreignAmount)
+  const nokCharged = Number(item.nokCharged)
+  if (!Number.isFinite(foreignAmount) || foreignAmount <= 0) return null
+  if (!Number.isFinite(nokCharged) || nokCharged <= 0) return null
+  return { foreignAmount, nokCharged }
+}
+
+export function loadCustomCurrencyRates(): Record<string, CustomCurrencySample> {
+  try {
+    const raw = localStorage.getItem(CUSTOM_CURRENCY_KEY)
+    if (!raw) return {}
+    const parsed = JSON.parse(raw) as Record<string, unknown>
+    if (!parsed || typeof parsed !== 'object') return {}
+    const out: Record<string, CustomCurrencySample> = {}
+    for (const [key, value] of Object.entries(parsed)) {
+      const sample = readCustomCurrencySample(value)
+      if (!sample) continue
+      const normalized = countryCurrencyKey(key)
+      if (!normalized) continue
+      out[normalized] = sample
+    }
+    return out
+  } catch {
+    return {}
+  }
+}
+
+export function loadCustomCurrencyRate(
+  country: string,
+): CustomCurrencySample | null {
+  const key = countryCurrencyKey(country)
+  if (!key) return null
+  return loadCustomCurrencyRates()[key] ?? null
+}
+
+export function saveCustomCurrencyRate(
+  country: string,
+  sample: CustomCurrencySample | null,
+): Record<string, CustomCurrencySample> {
+  const key = countryCurrencyKey(country)
+  const next = { ...loadCustomCurrencyRates() }
+  if (!key) return next
+  const parsed = sample ? readCustomCurrencySample(sample) : null
+  if (parsed) next[key] = parsed
+  else delete next[key]
+  localStorage.setItem(CUSTOM_CURRENCY_KEY, JSON.stringify(next))
+  notifyCustomCurrencyChanged()
+  return next
+}
+
+const CUSTOM_CURRENCY_EVENT = 'reise-custom-currency-change'
+
+function notifyCustomCurrencyChanged() {
+  if (typeof window === 'undefined') return
+  window.dispatchEvent(new Event(CUSTOM_CURRENCY_EVENT))
+}
+
+export function subscribeCustomCurrencyRates(onChange: () => void): () => void {
+  if (typeof window === 'undefined') return () => {}
+  const onStorage = (e: StorageEvent) => {
+    if (e.key === CUSTOM_CURRENCY_KEY || e.key === null) onChange()
+  }
+  window.addEventListener(CUSTOM_CURRENCY_EVENT, onChange)
+  window.addEventListener('storage', onStorage)
+  return () => {
+    window.removeEventListener(CUSTOM_CURRENCY_EVENT, onChange)
+    window.removeEventListener('storage', onStorage)
+  }
 }
 
