@@ -8012,6 +8012,19 @@ html[data-theme='plasma'] .v2-shell {
   flex-wrap: wrap;
 }
 
+.v2-live-place-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  min-width: 0;
+}
+
+.v2-live-currency {
+  display: block;
+  font-size: 0.82rem;
+  line-height: 1.35;
+}
+
 .v2-live-rides li {
   display: flex;
   flex-direction: column;

@@ -5,6 +5,7 @@ import { downscaleImage } from './imageResize'
 import { localizeCity } from '../placeNames'
 import { noteHasContent, noteHtmlForDisplay } from './noteHtml'
 import { CityInfoTip } from './CityInfoTip'
+import { LiveCityCurrency } from './LiveCityCurrency'
 import { HotelInfoTip } from './HotelInfoTip'
 import { CountdownCard, HolidayCountdown, osloWallTimeMs } from './HolidayCountdown'
 import { nextScheduledDeparture } from './transportSchedule'
@@ -598,6 +599,8 @@ function LiveCityTransportSection({
 type DayPlace = {
   stop: JourneyStop
   city: string
+  country?: string
+  countrySearch?: string
   hotel?: string
   notes?: string
   docs?: JourneyCityDoc[]
@@ -744,6 +747,8 @@ function placesOnDate(journey: Journey, date: string): DayPlace[] {
         out.push({
           stop,
           city: stop.city || 'Hjem',
+          country: stop.country,
+          countrySearch: stop.countrySearch,
           notes: stop.notes,
           docs: stop.docs,
           arriving: true,
@@ -764,6 +769,11 @@ function placesOnDate(journey: Journey, date: string): DayPlace[] {
           out.push({
             stop,
             city: packageFreeDayLabel(stop.kind),
+            country:
+              day?.country?.trim() ||
+              pack?.baseCountry?.trim() ||
+              stop.country,
+            countrySearch: stop.countrySearch,
             notes: day?.notes,
             docs: day?.docs,
             arriving: offset === 0,
@@ -777,6 +787,11 @@ function placesOnDate(journey: Journey, date: string): DayPlace[] {
             pack?.basePlace?.trim() ||
             stop.city ||
             'Pakke',
+          country:
+            day?.country?.trim() ||
+            pack?.baseCountry?.trim() ||
+            stop.country,
+          countrySearch: stop.countrySearch,
           notes: day?.notes,
           docs: day?.docs,
           arriving: offset === 0,
@@ -789,6 +804,8 @@ function placesOnDate(journey: Journey, date: string): DayPlace[] {
     out.push({
       stop,
       city: stopGoalLabel(stop, 'By'),
+      country: stop.country,
+      countrySearch: stop.countrySearch,
       hotel: effectiveHotelName(stop.stay),
       notes: stop.notes,
       docs: stop.docs,
@@ -1354,11 +1371,15 @@ export function JourneyLive({
           <ul className="v2-live-places">
             {places.map((place) => (
               <li key={place.stop.id + place.city}>
-                <span>
+                <span className="v2-live-place-text">
                   <strong>{localizeCity(place.city) || place.city}</strong>
                   {place.arriving ? (
                     <span className="v2-meta"> · ankomst</span>
                   ) : null}
+                  <LiveCityCurrency
+                    country={place.country}
+                    countrySearch={place.countrySearch}
+                  />
                 </span>
                 <CityInfoTip text={place.notes} docs={place.docs} />
               </li>

@@ -185,6 +185,64 @@ func geocodeEnglishCountry(key string) string {
 		return "Bosnia and Herzegovina"
 	case "north macedonia", "macedonia":
 		return "North Macedonia"
+	case "norway", "norwegen", "norge":
+		return "Norway"
+	case "italy", "italia", "italien":
+		return "Italy"
+	case "spain", "spania", "espana", "españa", "spanien":
+		return "Spain"
+	case "france", "frankreich", "frankrike":
+		return "France"
+	case "germany", "deutschland", "tyskland":
+		return "Germany"
+	case "sweden", "sverige", "schweden":
+		return "Sweden"
+	case "denmark", "danmark", "dänemark":
+		return "Denmark"
+	case "finland", "finnland":
+		return "Finland"
+	case "iceland", "island":
+		return "Iceland"
+	case "austria", "österreich", "osterreich", "østerrike":
+		return "Austria"
+	case "switzerland", "schweiz", "suisse", "sveits":
+		return "Switzerland"
+	case "netherlands", "nederland", "holland":
+		return "Netherlands"
+	case "belgium", "belgien", "belgique", "belgia":
+		return "Belgium"
+	case "portugal":
+		return "Portugal"
+	case "greece", "griechenland", "hellas":
+		return "Greece"
+	case "croatia", "kroatien", "kroatia":
+		return "Croatia"
+	case "slovenia", "slowenien", "slovenija":
+		return "Slovenia"
+	case "poland", "polen":
+		return "Poland"
+	case "hungary", "ungarn":
+		return "Hungary"
+	case "turkey", "türkiye", "turkiye", "tyrkia":
+		return "Turkey"
+	case "china", "kina":
+		return "China"
+	case "south korea", "sør-korea":
+		return "South Korea"
+	case "philippines", "filippinene":
+		return "Philippines"
+	case "south africa", "sør-afrika":
+		return "South Africa"
+	case "united arab emirates", "uae":
+		return "United Arab Emirates"
+	case "egypt", "ägypten":
+		return "Egypt"
+	case "morocco", "marokko":
+		return "Morocco"
+	case "ukraine", "ukraina":
+		return "Ukraine"
+	case "russia", "russland":
+		return "Russia"
 	default:
 		return englishTitle(key)
 	}
