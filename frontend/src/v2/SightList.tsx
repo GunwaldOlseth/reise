@@ -705,16 +705,25 @@ export function SightList({
                   <div className="v2-activity-prices">
                     <label>
                       Pris
-                      <input
-                        value={sight.price || ''}
+                      <PriceWithCurrencyInput
+                        amount={sight.price || ''}
+                        currency={sight.currency}
                         disabled={disabled}
-                        placeholder="500 kr"
-                        inputMode="decimal"
-                        title="Pris"
-                        onChange={(e) =>
-                          update(idx, { price: e.target.value })
+                        amountPlaceholder="500"
+                        amountTitle="Pris"
+                        onAmountChange={(value) =>
+                          update(idx, { price: value })
                         }
-                        onBlur={() => commit(idx)}
+                        onCurrencyChange={(code) =>
+                          update(idx, {
+                            currency:
+                              normalizePriceCurrency(code) ===
+                              DEFAULT_PRICE_CURRENCY
+                                ? undefined
+                                : normalizePriceCurrency(code),
+                          })
+                        }
+                        onAmountBlur={() => commit(idx)}
                       />
                     </label>
                     <PaidToggle
