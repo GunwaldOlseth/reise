@@ -20,6 +20,8 @@ import {
 } from './journeyModel'
 import { useConfirmDelete } from './ConfirmDelete'
 import { PurposeToggle, PaidToggle } from './PurposeToggle'
+import { PriceWithCurrencyInput } from './PriceWithCurrencyInput'
+import { DEFAULT_PRICE_CURRENCY, normalizePriceCurrency } from './priceCurrency'
 import { noteHasContent } from './noteHtml'
 
 function hasActivityContent(s: JourneyActivity): boolean {
@@ -456,15 +458,23 @@ export function SightList({
                   </span>
                   {cityField(sight, idx, true)}
                   {placeField(sight, idx, kind, true)}
-                  <input
-                    className="v2-hop-price"
-                    inputMode="decimal"
-                    placeholder="Pris"
-                    value={sight.price || ''}
+                  <PriceWithCurrencyInput
+                    compact
+                    amount={sight.price || ''}
+                    currency={sight.currency}
                     disabled={disabled}
-                    title="Pris"
-                    onChange={(e) => update(idx, { price: e.target.value })}
-                    onBlur={() => emit(draftRef.current, true)}
+                    amountPlaceholder="Pris"
+                    amountTitle="Pris"
+                    onAmountChange={(value) => update(idx, { price: value })}
+                    onCurrencyChange={(code) =>
+                      update(idx, {
+                        currency:
+                          normalizePriceCurrency(code) === DEFAULT_PRICE_CURRENCY
+                            ? undefined
+                            : normalizePriceCurrency(code),
+                      })
+                    }
+                    onAmountBlur={() => emit(draftRef.current, true)}
                   />
                   <PaidToggle
                     compact

@@ -8072,6 +8072,33 @@ html[data-theme='plasma'] .v2-shell {
   margin-top: 0.35rem;
 }
 
+.v2-price-currency {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+.v2-price-currency.is-compact .v2-price-currency-select {
+  max-width: 4.25rem;
+  padding-left: 0.35rem;
+  padding-right: 0.35rem;
+}
+
+.v2-price-currency-select {
+  font: inherit;
+  font-size: 0.82rem;
+  padding: 0.35rem 0.45rem;
+  border: 1px solid var(--v2-line);
+  border-radius: 0.45rem;
+  background: var(--v2-panel);
+  color: var(--v2-ink);
+}
+
+.v2-live-prices-currency {
+  grid-column: 1 / -1;
+}
+
 .v2-live-rides li {
   display: flex;
   flex-direction: column;

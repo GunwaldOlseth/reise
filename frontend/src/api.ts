@@ -539,6 +539,9 @@ export type ExpenseLine = {
   date?: string;
   rawPrice: string;
   amount: number;
+  /** Original currency when converted to NOK for totals. */
+  currency?: string;
+  foreignAmount?: number;
   /** Hotel nights — for per-night stats when amount is the full stay. */
   nights?: number;
   /** City / place for hotel (and similar) stats labels. */

@@ -14,6 +14,7 @@ import {
 } from '../api'
 import { localizeJourneyPlaces } from '../placeNames'
 import { compactNoteHtml, noteHasContent } from './noteHtml'
+import { formatPriceLabel } from './priceCurrency'
 
 export type JourneyPackageType =
   | 'cruise'
@@ -66,6 +67,8 @@ export interface JourneyStay {
   address?: string
   url?: string
   price?: string
+  /** ISO 4217 — empty / NOK = norske kroner. */
+  currency?: string
   notes?: string
   checkInTime?: string
   checkOutTime?: string
@@ -215,6 +218,7 @@ export interface JourneyActivity {
   purpose?: PlacePurpose
   /** Price for utgifter (excursion, sight, other). */
   price?: string
+  currency?: string
   /** Whether the activity price is paid. */
   paid?: boolean
   /** Legacy single note; kept in sync with the first document. */
@@ -237,6 +241,7 @@ export interface JourneyCityTransport {
   company?: string
   price?: string
   actualPrice?: string
+  currency?: string
   ticket?: boolean
   paid?: boolean
   notes?: string
@@ -279,6 +284,7 @@ export interface JourneyPackage {
   /** Cabin, booking ref, etc. */
   detail?: string
   price?: string
+  currency?: string
   /** Whether the package price has been paid. */
   paid?: boolean
   /** Extra costs for the whole package (spread over nights in overview). */
@@ -291,6 +297,7 @@ export interface JourneyCost {
   id: string
   title: string
   price?: string
+  currency?: string
   /** Whether this extra cost is paid. */
   paid?: boolean
   notes?: string
@@ -502,6 +509,7 @@ export interface JourneyTransportOption {
   price?: string
   /** Actual cost after travel. Empty → expected `price` is used in expenses. */
   actualPrice?: string
+  currency?: string
   /** This is the alternative we took — used in expenses. */
   taken?: boolean
   /** Ticket is bought for this departure. */
@@ -1523,10 +1531,15 @@ export function effectiveTransportPrice(
 
 /** Price label for transport lists (uses actual when set). */
 export function transportOptionPriceLabel(
-  option?: Pick<JourneyTransportOption, 'price' | 'actualPrice'> | null,
+  option?: Pick<
+    JourneyTransportOption,
+    'price' | 'actualPrice' | 'currency'
+  > | null,
 ): string {
   const raw = effectiveTransportPrice(option)
   if (!raw) return ''
+  const labeled = formatPriceLabel(raw, option?.currency)
+  if (labeled) return labeled
   const amount = parsePriceAmount(raw)
   if (amount !== null) return `${formatExpenseAmount(amount)} kr`
   const trimmed = raw.trim()
@@ -1946,6 +1959,7 @@ export interface JourneyLiveEntry {
   /** Restaurant, café, shop, or other venue name. */
   place?: string
   price?: string
+  currency?: string
   notes?: string
   time?: string
   /** 0 = unset, otherwise 1..5. */
@@ -2077,6 +2091,7 @@ export function normalizeLive(
         title: e.title || '',
         place: e.place || '',
         price: e.price || '',
+        currency: (e.currency || '').trim().toUpperCase() || undefined,
         notes: e.notes || '',
         time: e.time || '',
         rating,
@@ -2759,6 +2774,7 @@ export function normalizeSights(
           : '',
         purpose: activityPurpose(s),
         price: (s.price || '').trim(),
+        currency: (s.currency || '').trim().toUpperCase() || undefined,
         paid: s.paid || false,
         docs: normalizeCityDocs(s.docs),
         sortOrder: i,
@@ -2826,6 +2842,7 @@ export function normalizeCityTransport(
       company: (row.company || '').trim(),
       price: (row.price || '').trim(),
       actualPrice: (row.actualPrice || '').trim(),
+      currency: (row.currency || '').trim().toUpperCase() || undefined,
       ticket: row.ticket || false,
       paid: row.paid || false,
       notes: (row.notes || '').trim(),
