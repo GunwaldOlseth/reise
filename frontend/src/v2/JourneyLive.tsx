@@ -1996,6 +1996,7 @@ export function LiveEntryRow({
             onBlur={() => onChange({ place: place.trim() })}
           />
           <PriceWithCurrencyInput
+            compact
             amount={price}
             currency={currency}
             disabled={disabled}

@@ -8236,9 +8236,26 @@ html[data-theme='plasma'] .v2-shell {
 
 .v2-live-log-row {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) minmax(0, 1fr) 5.2rem minmax(0, 0.9fr) auto;
+  grid-template-columns:
+    auto
+    minmax(6.5rem, 1.35fr)
+    minmax(4.5rem, 1fr)
+    minmax(7.25rem, auto)
+    minmax(3.5rem, 0.8fr)
+    auto;
   gap: 0.35rem;
   align-items: center;
+}
+
+.v2-live-log-row .v2-price-currency {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.v2-live-log-row .v2-live-price {
+  flex: 1 1 3.25rem;
+  width: auto;
+  min-width: 0;
 }
 
 .v2-live-log-row.is-view {
@@ -8430,11 +8447,12 @@ html[data-theme='plasma'] .v2-shell {
   min-width: 8rem;
 }
 
-@media (max-width: 520px) {
+@media (max-width: 680px) {
   .v2-live-log-row.is-editing {
-    grid-template-columns: auto minmax(0, 1fr) 5.2rem auto;
+    grid-template-columns: auto minmax(0, 1fr) auto;
   }
 
+  .v2-live-log-row.is-editing .v2-price-currency,
   .v2-live-log-row.is-editing .v2-live-place,
   .v2-live-log-row.is-editing .v2-live-notes {
     grid-column: 1 / -1;
