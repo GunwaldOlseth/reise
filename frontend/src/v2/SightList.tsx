@@ -475,7 +475,10 @@ export function SightList({
                       })
                     }
                     onPersist={(stored) => {
-                      update(idx, { price: stored, currency: undefined })
+                      update(idx, {
+                        price: stored.price,
+                        currency: undefined,
+                      })
                       emit(draftRef.current, true)
                     }}
                   />
@@ -727,7 +730,10 @@ export function SightList({
                           })
                         }
                         onPersist={(stored) => {
-                          update(idx, { price: stored, currency: undefined })
+                          update(idx, {
+                            price: stored.price,
+                            currency: undefined,
+                          })
                           commit(idx)
                         }}
                       />

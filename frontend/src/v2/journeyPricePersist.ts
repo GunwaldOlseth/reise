@@ -14,15 +14,30 @@ import {
 function persistField(
   price?: string,
   currency?: string,
-): { price: string; currency?: string } {
+  foreignPrice?: string,
+): { price: string; currency?: string; foreignPrice?: string } {
   const raw = (price || '').trim()
   if (!raw) return { price: '' }
+  if (foreignPrice?.trim() && currency) {
+    const code = normalizePriceCurrency(currency)
+    if (code !== DEFAULT_PRICE_CURRENCY) {
+      return {
+        price: raw,
+        foreignPrice: foreignPrice.trim(),
+        currency: code,
+      }
+    }
+  }
   const code = normalizePriceCurrency(currency)
   if (code === DEFAULT_PRICE_CURRENCY) return { price: raw }
   const converted = convertPriceToNokStorage(raw, currency)
   if (converted === 'empty') return { price: '' }
   if (converted === 'no-rate') return { price: raw, currency: code }
-  return { price: converted.price }
+  return {
+    price: converted.price,
+    foreignPrice: converted.foreignPrice,
+    currency: converted.foreignPrice ? converted.currency : undefined,
+  }
 }
 
 function persistOption(opt: JourneyTransportOption): JourneyTransportOption {
@@ -58,8 +73,13 @@ function persistActivity(a: JourneyActivity): JourneyActivity {
 }
 
 function persistLiveEntry(e: JourneyLiveEntry): JourneyLiveEntry {
-  const patch = persistField(e.price, e.currency)
-  return { ...e, price: patch.price, currency: patch.currency }
+  const patch = persistField(e.price, e.currency, e.foreignPrice)
+  return {
+    ...e,
+    price: patch.price,
+    foreignPrice: patch.foreignPrice,
+    currency: patch.currency,
+  }
 }
 
 /** Convert foreign-currency price fields to NOK before save (when rate is known). */
