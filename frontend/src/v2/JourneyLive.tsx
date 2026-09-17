@@ -6,6 +6,7 @@ import { localizeCity } from '../placeNames'
 import { noteHasContent, noteHtmlForDisplay } from './noteHtml'
 import { CityInfoTip } from './CityInfoTip'
 import { LiveCityCurrency } from './LiveCityCurrency'
+import { LiveCityWeather } from './LiveCityWeather'
 import { HotelInfoTip } from './HotelInfoTip'
 import { CountdownCard, HolidayCountdown, osloWallTimeMs } from './HolidayCountdown'
 import { nextScheduledDeparture } from './transportSchedule'
@@ -619,10 +620,15 @@ type DayPlace = {
   city: string
   country?: string
   countrySearch?: string
+  citySearch?: string
+  latitude?: number
+  longitude?: number
   hotel?: string
   notes?: string
   docs?: JourneyCityDoc[]
   arriving: boolean
+  /** Cruise/package day at sea — no city weather. */
+  atSea?: boolean
 }
 
 type DayRide = {
@@ -767,6 +773,9 @@ function placesOnDate(journey: Journey, date: string): DayPlace[] {
           city: stop.city || 'Hjem',
           country: stop.country,
           countrySearch: stop.countrySearch,
+          citySearch: stop.citySearch,
+          latitude: stop.latitude,
+          longitude: stop.longitude,
           notes: stop.notes,
           docs: stop.docs,
           arriving: true,
@@ -792,9 +801,13 @@ function placesOnDate(journey: Journey, date: string): DayPlace[] {
               pack?.baseCountry?.trim() ||
               stop.country,
             countrySearch: stop.countrySearch,
+            citySearch: stop.citySearch,
+            latitude: day?.latitude ?? stop.latitude,
+            longitude: day?.longitude ?? stop.longitude,
             notes: day?.notes,
             docs: day?.docs,
             arriving: offset === 0,
+            atSea: true,
           })
           continue
         }
@@ -810,6 +823,9 @@ function placesOnDate(journey: Journey, date: string): DayPlace[] {
             pack?.baseCountry?.trim() ||
             stop.country,
           countrySearch: stop.countrySearch,
+          citySearch: stop.citySearch,
+          latitude: day?.latitude ?? stop.latitude,
+          longitude: day?.longitude ?? stop.longitude,
           notes: day?.notes,
           docs: day?.docs,
           arriving: offset === 0,
@@ -824,6 +840,9 @@ function placesOnDate(journey: Journey, date: string): DayPlace[] {
       city: stopGoalLabel(stop, 'By'),
       country: stop.country,
       countrySearch: stop.countrySearch,
+      citySearch: stop.citySearch,
+      latitude: stop.latitude,
+      longitude: stop.longitude,
       hotel: effectiveHotelName(stop.stay),
       notes: stop.notes,
       docs: stop.docs,
@@ -1398,6 +1417,17 @@ export function JourneyLive({
                     country={place.country}
                     countrySearch={place.countrySearch}
                   />
+                  {!place.atSea ? (
+                    <LiveCityWeather
+                      city={place.city}
+                      country={place.country}
+                      date={date}
+                      latitude={place.latitude}
+                      longitude={place.longitude}
+                      citySearch={place.citySearch}
+                      countrySearch={place.countrySearch}
+                    />
+                  ) : null}
                 </span>
                 <CityInfoTip text={place.notes} docs={place.docs} />
               </li>

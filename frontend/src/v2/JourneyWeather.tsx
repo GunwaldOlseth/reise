@@ -224,7 +224,7 @@ function isTodayISO(iso: string): boolean {
   )
 }
 
-function WeatherIcon({ icon, size = 18 }: { icon: string; size?: number }) {
+export function WeatherIcon({ icon, size = 18 }: { icon: string; size?: number }) {
   const props = {
     width: size,
     height: size,
