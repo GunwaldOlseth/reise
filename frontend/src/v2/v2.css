@@ -8031,6 +8031,43 @@ html[data-theme='plasma'] .v2-shell {
   opacity: 0.92;
 }
 
+.v2-live-weather {
+  display: flex;
+  flex-direction: column;
+  gap: 0.05rem;
+  font-size: 0.82rem;
+  line-height: 1.35;
+}
+
+.v2-live-weather-main {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 0.45rem;
+}
+
+.v2-live-weather-temp {
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+
+.v2-live-weather.is-forecast .v2-live-weather-temp {
+  color: var(--v2-weather-forecast);
+}
+
+.v2-live-weather-forecast-label {
+  font-size: 0.75rem;
+  color: var(--v2-weather-forecast);
+}
+
+.v2-live-weather-now {
+  opacity: 0.92;
+}
+
+.v2-live-weather.is-outside {
+  opacity: 0.85;
+}
+
 .v2-currency-rate-list {
   list-style: none;
   margin: 0.75rem 0 0;
