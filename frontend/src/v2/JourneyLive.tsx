@@ -1914,48 +1914,42 @@ export function LiveEntryRow({
   })
   const showForm = editing || !registered
 
-  function flushFields() {
+  async function finishEditing() {
     const code = normalizePriceCurrency(currency)
-    const hasForeign =
-      code !== DEFAULT_PRICE_CURRENCY &&
-      entry.foreignPrice?.trim() &&
-      entry.price?.trim() &&
-      price.trim() === entry.foreignPrice.trim()
-    onChange({
-      title: title.trim(),
-      place: place.trim(),
-      price: hasForeign ? entry.price!.trim() : price.trim(),
-      foreignPrice: hasForeign ? entry.foreignPrice!.trim() : undefined,
-      currency: hasForeign
-        ? code
-        : code === DEFAULT_PRICE_CURRENCY
-          ? undefined
-          : code,
-      notes: notes.trim(),
-    })
-  }
+    const trimmedPrice = price.trim()
+    let storedPrice = trimmedPrice
+    let storedForeign = entry.foreignPrice?.trim()
+    let storedCurrency =
+      code === DEFAULT_PRICE_CURRENCY ? undefined : code
 
-  function finishEditing() {
-    flushFields()
-    const code = normalizePriceCurrency(currency)
-    const hasForeign =
-      code !== DEFAULT_PRICE_CURRENCY &&
-      entry.foreignPrice?.trim() &&
+    if (trimmedPrice && code !== DEFAULT_PRICE_CURRENCY) {
+      const converted = await persistPriceAsNok(trimmedPrice, code)
+      if (converted !== 'empty' && converted !== 'failed') {
+        storedPrice = converted.price
+        storedForeign = converted.foreignPrice
+        storedCurrency = converted.foreignPrice
+          ? normalizePriceCurrency(converted.currency)
+          : undefined
+      }
+    } else if (
+      storedForeign &&
       entry.price?.trim() &&
-      price.trim() === entry.foreignPrice.trim()
-    const next = {
-      ...entry,
+      trimmedPrice === storedForeign
+    ) {
+      storedPrice = entry.price.trim()
+      storedCurrency = code
+    }
+
+    const partial = {
       title: title.trim(),
       place: place.trim(),
-      price: hasForeign ? entry.price!.trim() : price.trim(),
-      foreignPrice: hasForeign ? entry.foreignPrice!.trim() : undefined,
-      currency: hasForeign
-        ? code
-        : code === DEFAULT_PRICE_CURRENCY
-          ? undefined
-          : code,
+      price: storedPrice,
+      foreignPrice: storedForeign,
+      currency: storedCurrency,
       notes: notes.trim(),
     }
+    onChange(partial)
+    const next = { ...entry, ...partial }
     if (liveEntryHasContent(next)) setEditing(false)
   }
 
@@ -2166,7 +2160,7 @@ export function LiveEntryRow({
                 type="button"
                 className="v2-chip-btn v2-live-finish"
                 disabled={disabled}
-                onClick={finishEditing}
+                onClick={() => void finishEditing()}
               >
                 Ferdig
               </button>

@@ -81,6 +81,13 @@ async function fetchFrankfurterRateToNok(code: string): Promise<number | null> {
   const c = normalizePriceCurrency(code)
   if (c === DEFAULT_PRICE_CURRENCY) return 1
   try {
+    const report = await api.getCurrencyRate(c)
+    const rate = report.rateToNok
+    if (rate && rate > 0) return rate
+  } catch {
+    /* backend may not expose /currency/rate yet — try Frankfurter */
+  }
+  try {
     const res = await fetch(
       `https://api.frankfurter.app/latest?from=${encodeURIComponent(c)}&to=NOK`,
     )
