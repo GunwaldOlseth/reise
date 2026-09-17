@@ -1740,6 +1740,12 @@ export const api = {
     return request<CurrencyReport>(`/currency?${qs.toString()}`);
   },
 
+  /** Exchange rate for a currency code to NOK (via backend, avoids browser CORS). */
+  getCurrencyRate: (code: string) => {
+    const qs = new URLSearchParams({ code: code.trim().toUpperCase() });
+    return request<CurrencyReport>(`/currency/rate?${qs.toString()}`);
+  },
+
   /** Place suggestions for city spelling / map geocoding (Open-Meteo). */
   searchPlaces: (q: string, country = '') => {
     const qs = new URLSearchParams({ q: q.trim() });

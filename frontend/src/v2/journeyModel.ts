@@ -1959,6 +1959,8 @@ export interface JourneyLiveEntry {
   /** Restaurant, café, shop, or other venue name. */
   place?: string
   price?: string
+  /** Original foreign amount when price is stored as NOK. */
+  foreignPrice?: string
   currency?: string
   notes?: string
   time?: string

@@ -1,6 +1,7 @@
 import {
   formatExpenseAmount,
   isPaidOrActualExpenseLine,
+  parsePriceAmount,
   type DayExpenseSummary,
   type ExpenseLine,
   type TripExpenseSummary,
@@ -31,7 +32,11 @@ import {
   type JourneyStop,
   type JourneyActivity,
 } from './journeyModel'
-import { resolvePriceInNok } from './priceCurrency'
+import {
+  formatPriceDisplay,
+  normalizePriceCurrency,
+  resolvePriceInNok,
+} from './priceCurrency'
 
 function emptySummary(): TripExpenseSummary {
   return {
@@ -506,7 +511,24 @@ export function journeyExpenseSummary(journey: Journey): TripExpenseSummary {
   }
 
   for (const entry of compactLive(journey.live)) {
-    const resolved = takeAmount(entry.price || '', entry.currency)
+    const resolved =
+      entry.foreignPrice?.trim() && entry.currency && entry.price?.trim()
+        ? (() => {
+            const foreignAmount = parsePriceAmount(entry.foreignPrice)
+            const amount = parsePriceAmount(entry.price)
+            if (foreignAmount === null || amount === null) {
+              return takeAmount(entry.price || '', entry.currency)
+            }
+            const code = normalizePriceCurrency(entry.currency)
+            return {
+              amount,
+              raw: formatPriceDisplay(foreignAmount, code),
+              currency: code !== 'NOK' ? code : undefined,
+              foreignAmount:
+                code !== 'NOK' ? foreignAmount : undefined,
+            }
+          })()
+        : takeAmount(entry.price || '', entry.currency)
     if (resolved === 'empty') continue
     if (resolved === 'unparsed') {
       unparsedCount += 1
@@ -528,6 +550,8 @@ export function journeyExpenseSummary(journey: Journey): TripExpenseSummary {
       date: entry.date,
       rawPrice: resolved.raw,
       amount: resolved.amount,
+      currency: resolved.currency,
+      foreignAmount: resolved.foreignAmount,
       isActual: true,
     }
     liveLines.push(line)

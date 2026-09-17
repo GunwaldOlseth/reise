@@ -21,6 +21,22 @@ func TestResolveCountryEnglishNorwegian(t *testing.T) {
 	}
 }
 
+func TestGetCurrencyRateHandlerNok(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/api/currency/rate?code=NOK", nil)
+	rr := httptest.NewRecorder()
+	getCurrencyRate(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status %d", rr.Code)
+	}
+	var body currencyResponse
+	if err := json.NewDecoder(rr.Body).Decode(&body); err != nil {
+		t.Fatal(err)
+	}
+	if !body.IsNok || body.CurrencyCode != "NOK" || body.RateToNok != 1 {
+		t.Fatalf("unexpected body: %+v", body)
+	}
+}
+
 func TestGetCurrencyHandlerNok(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/api/currency?country=Norge", nil)
 	rr := httptest.NewRecorder()

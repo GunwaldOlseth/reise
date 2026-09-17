@@ -81,6 +81,13 @@ async function fetchFrankfurterRateToNok(code: string): Promise<number | null> {
   const c = normalizePriceCurrency(code)
   if (c === DEFAULT_PRICE_CURRENCY) return 1
   try {
+    const report = await api.getCurrencyRate(c)
+    const rate = report.rateToNok
+    if (rate && rate > 0) return rate
+  } catch {
+    /* backend may not expose /currency/rate yet — try Frankfurter */
+  }
+  try {
     const res = await fetch(
       `https://api.frankfurter.app/latest?from=${encodeURIComponent(c)}&to=NOK`,
     )
@@ -201,7 +208,11 @@ export async function prefetchJourneyCurrencyRates(
   applyCustomCountryRates(countries, currencyByCountry)
 }
 
-export type NokStoredPrice = { price: string; currency?: undefined }
+export type NokStoredPrice = {
+  price: string
+  foreignPrice?: string
+  currency?: string
+}
 
 export function convertPriceToNokStorage(
   raw: string | undefined,
@@ -217,7 +228,40 @@ export function convertPriceToNokStorage(
   }
   const nok = amountInNok(amount, code)
   if (nok === null) return 'no-rate'
-  return { price: formatExpenseAmount(nok) }
+  return {
+    price: formatExpenseAmount(nok),
+    foreignPrice: formatExpenseAmount(amount),
+    currency: code,
+  }
+}
+
+export type StoredPriceView = { primary: string; secondary?: string }
+
+/** NOK on top, original foreign currency below when both are stored. */
+export function formatStoredPriceView(
+  price?: string | null,
+  foreignPrice?: string | null,
+  currency?: string | null,
+): StoredPriceView | null {
+  const nokRaw = (price || '').trim()
+  if (!nokRaw) return null
+  const code = normalizePriceCurrency(currency)
+  const foreignRaw = (foreignPrice || '').trim()
+  if (foreignRaw && code !== DEFAULT_PRICE_CURRENCY) {
+    const nokAmt = parsePriceAmount(nokRaw)
+    const primary =
+      nokAmt !== null
+        ? `${formatExpenseAmount(nokAmt)} kr`
+        : `${nokRaw} kr`
+    const foreignAmt = parsePriceAmount(foreignRaw)
+    const secondary =
+      foreignAmt !== null
+        ? formatPriceDisplay(foreignAmt, code)
+        : `${foreignRaw} ${code}`
+    return { primary, secondary }
+  }
+  const label = formatPriceLabel(nokRaw, currency)
+  return label ? { primary: label } : { primary: nokRaw }
 }
 
 /** Parse, convert foreign currency to NOK, return value for Firestore/local save. */

@@ -230,6 +230,45 @@ func fetchRateToNOK(code string) (rate float64, rateDate string, err error) {
 	return rate, rateDate, nil
 }
 
+func getCurrencyRate(w http.ResponseWriter, r *http.Request) {
+	code := strings.ToUpper(strings.TrimSpace(r.URL.Query().Get("code")))
+	if code == "" {
+		respondWithError(w, http.StatusBadRequest, "code is required")
+		return
+	}
+	if len(code) != 3 {
+		respondWithError(w, http.StatusBadRequest, "invalid currency code")
+		return
+	}
+
+	name := currencyDisplayNameNB(code)
+	isNok := code == "NOK"
+	out := currencyResponse{
+		CurrencyCode: code,
+		CurrencyName: name,
+		IsNok:        isNok,
+		Source:       "frankfurter",
+	}
+
+	if isNok {
+		out.RateToNok = 1
+		out.RateDate = time.Now().UTC().Format("2006-01-02")
+		respondWithJSON(w, http.StatusOK, out)
+		return
+	}
+
+	rate, rateDate, err := fetchRateToNOK(code)
+	if err != nil {
+		log.Printf("currency rate %s: %v", code, err)
+		out.Source = "rate-unavailable"
+		respondWithJSON(w, http.StatusOK, out)
+		return
+	}
+	out.RateToNok = rate
+	out.RateDate = rateDate
+	respondWithJSON(w, http.StatusOK, out)
+}
+
 func getCurrency(w http.ResponseWriter, r *http.Request) {
 	country := strings.TrimSpace(r.URL.Query().Get("country"))
 	countrySearch := strings.TrimSpace(r.URL.Query().Get("countrySearch"))

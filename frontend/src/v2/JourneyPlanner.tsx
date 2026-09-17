@@ -2133,7 +2133,7 @@ function PlaceStopPanel({
                         }
                         onPersist={(stored) =>
                           patchStay(
-                            { price: stored, currency: undefined },
+                            { price: stored.price, currency: undefined },
                             true,
                             { immediate: true },
                           )

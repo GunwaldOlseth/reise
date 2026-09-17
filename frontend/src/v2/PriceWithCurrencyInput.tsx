@@ -4,6 +4,7 @@ import {
   normalizePriceCurrency,
   persistPriceAsNok,
   PRICE_CURRENCY_OPTIONS,
+  type NokStoredPrice,
 } from './priceCurrency'
 
 export function PriceWithCurrencyInput({
@@ -33,7 +34,7 @@ export function PriceWithCurrencyInput({
   onCurrencyChange: (code: string) => void
   onAmountBlur?: () => void
   /** Called after blur when amount is stored (NOK when persistAsNok). */
-  onPersist?: (price: string) => void
+  onPersist?: (stored: NokStoredPrice) => void
 }) {
   const code = normalizePriceCurrency(currency)
   const [hint, setHint] = useState('')
@@ -41,13 +42,13 @@ export function PriceWithCurrencyInput({
   async function commitAmount() {
     if (!persistAsNok) {
       onAmountBlur?.()
-      onPersist?.(amount.trim())
+      onPersist?.({ price: amount.trim() })
       return
     }
     const result = await persistPriceAsNok(amount, code)
     if (result === 'empty') {
       setHint('')
-      onPersist?.('')
+      onPersist?.({ price: '' })
       onAmountBlur?.()
       return
     }
@@ -59,7 +60,7 @@ export function PriceWithCurrencyInput({
     setHint('')
     onAmountChange(result.price)
     onCurrencyChange(DEFAULT_PRICE_CURRENCY)
-    onPersist?.(result.price)
+    onPersist?.(result)
     onAmountBlur?.()
   }
 

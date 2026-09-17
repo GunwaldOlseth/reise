@@ -94,7 +94,7 @@ import { SightList } from './SightList'
 import { PriceWithCurrencyInput } from './PriceWithCurrencyInput'
 import {
   DEFAULT_PRICE_CURRENCY,
-  formatPriceLabel,
+  formatStoredPriceView,
   normalizePriceCurrency,
   persistPriceAsNok,
   PRICE_CURRENCY_OPTIONS,
@@ -570,9 +570,9 @@ function LiveCityTransportSection({
                     onCurrencyChange={(currency) =>
                       patchRow(idx, { currency })
                     }
-                    onPersist={(price) =>
+                    onPersist={(stored) =>
                       patchRow(idx, {
-                        actualPrice: price,
+                        actualPrice: stored.price,
                         price: '',
                         currency: undefined,
                       })
@@ -1828,14 +1828,29 @@ function livePlacePlaceholder(kind: JourneyLiveKind): string {
   }
 }
 
-function liveEntryPriceLabel(
-  raw?: string,
-  currency?: string,
-): string | null {
-  const trimmed = (raw || '').trim()
-  if (!trimmed) return null
-  const labeled = formatPriceLabel(trimmed, currency)
-  return labeled || trimmed
+function liveEntryPriceView(entry: Pick<
+  JourneyLiveEntry,
+  'price' | 'foreignPrice' | 'currency'
+>) {
+  return formatStoredPriceView(
+    entry.price,
+    entry.foreignPrice,
+    entry.currency,
+  )
+}
+
+function liveEntryEditPrice(entry: JourneyLiveEntry): {
+  amount: string
+  currency: string
+} {
+  const code = normalizePriceCurrency(entry.currency)
+  if (entry.foreignPrice?.trim() && code !== DEFAULT_PRICE_CURRENCY) {
+    return { amount: entry.foreignPrice.trim(), currency: code }
+  }
+  return {
+    amount: entry.price || '',
+    currency: DEFAULT_PRICE_CURRENCY,
+  }
 }
 
 export function LiveEntryRow({
@@ -1853,9 +1868,9 @@ export function LiveEntryRow({
 }) {
   const [title, setTitle] = useState(entry.title)
   const [place, setPlace] = useState(entry.place || '')
-  const [price, setPrice] = useState(entry.price || '')
+  const [price, setPrice] = useState(() => liveEntryEditPrice(entry).amount)
   const [currency, setCurrency] = useState(
-    normalizePriceCurrency(entry.currency),
+    () => liveEntryEditPrice(entry).currency,
   )
   const [notes, setNotes] = useState(entry.notes || '')
   const [editing, setEditing] = useState(() => !liveEntryHasContent(entry))
@@ -1867,10 +1882,19 @@ export function LiveEntryRow({
   useEffect(() => {
     setTitle(entry.title)
     setPlace(entry.place || '')
-    setPrice(entry.price || '')
-    setCurrency(normalizePriceCurrency(entry.currency))
+    const editPrice = liveEntryEditPrice(entry)
+    setPrice(editPrice.amount)
+    setCurrency(editPrice.currency)
     setNotes(entry.notes || '')
-  }, [entry.id, entry.title, entry.place, entry.price, entry.currency, entry.notes])
+  }, [
+    entry.id,
+    entry.title,
+    entry.place,
+    entry.price,
+    entry.foreignPrice,
+    entry.currency,
+    entry.notes,
+  ])
 
   useEffect(() => {
     setEditing(!liveEntryHasContent(entry))
@@ -1890,32 +1914,42 @@ export function LiveEntryRow({
   })
   const showForm = editing || !registered
 
-  function flushFields() {
-    onChange({
-      title: title.trim(),
-      place: place.trim(),
-      price: price.trim(),
-      currency:
-        normalizePriceCurrency(currency) === DEFAULT_PRICE_CURRENCY
-          ? undefined
-          : normalizePriceCurrency(currency),
-      notes: notes.trim(),
-    })
-  }
+  async function finishEditing() {
+    const code = normalizePriceCurrency(currency)
+    const trimmedPrice = price.trim()
+    let storedPrice = trimmedPrice
+    let storedForeign = entry.foreignPrice?.trim()
+    let storedCurrency =
+      code === DEFAULT_PRICE_CURRENCY ? undefined : code
 
-  function finishEditing() {
-    flushFields()
-    const next = {
-      ...entry,
+    if (trimmedPrice && code !== DEFAULT_PRICE_CURRENCY) {
+      const converted = await persistPriceAsNok(trimmedPrice, code)
+      if (converted !== 'empty' && converted !== 'failed') {
+        storedPrice = converted.price
+        storedForeign = converted.foreignPrice
+        storedCurrency = converted.foreignPrice
+          ? normalizePriceCurrency(converted.currency)
+          : undefined
+      }
+    } else if (
+      storedForeign &&
+      entry.price?.trim() &&
+      trimmedPrice === storedForeign
+    ) {
+      storedPrice = entry.price.trim()
+      storedCurrency = code
+    }
+
+    const partial = {
       title: title.trim(),
       place: place.trim(),
-      price: price.trim(),
-      currency:
-        normalizePriceCurrency(currency) === DEFAULT_PRICE_CURRENCY
-          ? undefined
-          : normalizePriceCurrency(currency),
+      price: storedPrice,
+      foreignPrice: storedForeign,
+      currency: storedCurrency,
       notes: notes.trim(),
     }
+    onChange(partial)
+    const next = { ...entry, ...partial }
     if (liveEntryHasContent(next)) setEditing(false)
   }
 
@@ -1958,7 +1992,7 @@ export function LiveEntryRow({
     onChange({ photos: photos.filter((p) => p.id !== id) })
   }
 
-  const priceLabel = liveEntryPriceLabel(entry.price, entry.currency)
+  const priceView = liveEntryPriceView(entry)
   const displayTitle = entry.title.trim() || liveKindLabel(entry.kind)
   const displayPlace = (entry.place || '').trim()
 
@@ -2005,9 +2039,16 @@ export function LiveEntryRow({
             onAmountChange={setPrice}
             onCurrencyChange={setCurrency}
             onPersist={(stored) => {
-              setPrice(stored)
-              setCurrency(DEFAULT_PRICE_CURRENCY)
-              onChange({ price: stored, currency: undefined })
+              const foreignCode = stored.foreignPrice
+                ? normalizePriceCurrency(stored.currency)
+                : DEFAULT_PRICE_CURRENCY
+              setPrice(stored.foreignPrice ?? stored.price)
+              setCurrency(foreignCode)
+              onChange({
+                price: stored.price,
+                foreignPrice: stored.foreignPrice,
+                currency: stored.foreignPrice ? foreignCode : undefined,
+              })
             }}
           />
           <input
@@ -2119,7 +2160,7 @@ export function LiveEntryRow({
                 type="button"
                 className="v2-chip-btn v2-live-finish"
                 disabled={disabled}
-                onClick={finishEditing}
+                onClick={() => void finishEditing()}
               >
                 Ferdig
               </button>
@@ -2144,8 +2185,17 @@ export function LiveEntryRow({
                 </span>
               ) : null}
             </div>
-            {priceLabel ? (
-              <span className="v2-live-log-view-price">{priceLabel}</span>
+            {priceView ? (
+              <span className="v2-live-log-view-price">
+                <span className="v2-live-log-view-price-primary">
+                  {priceView.primary}
+                </span>
+                {priceView.secondary ? (
+                  <span className="v2-live-log-view-price-secondary">
+                    {priceView.secondary}
+                  </span>
+                ) : null}
+              </span>
             ) : null}
           </div>
           <div className="v2-live-log-view-meta">
