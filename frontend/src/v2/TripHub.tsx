@@ -21,7 +21,7 @@ import { normalizeJourneyPricesToNok } from './journeyPricePersist'
 import { ExpensesDailyChart } from './ExpensesDailyChart'
 import { journeyMapRouteKey, journeyMapStopsInOrder } from './journeyMap'
 import { localizeJourneyPlaces } from '../placeNames'
-import { compactLive, compactLiveDailyComments, compactLiveDailyPhotos, compactLiveDailySteps, emptyJourney, formatDateNO, compactActivity, normalizeLiveActivitySkips, normalizeSights, normalizeCityTransport, type Journey } from './journeyModel'
+import { compactLive, compactLiveDailyComments, compactLiveDailyPhotos, compactLiveDailySteps, emptyJourney, formatDateNO, compactActivity, normalizeLiveActivitySkips, normalizeSights, normalizeCityTransport, migrateCityTransportToLive, type Journey } from './journeyModel'
 import { shareOrCopy, sharePageUrl } from './shareItinerary'
 import { PdfDownloadSheet } from './PdfDownloadSheet'
 import { DeleteTripSheet } from './DeleteTripSheet'
@@ -133,13 +133,17 @@ export function TripHub({
       .getJourney(tripId)
       .then((data) => {
         if (cancelled) return
-        setJourney(
-          localizeJourneyPlaces({
-            ...emptyJourney(tripId),
-            ...data,
-            tripId,
-          }),
-        )
+        const loaded = localizeJourneyPlaces({
+          ...emptyJourney(tripId),
+          ...data,
+          tripId,
+        })
+        const { journey: migrated, changed } = migrateCityTransportToLive(loaded)
+        setJourney(migrated)
+        if (changed) {
+          livePending.current = migrated
+          persistJourneyQuiet(migrated)
+        }
         setJourneyReady(true)
       })
       .catch(() => {

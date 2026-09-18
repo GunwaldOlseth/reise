@@ -401,11 +401,11 @@ type JourneyPhoto struct {
 	URL string `json:"url" firestore:"url"`
 }
 
-// JourneyLiveEntry is an off-plan item logged while travelling (food, drink, shop).
+// JourneyLiveEntry is an off-plan item logged while travelling (food, drink, shop, transport).
 type JourneyLiveEntry struct {
 	ID        string         `json:"id" firestore:"id"`
 	Date      string         `json:"date" firestore:"date"`
-	Kind      string         `json:"kind" firestore:"kind"` // food | drink | shop | other
+	Kind      string         `json:"kind" firestore:"kind"` // food | drink | shop | transport | other
 	Title     string         `json:"title" firestore:"title"`
 	Place     string         `json:"place,omitempty" firestore:"place,omitempty"`
 	Price     string         `json:"price,omitempty" firestore:"price,omitempty"`

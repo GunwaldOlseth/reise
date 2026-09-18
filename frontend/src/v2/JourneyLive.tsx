@@ -16,8 +16,6 @@ import {
   addDaysIso,
   calendarDaysForStop,
   cityStayDays,
-  cityTransportOnDay,
-  cityTransportExpenseLabel,
   effectiveHotelName,
   formatDateNO,
   formatChangeTimeLabel,
@@ -38,9 +36,7 @@ import {
   moveActivityToCalendarDate,
   moveActivityToDay,
   newLiveEntry,
-  newCityTransport,
   normalizeLive,
-  normalizeCityTransport,
   normalizeSights,
   optionIsTaken,
   chosenFromOptions,
@@ -48,7 +44,6 @@ import {
   packageFreeDayLabel,
   packageOf,
   replaceDayActivities,
-  replaceDayCityTransport,
   stopDepartDate,
   stopGoalLabel,
   optionHasTicket,
@@ -79,7 +74,6 @@ import {
   type Journey,
   type JourneyActivity,
   type JourneyCityDoc,
-  type JourneyCityTransport,
   type JourneyLiveEntry,
   type JourneyLiveKind,
   type JourneyPhoto,
@@ -492,128 +486,9 @@ const LIVE_KINDS: { kind: JourneyLiveKind; label: string }[] = [
   { kind: 'food', label: 'Mat' },
   { kind: 'drink', label: 'Drikke' },
   { kind: 'shop', label: 'Kjøpt' },
+  { kind: 'transport', label: 'Transport' },
   { kind: 'other', label: 'Annet' },
 ]
-
-function LiveCityTransportSection({
-  dayOffset,
-  rows,
-  disabled,
-  onChange,
-}: {
-  dayOffset: number
-  rows: JourneyCityTransport[]
-  disabled?: boolean
-  onChange: (next: JourneyCityTransport[]) => void
-}) {
-  function patchRow(idx: number, partial: Partial<JourneyCityTransport>) {
-    onChange(
-      rows.map((row, i) => (i === idx ? { ...row, ...partial } : row)),
-    )
-  }
-
-  function addRow() {
-    onChange([...rows, newCityTransport(dayOffset, rows.length)])
-  }
-
-  function removeRow(idx: number) {
-    onChange(rows.filter((_, i) => i !== idx))
-  }
-
-  return (
-    <div className="v2-live-city-transport">
-      <div className="v2-live-city-transport-head">
-        <span className="v2-live-city-transport-title">Transport (utgift)</span>
-        <button
-          type="button"
-          className="v2-chip-btn"
-          disabled={disabled}
-          title="Legg til transportutgift for dagen (bussbillett, dagskort …)"
-          onClick={addRow}
-        >
-          + Billett / transport
-        </button>
-      </div>
-      {rows.length === 0 ? (
-        <p className="v2-meta" style={{ margin: 0 }}>
-          Bussbillett, dagskort eller annen transport — telles under transport i
-          utgifter.
-        </p>
-      ) : (
-        <ul className="v2-live-city-transport-list">
-          {rows.map((row, idx) => {
-            const mode = row.mode || 'bus'
-            const summary =
-              cityTransportExpenseLabel(row) ||
-              (row.price || row.actualPrice ? 'Transport' : '')
-            return (
-              <li key={row.id} className="v2-live-city-transport-item">
-                <div className="v2-live-city-transport-row">
-                  <TransportModeIcon mode={mode} size={18} />
-                  <input
-                    className="v2-live-city-transport-desc"
-                    value={row.from || ''}
-                    disabled={disabled}
-                    placeholder="F.eks. bussbillett"
-                    title="Kort beskrivelse (valgfritt)"
-                    onChange={(e) => patchRow(idx, { from: e.target.value })}
-                  />
-                  <PriceWithCurrencyInput
-                    compact
-                    amount={row.actualPrice || row.price || ''}
-                    currency={row.currency}
-                    disabled={disabled}
-                    amountPlaceholder="Pris"
-                    amountTitle="Beløp — telles som transport i utgifter"
-                    onAmountChange={(value) =>
-                      patchRow(idx, { actualPrice: value })
-                    }
-                    onCurrencyChange={(currency) =>
-                      patchRow(idx, { currency })
-                    }
-                    onPersist={(stored) =>
-                      patchRow(idx, {
-                        actualPrice: stored.price,
-                        price: '',
-                        currency: undefined,
-                      })
-                    }
-                  />
-                  <TicketToggle
-                    checked={row.ticket || false}
-                    disabled={disabled}
-                    onChange={(ticket) => patchRow(idx, { ticket })}
-                  />
-                  <PaidToggle
-                    compact
-                    checked={row.paid || false}
-                    disabled={disabled}
-                    onChange={(paid) => patchRow(idx, { paid })}
-                  />
-                  <button
-                    type="button"
-                    className="v2-via-remove"
-                    disabled={disabled}
-                    aria-label="Slett"
-                    title="Slett"
-                    onClick={() => removeRow(idx)}
-                  >
-                    <TrashIcon size={14} />
-                  </button>
-                </div>
-                {summary ? (
-                  <span className="v2-meta v2-live-city-transport-summary">
-                    {summary}
-                  </span>
-                ) : null}
-              </li>
-            )
-          })}
-        </ul>
-      )}
-    </div>
-  )
-}
 
 type DayPlace = {
   stop: JourneyStop
@@ -1005,28 +880,6 @@ export function JourneyLive({
       next = withLiveActivitySkip(next, date, stopId, dayOffset, false)
     }
     patchJourney(next)
-  }
-
-  function patchDayCityTransport(
-    stopId: string,
-    dayOffset: number,
-    dayList: JourneyCityTransport[],
-  ) {
-    patchJourney({
-      ...journey,
-      stops: (journey.stops || []).map((stop) =>
-        stop.id !== stopId
-          ? stop
-          : {
-              ...stop,
-              cityTransport: replaceDayCityTransport(
-                stop.cityTransport,
-                dayOffset,
-                normalizeCityTransport(dayList),
-              ),
-            },
-      ),
-    })
   }
 
   function setActivitySkip(
@@ -1710,24 +1563,6 @@ export function JourneyLive({
                         )
                       }
                     />
-                    {target.stop.kind !== 'home' &&
-                    !isPackageStop(target.stop) ? (
-                      <LiveCityTransportSection
-                        dayOffset={target.dayOffset}
-                        rows={cityTransportOnDay(
-                          target.stop,
-                          target.dayOffset,
-                        )}
-                        disabled={disabled}
-                        onChange={(list) =>
-                          patchDayCityTransport(
-                            target.stop.id,
-                            target.dayOffset,
-                            list,
-                          )
-                        }
-                      />
-                    ) : null}
                     {skippedSights.length > 0 ? (
                       <ul className="v2-live-activity-skipped-list">
                         {skippedSights.map((sight) => (
@@ -1806,7 +1641,7 @@ export function JourneyLive({
           </div>
         </div>
         <p className="v2-meta" style={{ margin: 0 }}>
-          Mat, drikke, kjøp og annet som ikke ligger i planen.
+          Mat, drikke, transport, kjøp og annet som ikke ligger i planen.
         </p>
         {entries.length === 0 ? (
           <p className="v2-empty">Ingenting logget denne dagen ennå.</p>
@@ -1856,6 +1691,14 @@ function livePlacePlaceholder(kind: JourneyLiveKind): string {
     default:
       return 'Sted'
   }
+}
+
+function liveEntryShowsPlace(kind: JourneyLiveKind): boolean {
+  return kind !== 'transport'
+}
+
+function liveEntryShowsExtras(kind: JourneyLiveKind): boolean {
+  return kind !== 'transport'
 }
 
 function liveEntryPriceView(entry: Pick<
@@ -2025,6 +1868,8 @@ export function LiveEntryRow({
   const priceView = liveEntryPriceView(entry)
   const displayTitle = entry.title.trim() || liveKindLabel(entry.kind)
   const displayPlace = (entry.place || '').trim()
+  const showsPlace = liveEntryShowsPlace(entry.kind)
+  const showsExtras = liveEntryShowsExtras(entry.kind)
 
   return (
     <li
@@ -2046,19 +1891,23 @@ export function LiveEntryRow({
                   ? 'F.eks. Kaffe'
                   : entry.kind === 'shop'
                     ? 'F.eks. Souvenir'
-                    : 'Hva skjedde'
+                    : entry.kind === 'transport'
+                      ? 'F.eks. Bussbillett'
+                      : 'Hva skjedde'
             }
             onChange={(e) => setTitle(e.target.value)}
             onBlur={() => onChange({ title: title.trim() })}
           />
-          <input
-            className="v2-live-place"
-            value={place}
-            disabled={disabled}
-            placeholder={livePlacePlaceholder(entry.kind)}
-            onChange={(e) => setPlace(e.target.value)}
-            onBlur={() => onChange({ place: place.trim() })}
-          />
+          {showsPlace ? (
+            <input
+              className="v2-live-place"
+              value={place}
+              disabled={disabled}
+              placeholder={livePlacePlaceholder(entry.kind)}
+              onChange={(e) => setPlace(e.target.value)}
+              onBlur={() => onChange({ place: place.trim() })}
+            />
+          ) : null}
           <PriceWithCurrencyInput
             compact
             amount={price}
@@ -2101,7 +1950,7 @@ export function LiveEntryRow({
           </button>
 
           <div className="v2-live-log-extra">
-            {showTravelerPick ? (
+            {showsExtras && showTravelerPick ? (
               <div
                 className="v2-live-entry-travelers"
                 role="group"
@@ -2131,23 +1980,26 @@ export function LiveEntryRow({
                 })}
               </div>
             ) : null}
-            <div className="v2-live-stars" role="group" aria-label="Vurdering">
-              {[1, 2, 3, 4, 5].map((n) => (
-                <button
-                  key={n}
-                  type="button"
-                  className={`v2-live-star${n <= rating ? ' is-on' : ''}`}
-                  disabled={disabled}
-                  aria-label={`${n} av 5`}
-                  aria-pressed={n <= rating}
-                  title={`Gi ${n} av 5`}
-                  onClick={() => setRating(n)}
-                >
-                  {n <= rating ? '★' : '☆'}
-                </button>
-              ))}
-            </div>
+            {showsExtras ? (
+              <div className="v2-live-stars" role="group" aria-label="Vurdering">
+                {[1, 2, 3, 4, 5].map((n) => (
+                  <button
+                    key={n}
+                    type="button"
+                    className={`v2-live-star${n <= rating ? ' is-on' : ''}`}
+                    disabled={disabled}
+                    aria-label={`${n} av 5`}
+                    aria-pressed={n <= rating}
+                    title={`Gi ${n} av 5`}
+                    onClick={() => setRating(n)}
+                  >
+                    {n <= rating ? '★' : '☆'}
+                  </button>
+                ))}
+              </div>
+            ) : null}
 
+            {showsExtras ? (
             <div className="v2-live-photos">
               {photos.map((p) => (
                 <span className="v2-live-photo" key={p.id}>
@@ -2185,6 +2037,7 @@ export function LiveEntryRow({
                 onChange={(e) => void onPickFiles(e.target.files)}
               />
             </div>
+            ) : null}
             {draftHasContent ? (
               <button
                 type="button"
@@ -2206,7 +2059,7 @@ export function LiveEntryRow({
             <span className="v2-activity-kind">{liveKindLabel(entry.kind)}</span>
             <div className="v2-live-log-view-text">
               <strong>{displayTitle}</strong>
-              {displayPlace ? (
+              {showsPlace && displayPlace ? (
                 <span className="v2-live-log-view-place">{displayPlace}</span>
               ) : null}
               {(entry.notes || '').trim() ? (
@@ -2229,18 +2082,18 @@ export function LiveEntryRow({
             ) : null}
           </div>
           <div className="v2-live-log-view-meta">
-            {showTravelerPick && tagged.length ? (
+            {showsExtras && showTravelerPick && tagged.length ? (
               <span className="v2-live-log-view-travelers">
                 {tagged.join(', ')}
               </span>
             ) : null}
-            {rating > 0 ? (
+            {showsExtras && rating > 0 ? (
               <span className="v2-live-log-view-rating" aria-label={`${rating} av 5`}>
                 {'★'.repeat(rating)}
                 {'☆'.repeat(5 - rating)}
               </span>
             ) : null}
-            {photos.length ? (
+            {showsExtras && photos.length ? (
               <div className="v2-live-photos v2-live-photos-readonly">
                 {photos.map((p) => (
                   <span className="v2-live-photo" key={p.id}>

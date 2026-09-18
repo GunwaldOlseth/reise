@@ -26,6 +26,7 @@ import {
   legTravelDate,
   normalizeCityTransport,
   cityTransportExpenseLabel,
+  migrateCityTransportToLive,
   stopGoalLabel,
   type Journey,
   type JourneyCost,
@@ -77,6 +78,7 @@ function hotelNightCount(lines: ExpenseLine[]): number {
 
 /** Expense overview from the v2 journey (hotel, package, transport prices). */
 export function journeyExpenseSummary(journey: Journey): TripExpenseSummary {
+  journey = migrateCityTransportToLive(journey).journey
   const stops = [...(journey.stops || [])].sort(
     (a, b) => a.sortOrder - b.sortOrder,
   )
@@ -554,8 +556,13 @@ export function journeyExpenseSummary(journey: Journey): TripExpenseSummary {
       foreignAmount: resolved.foreignAmount,
       isActual: true,
     }
-    liveLines.push(line)
-    addShare(entry.date, place, 'live', resolved.amount, line)
+    if (entry.kind === 'transport') {
+      transportLines.push(line)
+      addShare(entry.date, place, 'transport', resolved.amount, line)
+    } else {
+      liveLines.push(line)
+      addShare(entry.date, place, 'live', resolved.amount, line)
+    }
   }
 
   const cruiseTotal = cruiseLines.reduce((s, l) => s + l.amount, 0)
