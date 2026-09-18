@@ -1942,7 +1942,7 @@ export function formatOptionAltLine(option: JourneyTransportOption): string {
   return [company, mode, nr, time, dur, price].filter(Boolean).join(' · ')
 }
 
-export type JourneyLiveKind = 'food' | 'drink' | 'shop' | 'other'
+export type JourneyLiveKind = 'food' | 'drink' | 'shop' | 'transport' | 'other'
 
 /** An uploaded image attached to a live log entry. */
 export interface JourneyPhoto {
@@ -2067,6 +2067,8 @@ export function liveKindLabel(kind?: JourneyLiveKind | string): string {
       return 'Drikke'
     case 'shop':
       return 'Kjøpt'
+    case 'transport':
+      return 'Transport'
     default:
       return 'Annet'
   }
@@ -2078,7 +2080,10 @@ export function normalizeLive(
   return [...(list || [])]
     .map((e, i) => {
       const kind: JourneyLiveKind =
-        e.kind === 'food' || e.kind === 'drink' || e.kind === 'shop'
+        e.kind === 'food' ||
+        e.kind === 'drink' ||
+        e.kind === 'shop' ||
+        e.kind === 'transport'
           ? e.kind
           : 'other'
       const rating = Math.max(0, Math.min(5, Math.round(Number(e.rating) || 0)))
@@ -2897,6 +2902,77 @@ export function cityTransportExpenseLabel(
   const to = (hop.to || '').trim()
   if (to) return to
   return 'Transport'
+}
+
+/** Move legacy stop.cityTransport expense rows into journey.live (kind transport). */
+export function migrateCityTransportToLive(journey: Journey): {
+  journey: Journey
+  changed: boolean
+} {
+  const liveIds = new Set(
+    normalizeLive(journey.live)
+      .map((e) => e.id)
+      .filter(Boolean),
+  )
+  const migratedLive: JourneyLiveEntry[] = []
+  let changed = false
+
+  const stops = (journey.stops || []).map((stop) => {
+    const arrive = (stop.arriveDate || '').trim()
+    if (!arrive || stop.kind === 'home') {
+      return stop
+    }
+    const hops = normalizeCityTransport(stop.cityTransport)
+    if (!hops.length) return stop
+
+    let stopChanged = false
+    for (const hop of hops) {
+      if (liveIds.has(hop.id)) {
+        stopChanged = true
+        continue
+      }
+
+      const date = addDaysIso(arrive, hop.dayOffset)
+      const title = cityTransportExpenseLabel(hop)
+      const noteBits = [
+        (hop.to || '').trim(),
+        (hop.company || '').trim(),
+        hop.notes && hop.notes !== title ? hop.notes : '',
+      ].filter(Boolean)
+      const price = (hop.actualPrice || hop.price || '').trim()
+
+      migratedLive.push({
+        id: hop.id,
+        date,
+        kind: 'transport',
+        title,
+        place: '',
+        price,
+        currency: hop.currency,
+        notes: noteBits.join(' · '),
+        time: '',
+        rating: 0,
+        photos: [],
+        sortOrder: 0,
+      })
+      liveIds.add(hop.id)
+      stopChanged = true
+    }
+
+    if (!stopChanged) return stop
+    changed = true
+    return { ...stop, cityTransport: [] }
+  })
+
+  if (!changed) {
+    return { journey, changed: false }
+  }
+
+  const live = normalizeLive([...(journey.live || []), ...migratedLive])
+  return {
+    journey: { ...journey, stops, live },
+    changed: true,
+  }
 }
 
 /**
