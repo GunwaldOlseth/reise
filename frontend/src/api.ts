@@ -525,12 +525,12 @@ export function parsePriceAmount(raw: string | undefined): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-/** Format amount for expense overview (nb-NO, no currency symbol forced). */
+/** Format amount for expense overview (nb-NO, whole kroner, no currency symbol). */
 export function formatExpenseAmount(amount: number): string {
   return new Intl.NumberFormat('nb-NO', {
-    maximumFractionDigits: amount % 1 === 0 ? 0 : 2,
-    minimumFractionDigits: amount % 1 === 0 ? 0 : 2,
-  }).format(amount);
+    maximumFractionDigits: 0,
+    minimumFractionDigits: 0,
+  }).format(Math.round(amount));
 }
 
 export type ExpenseLine = {
