@@ -3842,9 +3842,9 @@ export function gapFillPrefill(
 }
 
 /**
- * «Reise videre herfra» on a stop: at the end of the thread, before home,
- * or when there is a real date gap between this stop and the next.
- * Contiguous city/package pairs hide the action.
+ * «Reise videre herfra» on a stop: at the end of the thread (no next stop),
+ * or when there is a real date gap before the next stop (including hjemkomst).
+ * Contiguous pairs hide the action once the next leg is planned.
  */
 /** Overlay registered home city/address onto every home stop. */
 export function journeyWithRegisteredHome(
@@ -3895,7 +3895,6 @@ export function showOnwardFromHere(
 ): boolean {
   if (stop.kind === 'home') return false
   if (!nextStop) return true
-  if (nextStop.kind === 'home') return true
   return hasPlanGapBetween(stop, nextStop)
 }
 
