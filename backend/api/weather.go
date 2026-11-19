@@ -374,8 +374,14 @@ func countriesLooselyMatch(a, b string) bool {
 	if localizeCountry(a) != "" && localizeCountry(a) == localizeCountry(b) {
 		return true
 	}
-	if a == b || strings.Contains(a, b) || strings.Contains(b, a) {
+	if a == b {
 		return true
+	}
+	// Avoid Roma (city) matching Romania (country) via substring.
+	if len(a) >= 4 && len(b) >= 4 {
+		if strings.Contains(a, b) || strings.Contains(b, a) {
+			return true
+		}
 	}
 	for _, x := range countryAliases(a) {
 		for _, y := range countryAliases(b) {
@@ -832,6 +838,35 @@ func firstNonEmpty(vals ...string) string {
 	return ""
 }
 
+// dropCountryNameFalsePositives removes country hits (PCLI) when the query is a city
+// name that merely prefixes the country — Open-Meteo returns «Romania» for «Roma».
+func dropCountryNameFalsePositives(query string, list []placeSuggestion) []placeSuggestion {
+	q := strings.ToLower(strings.TrimSpace(query))
+	if q == "" || len(list) == 0 {
+		return list
+	}
+	out := make([]placeSuggestion, 0, len(list))
+	for _, p := range list {
+		if strings.ToUpper(p.FeatureCode) != "PCLI" {
+			out = append(out, p)
+			continue
+		}
+		name := strings.ToLower(strings.TrimSpace(p.Name))
+		if name == q {
+			out = append(out, p)
+			continue
+		}
+		if strings.HasPrefix(name, q) && len(name) > len(q) {
+			continue
+		}
+		out = append(out, p)
+	}
+	if len(out) == 0 {
+		return list
+	}
+	return out
+}
+
 func getPlaces(w http.ResponseWriter, r *http.Request) {
 	q := strings.TrimSpace(r.URL.Query().Get("q"))
 	if q == "" {
@@ -841,6 +876,12 @@ func getPlaces(w http.ResponseWriter, r *http.Request) {
 	if q == "" {
 		respondWithError(w, http.StatusBadRequest, "q is required")
 		return
+	}
+
+	countryEn := geocodeCountryEnglish(country)
+	searchQ := geocodeCityForSearch(q, countryEn)
+	if searchQ == "" {
+		searchQ = q
 	}
 
 	streetQuery := looksLikeStreetAddress(q)
@@ -856,17 +897,17 @@ func getPlaces(w http.ResponseWriter, r *http.Request) {
 	langWG.Add(3)
 	go func() {
 		defer langWG.Done()
-		p, e := searchPlaces(q, "en", 10)
+		p, e := searchPlaces(searchQ, "en", 10)
 		byCityEn = placeBatch{p, e}
 	}()
 	go func() {
 		defer langWG.Done()
-		p, e := searchPlaces(q, "nb", 10)
+		p, e := searchPlaces(searchQ, "nb", 10)
 		byCityNb = placeBatch{p, e}
 	}()
 	go func() {
 		defer langWG.Done()
-		p, e := searchPlaces(q, "it", 10)
+		p, e := searchPlaces(searchQ, "it", 10)
 		byCityIt = placeBatch{p, e}
 	}()
 	langWG.Wait()
@@ -890,12 +931,12 @@ func getPlaces(w http.ResponseWriter, r *http.Request) {
 		countryWG.Add(2)
 		go func() {
 			defer countryWG.Done()
-			p, e := searchPlaces(q+", "+country, "en", 8)
+			p, e := searchPlaces(searchQ+", "+country, "en", 8)
 			withCountryEn = placeBatch{p, e}
 		}()
 		go func() {
 			defer countryWG.Done()
-			p, e := searchPlaces(q+", "+country, "nb", 8)
+			p, e := searchPlaces(searchQ+", "+country, "nb", 8)
 			withCountryNb = placeBatch{p, e}
 		}()
 		countryWG.Wait()
@@ -950,6 +991,8 @@ func getPlaces(w http.ResponseWriter, r *http.Request) {
 			})
 		}
 	}
+
+	primary = dropCountryNameFalsePositives(q, primary)
 
 	if len(primary) > 8 {
 		primary = primary[:8]

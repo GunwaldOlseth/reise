@@ -17,7 +17,12 @@ import {
   GOOGLE_MY_MAPS_CREATE_URL,
   googleMapsPlaceUrl,
 } from './googleMaps'
-import { localizeCity, localizeCountry } from './placeNames'
+import {
+  localizeCity,
+  localizeCountry,
+  weatherSearchCity,
+  weatherSearchCountry,
+} from './placeNames'
 import { formatDateNO, formatDurationHM, samePlaceName } from './v2/journeyModel'
 
 const MAP_TIME_KEY = 'reise.mapShowTravelTime'
@@ -104,10 +109,22 @@ function countriesMatch(a: string, b: string): boolean {
   const x = a.trim().toLowerCase()
   const y = b.trim().toLowerCase()
   if (!x || !y) return false
-  if (x === y || x.includes(y) || y.includes(x)) return true
+  if (x === y) return true
+  if (x.length >= 4 && y.length >= 4 && (x.includes(y) || y.includes(x))) return true
   const ax = COUNTRY_ALIASES[x] || [x]
   const ay = COUNTRY_ALIASES[y] || [y]
   return ax.some((v) => ay.includes(v))
+}
+
+function placeNameMatchesQuery(name: string, query: string): boolean {
+  const n = name.trim().toLowerCase()
+  const q = query.trim().toLowerCase()
+  if (!n || !q) return false
+  if (n === q) return true
+  const head = q.split(/\s+\d/)[0] || q
+  if (!n.startsWith(head)) return false
+  // Open-Meteo returns the country «Romania» for the city query «Roma».
+  return n.length === head.length
 }
 
 /** Prefer major city / same country — avoids tiny namesakes scrambling the route. */
@@ -121,11 +138,13 @@ function pickBestPlace(
   let best = places[0]
   let bestScore = -1
   for (const p of places) {
+    const name = p.name.trim().toLowerCase()
+    if (p.featureCode?.toUpperCase() === 'PCLI' && name !== q && name.startsWith(q) && name.length > q.length) {
+      continue
+    }
     let score = p.population || 0
-    if (p.name.trim().toLowerCase() === q) score += 2_000_000
-    else if (p.name.trim().toLowerCase().startsWith(q)) score += 400_000
-    else if (q && p.name.trim().toLowerCase().includes(q.split(/\s+\d/)[0] || q))
-      score += 200_000
+    if (name === q) score += 2_000_000
+    else if (placeNameMatchesQuery(p.name, query)) score += 400_000
     if (country && countriesMatch(country, p.country)) score += 1_500_000
     const fc = (p.featureCode || '').toUpperCase()
     if (fc === 'ADDR') score += 3_000_000
@@ -308,12 +327,15 @@ async function geocodeMapStop(
   stop: TripMapStop,
 ): Promise<PlaceSuggestion | null> {
   const looksStreet = /\d|gate|gata|gaten|vei|street|strada/i.test(stop.city)
+  const searchCity = weatherSearchCity(stop.city) || stop.city
+  const searchCountry =
+    weatherSearchCountry(stop.country) || stop.country
   // Streets/airports: search without day-country first (Bergen-gate
   // on an Italia-day must not be forced into Italy / Rapallo).
   let places = (
     await api.searchPlaces(
-      stop.city,
-      stop.kind === 'via' && looksStreet ? '' : stop.country,
+      searchCity,
+      stop.kind === 'via' && looksStreet ? '' : searchCountry,
     )
   ).places
   let picked = pickBestPlace(
@@ -322,7 +344,7 @@ async function geocodeMapStop(
     looksStreet ? '' : stop.country,
   )
   if (!picked && stop.kind === 'via' && stop.country) {
-    places = (await api.searchPlaces(stop.city, stop.country)).places
+    places = (await api.searchPlaces(searchCity, searchCountry)).places
     picked = pickBestPlace(places, stop.city, stop.country)
   }
   if (
@@ -332,16 +354,16 @@ async function geocodeMapStop(
     stop.contextCity.toLowerCase() !== stop.city.toLowerCase()
   ) {
     places = (
-      await api.searchPlaces(`${stop.city}, ${stop.contextCity}`, '')
+      await api.searchPlaces(`${searchCity}, ${stop.contextCity}`, '')
     ).places
     picked = pickBestPlace(places, stop.city, '')
   }
   if (!picked && stop.kind === 'via' && !looksStreet) {
-    places = (await api.searchPlaces(stop.city, '')).places
+    places = (await api.searchPlaces(searchCity, '')).places
     picked = pickBestPlace(places, stop.city, '')
   }
   if (!picked && stop.kind === 'port') {
-    places = (await api.searchPlaces(stop.city, '')).places
+    places = (await api.searchPlaces(searchCity, '')).places
     picked = pickBestPlace(places, stop.city, '')
   }
   return picked || null

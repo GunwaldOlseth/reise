@@ -279,6 +279,10 @@ func geocodeCityForSearch(city, countryEn string) string {
 		if countryEn == "Slovenia" || countryEn == "" {
 			return "Ljubljana"
 		}
+	case "roma", "rome":
+		if countryEn == "Italy" || countryEn == "" {
+			return "Rome"
+		}
 	}
 	return c
 }
